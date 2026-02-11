@@ -1,0 +1,41 @@
+# recipes.yaml
+recipes:
+  sandwich_basic:
+    # 아래는 “재료 key”를 poses.yaml의 pick 키와 동일하게 맞춘다.
+    steps:
+      - bread_w
+      - ham
+      - cheese
+      - lettuce
+      - bread_w
+
+  sandwich_oat_double:
+    steps:
+      - bread_o
+      - ham
+      - cheese
+      - ham
+      - lettuce
+      - tomato
+  move_all:
+    steps:
+      - ham
+      - lettuce
+      - cheese
+      - tomato
+      - bread_w
+      - bread_o
+  bread_w:
+    steps:
+      - bread_w
+refill_stock:
+  steps:
+    - ham
+    - lettuce
+    - cheese
+    - tomato
+    - bread_w
+    - bread_o
+
+
+

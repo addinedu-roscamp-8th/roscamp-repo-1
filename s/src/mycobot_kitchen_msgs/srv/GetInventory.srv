@@ -1,0 +1,6 @@
+string item_key
+---
+int32 remaining
+int32 capacity
+bool ok
+string message

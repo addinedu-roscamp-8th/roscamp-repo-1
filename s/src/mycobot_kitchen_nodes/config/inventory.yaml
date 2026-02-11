@@ -1,0 +1,15 @@
+capacity:
+  ham: 5
+  cheese: 5
+  lettuce: 5
+  tomato: 5
+  bread_w: 5
+  bread_o: 5
+
+remaining:
+  ham: 5
+  cheese: 5
+  lettuce: 5
+  tomato: 5
+  bread_w: 5
+  bread_o: 5
