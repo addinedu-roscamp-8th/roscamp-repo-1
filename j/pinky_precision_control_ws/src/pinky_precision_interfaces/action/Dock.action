@@ -1,0 +1,22 @@
+# Goal
+int32[] target_ids          # 예: [2, 4]
+float32 target_dist_m       # 예: 0.01 (1cm) or 0.00
+bool reverse                # 후진 도킹 지원
+float32 timeout_sec
+
+---
+# Result
+bool success
+string message
+float32 final_dist_err_m
+float32 final_yaw_err_rad
+int32 locked_target_id
+
+---
+# Feedback
+string state                # SEARCH/ALIGN/APPROACH/FINAL_ALIGN/...
+int32 target_id
+float32 distance_m
+float32 yaw_rad
+float32 cmd_v
+float32 cmd_w
