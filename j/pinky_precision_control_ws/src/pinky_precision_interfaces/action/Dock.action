@@ -1,6 +1,8 @@
 # Goal
 int32[] target_ids          # 예: [2, 4]
 float32 target_dist_m       # 예: 0.01 (1cm) or 0.00
+float32 standoff            # 예: 0.15 (15cm)
+float32 search_angular_speed    # 예: 0.25 (양수: 좌회전, 음수: 우회전)
 bool reverse                # 후진 도킹 지원
 float32 timeout_sec
 
