@@ -97,6 +97,7 @@ class PrecisionDockingServer(Node):
         self.marker_id = -1
         self.distance_m = None
         self.yaw_rad = None
+        self.end_state = "IDLE"
 
         # [UPDATED] Marker2D 확장 필드 저장
         self.center_x_err = None        # 화면 중앙 오차 (-1~+1)
@@ -338,19 +339,14 @@ class PrecisionDockingServer(Node):
         CENTERING 완료 시점에 1회 호출.
         - 현재 odom pose + (tx,tz,pose_yaw_err)로 목표 standoff 점을 odom에 저장
         - 목표 yaw는 '법선 방향을 정면으로 보게' 하는 yaw_goal로 저장
-
-        ✅ [UPDATED 핵심]
-        - standoff 방향 벡터는 pose_yaw_err(오차)가 아니라 yaw_rad(관측된 마커 yaw)를 기반으로 만든다.
-          pose_yaw_err는 VERIFY/제어에서 계속 쓰되, snapshot 목표점 생성에는 쓰지 않는다.
         """
         if not self.odom_is_fresh() or self.odom_x is None or self.odom_y is None:
             self.get_logger().error("[SNAPSHOT] Odom not available/fresh -> cannot create snapshot")
             self.snapshot_valid = False
             return
 
-        if not self.marker_valid or self.tx_m is None or self.tz_m is None or self.yaw_rad is None:
-            # ✅ [UPDATED] snapshot 목표점 생성에는 yaw_rad가 필수(법선/방향 계산용)
-            self.get_logger().error("[SNAPSHOT] Marker data not available (need tx,tz,yaw_rad) -> cannot create snapshot")
+        if not self.marker_valid or self.tx_m is None or self.tz_m is None or self.pose_yaw_err is None:
+            self.get_logger().error("[SNAPSHOT] Marker data not available -> cannot create snapshot")
             self.snapshot_valid = False
             return
 
@@ -362,42 +358,52 @@ class PrecisionDockingServer(Node):
         tz = float(self.tz_m)
 
         # ------------------------------------------------------------------
-        # ✅ [UPDATED START]
-        # standoff 목표점이 "카메라에서 본 마커 yaw 방향(법선/정면 방향 성분)" 기준으로 생성되도록 보정
+        # [UPDATED START] standoff 목표점이 "마커 법선 방향 기준 standoff_m"가 되도록 보정
+        #  - pose_yaw_err가 ±pi 근처로 튀는 경우를 [-pi/2, +pi/2]로 접어 안정화
+        #  - camera(x=right, z=forward) -> base(x=forward, y=left) 변환 시 부호를 명확히 적용
         # ------------------------------------------------------------------
-        yaw_rad_snap = float(self.yaw_rad)  # ✅ [UPDATED 핵심] pose_yaw_err 대신 yaw_rad 사용
+        theta_raw = float(self.pose_yaw_err)
 
-        # pose_yaw_err는 snapshot 생성에 사용하지 않지만, 디버깅/로그 비교를 위해 raw로 보관
-        pose_yaw_err_raw = float(self.pose_yaw_err) if self.pose_yaw_err is not None else 0.0  # [UPDATED]
+        # 1) [-pi, +pi] 정규화
+        theta = normalize_angle(theta_raw)
 
-        # yaw_rad_snap 정규화
-        theta = normalize_angle(yaw_rad_snap)
+        # 2) 법선 해석 안정화: 너무 뒤집힌(>90deg) 경우 π를 빼서 같은 방향(정면)으로 접기
+        #    예) +170deg -> -10deg,  -170deg -> +10deg
+        if abs(theta) > (math.pi / 2.0):
+            theta = normalize_angle(theta - math.copysign(math.pi, theta))
 
-        # 마커 "정면 방향" 단위벡터(카메라 x-z 평면)
-        # theta=0 이면 정면이 카메라 +z 방향(전방)이라고 가정
-        nx = math.sin(theta)  # camera x (right +)
-        nz = math.cos(theta)  # camera z (forward +)
+        # 3) 마커 법선 단위벡터(카메라 x-z 평면 기준)
+        #    theta=0 이면 정면: (nx,nz)=(0,1)
+        nx = math.sin(theta)
+        nz = math.cos(theta)
 
-        # 목표 standoff 점(카메라 x,z 평면)
-        # 마커 위치(tx,tz)에서 standoff만큼 "정면 방향"으로 카메라 쪽으로 당긴 지점(=tz 감소)이 되도록
-        dx_cam = tx - self.standoff_m * nx
-        dz_cam = tz - self.standoff_m * nz
+        # 4) standoff 목표점(카메라 x,z 평면)
+        #    - 현재 관측된 마커 중심(tx,tz)에서
+        #    - 마커 법선 방향으로 standoff_m 만큼 "카메라 쪽(앞/뒤 정의 포함)"으로 이동한 점
+        #
+        #    여기서는 pose_yaw_err가 "카메라가 마커 법선을 바라보도록" 만드는 기준이라고 가정하고,
+        #    standoff 점은 마커 중심에서 법선 방향으로 standoff_m 만큼 '빼는' 형태로 유지합니다.
+        dx_base = tx - self.standoff_m * nx   # camera x 성분
+        dz_base = tz - self.standoff_m * nz   # camera z 성분
 
-        # camera -> base_link 변환
-        # base_x(forward) = camera_z
-        # base_y(left)    = -camera_x
-        base_x = dz_cam
-        base_y = -dx_cam  # ✅ 부호 핵심: camera right(+)는 base left(+)의 반대
+        # 5) camera -> base 변환
+        #    camera: x=right(+), z=forward(+)
+        #    base  : x=forward(+), y=left(+)
+        #    => base_x = camera_z
+        #    => base_y = -camera_x   (right(+)는 left(+)의 반대)
+        base_x = dz_base
+        base_y = -dx_base  # [UPDATED] 핵심 부호
 
         # ------------------------------------------------------------------
-        # ✅ [UPDATED END]
+        # [UPDATED END]
         # ------------------------------------------------------------------
 
         # odom으로 회전시켜 목표점 생성
         x_goal = x_now + math.cos(yaw_now) * base_x - math.sin(yaw_now) * base_y
         y_goal = y_now + math.sin(yaw_now) * base_x + math.cos(yaw_now) * base_y
 
-        # 목표 yaw: 현재 로봇 yaw + 마커 yaw (카메라 기준 관측 yaw로 정면 맞추기)
+        # 목표 yaw (기존 구조 유지)
+        yaw_rad_snap = float(self.yaw_rad) if self.yaw_rad is not None else 0.0
         yaw_goal = normalize_angle(yaw_now + yaw_rad_snap)
 
         self.snap_x_goal = float(x_goal)
@@ -406,15 +412,29 @@ class PrecisionDockingServer(Node):
         self.snap_created_time = time.time()
         self.snapshot_valid = True
 
-        # NOTE: 아래 로그는 스냅샷 생성 시 1회 출력(성능 영향 제한적).
+        # NOTE: 아래 로그는 반복 출력은 아니고 "스냅샷 생성 시 1회"라서 성능 영향이 제한적임.
+        #       만약 스냅샷을 매우 자주 만들도록 변경한다면,
+        #       '성능을 저하시킬 수 있는 로그 코드이므로 주석을 권합니다.'  # [UPDATED-LOG]
         self.get_logger().info(
             f"[SNAPSHOT] created: x_goal={self.snap_x_goal:.3f}, y_goal={self.snap_y_goal:.3f}, "
             f"yaw_goal={self.snap_yaw_goal:.3f}, standoff={self.standoff_m:.3f} "
-            f"(tx={tx:.3f}, tz={tz:.3f}, "
-            f"yaw_rad_snap={yaw_rad_snap:.3f}, pose_yaw_err_raw={pose_yaw_err_raw:.3f}, "
-            f"theta_used={theta:.3f}, n_cam=({nx:.3f},{nz:.3f}), "
-            f"p_standoff_cam=({dx_cam:.3f},{dz_cam:.3f}))"  # ✅ [UPDATED] 비교 가능한 로그로 확장
+            f"(tx={tx:.3f}, tz={tz:.3f}, pose_yaw_err_raw={theta_raw:.3f}, pose_yaw_err_used={theta:.3f}, "
+            f"yaw_rad_snap={yaw_rad_snap:.3f}, p_standoff_cam=({dx_base:.3f},{dz_base:.3f}))"
         )
+
+        self.get_logger().warn(
+            f"[SNAPSHOT-DEBUG] "
+            f"yaw_now={yaw_now:.3f} "
+            f"theta_raw={theta_raw:.3f} "
+            f"theta_used={theta:.3f} "
+            f"nx={nx:.3f} nz={nz:.3f} "
+            f"tx={tx:.3f} tz={tz:.3f} "
+            f"dx_base={dx_base:.3f} dz_base={dz_base:.3f} "
+            f"base_x={base_x:.3f} base_y={base_y:.3f} "
+            f"x_goal={x_goal:.3f} y_goal={y_goal:.3f}"
+        )
+
+
 
     # ---------------------------
     # Action execute
@@ -428,9 +448,10 @@ class PrecisionDockingServer(Node):
         self.search_w = float(goal.search_angular_speed) if abs(goal.search_angular_speed) > 0.0 else self.search_w
         reverse = bool(goal.reverse)
         timeout_sec = float(goal.timeout_sec) if goal.timeout_sec > 0.0 else 30.0
+        self.end_state = str(goal.end_state) if goal.end_state in ["IDLE", "SEARCH", "CENTERING", "FACE_ALIGN_TRANSLATE", "FACE_ALIGN_ROTATE", "VERIFY_POSE", "APPROACH", "FINAL_ALIGN", "DOCKED", "FAILSAFE"] else "IDLE"
 
         self.get_logger().info(
-            f"Dock goal accepted: target_ids={target_ids}, target_dist={target_dist}, standoff={self.standoff_m}, search_w={self.search_w}, reverse={reverse}, timeout={timeout_sec}"
+            f"Dock goal accepted: target_ids={target_ids}, target_dist={target_dist}, standoff={self.standoff_m}, search_w={self.search_w}, reverse={reverse}, timeout={timeout_sec}, end_state={self.end_state}"
         )
 
         self.reset_controllers()
@@ -643,11 +664,31 @@ class PrecisionDockingServer(Node):
                         f"now=({x_now:.3f},{y_now:.3f}) yaw={yaw_now:.3f})"
                     )
 
+                    self.get_logger().warn(
+                        f"[TRANSLATE-DEBUG] "
+                        f"dist_goal={dist_goal:.3f} "
+                        f"current_marker_dist={self.tz_m:.3f} "
+                        f"standoff={self.standoff_m:.3f}"
+                    )
+
                     # [UPDATED 핵심] 종료 조건은 dist_goal만
                     if dist_goal <= self.translate_done_th:
+                        if self.end_state == "FACE_ALIGN_TRANSLATE":
+                            self.get_logger().info("[FSM] TRANSLATE -> IDLE (dist_goal reached, end_state=FACE_ALIGN_TRANSLATE)")
+                            self.publish_cmd(0.0, 0.0)
+                            goal_handle.succeed()
+                            result.success = True
+                            result.message = "Translate done"
+                            result.locked_target_id = locked_target_id
+                            result.final_dist_err_m = float(self.distance_m - target_dist) if self.distance_m is not None else 0.0
+                            result.final_yaw_err_rad = float(self.yaw_rad) if self.yaw_rad is not None else 0.0
+                            return result
                         self.get_logger().warn("[FSM] TRANSLATE -> FACE_ALIGN_ROTATE (dist_goal reached)")
                         self.state = DockState.FACE_ALIGN_ROTATE
                         self.reset_controllers()
+
+                    
+
 
             # ------------------------------------------------------------
             # FACE_ALIGN_ROTATE  (Blind Rotate)

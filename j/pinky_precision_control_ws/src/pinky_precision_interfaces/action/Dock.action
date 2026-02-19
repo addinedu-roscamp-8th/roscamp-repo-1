@@ -5,6 +5,7 @@ float32 standoff            # 예: 0.15 (15cm)
 float32 search_angular_speed    # 예: 0.25 (양수: 좌회전, 음수: 우회전)
 bool reverse                # 후진 도킹 지원
 float32 timeout_sec
+string end_state            # 종료 단계 설정 
 
 ---
 # Result
