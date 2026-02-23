@@ -1,0 +1,159 @@
+# Fleet Management System Configuration
+
+# Robot Fleet Configuration
+robots:
+  - robot_id: "pinky1"
+    namespace: "/pinky1"
+    type: "SERVING_BOT_1"
+    parking_spot: "pinky1_spot"
+  - robot_id: "pinky2"
+    namespace: "/pinky2"
+    type: "SERVING_BOT_2"
+    parking_spot: "pinky2_spot"
+  - robot_id: "pinky3"
+    namespace: "/pinky3"
+    type: "SERVING_BOT_3"
+    parking_spot: "pinky3_spot"
+
+# Map Positions (in meters, based on map frame)
+# TODO: Calibrate these positions based on actual map measurements
+positions:
+  pickup_spot:
+    x: 1.0
+    y: 0.3
+    theta: 0.0
+
+  # Table positions (left side)
+  table1:
+    x: 0.3
+    y: 0.2
+    theta: 0.0
+  table2:
+    x: 0.3
+    y: 0.4
+    theta: 0.0
+  table3:
+    x: 0.3
+    y: 0.6
+    theta: 0.0
+  table4:
+    x: 0.3
+    y: 0.8
+    theta: 0.0
+
+  # Table positions (right side)
+  table5:
+    x: 1.7
+    y: 0.2
+    theta: 3.14159
+  table6:
+    x: 1.7
+    y: 0.4
+    theta: 3.14159
+  table7:
+    x: 1.7
+    y: 0.6
+    theta: 3.14159
+  table8:
+    x: 1.7
+    y: 0.8
+    theta: 3.14159
+
+  # Parking spots
+  pinky1_spot:
+    x: 1.0
+    y: 0.1
+    theta: 1.5708  # 90 degrees
+  pinky2_spot:
+    x: 1.15
+    y: 0.1
+    theta: 1.5708
+  pinky3_spot:
+    x: 1.3
+    y: 0.1
+    theta: 1.5708
+
+# Zone Configuration for Collision Avoidance
+# TODO: Calibrate these zones based on actual robot size and map layout
+zones:
+  - id: "zone_pickup"
+    center_x: 1.0
+    center_y: 0.3
+    radius: 0.15
+
+  # Table zones (left side)
+  - id: "zone_table1"
+    center_x: 0.3
+    center_y: 0.2
+    radius: 0.12
+  - id: "zone_table2"
+    center_x: 0.3
+    center_y: 0.4
+    radius: 0.12
+  - id: "zone_table3"
+    center_x: 0.3
+    center_y: 0.6
+    radius: 0.12
+  - id: "zone_table4"
+    center_x: 0.3
+    center_y: 0.8
+    radius: 0.12
+
+  # Table zones (right side)
+  - id: "zone_table5"
+    center_x: 1.7
+    center_y: 0.2
+    radius: 0.12
+  - id: "zone_table6"
+    center_x: 1.7
+    center_y: 0.4
+    radius: 0.12
+  - id: "zone_table7"
+    center_x: 1.7
+    center_y: 0.6
+    radius: 0.12
+  - id: "zone_table8"
+    center_x: 1.7
+    center_y: 0.8
+    radius: 0.12
+
+  # Parking zones
+  - id: "zone_parking1"
+    center_x: 1.0
+    center_y: 0.1
+    radius: 0.1
+  - id: "zone_parking2"
+    center_x: 1.15
+    center_y: 0.1
+    radius: 0.1
+  - id: "zone_parking3"
+    center_x: 1.3
+    center_y: 0.1
+    radius: 0.1
+
+  # Corridor zones (pathways)
+  - id: "zone_corridor1"
+    center_x: 0.7
+    center_y: 0.5
+    radius: 0.15
+  - id: "zone_corridor2"
+    center_x: 1.3
+    center_y: 0.5
+    radius: 0.15
+
+# Fleet Management Parameters
+parameters:
+  # Task assignment frequency (Hz)
+  assignment_frequency: 2.0
+
+  # Fleet status publish frequency (Hz)
+  status_publish_frequency: 1.0
+
+  # Navigation goal distance threshold (meters)
+  goal_reached_threshold: 0.1
+
+  # Low battery threshold (volts)
+  low_battery_threshold: 20.0
+
+  # Zone reservation timeout (seconds)
+  zone_reservation_timeout: 30.0

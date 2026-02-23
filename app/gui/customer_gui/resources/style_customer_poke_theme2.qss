@@ -1,0 +1,257 @@
+/* 밝은 컬러 테마 스타일시트 */
+
+/* 전체 배경 */
+QWidget {
+    background-color: #F9FBFA;
+    color: #263333;
+    font-family: "맑은 고딕", "Malgun Gothic", sans-serif;
+}
+
+/* 메인 윈도우 */
+QMainWindow {
+    background-color: #F9FBFA;
+}
+
+/* 버튼 스타일 */
+QPushButton {
+    background-color: #2F6F73;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 10px;
+    padding: 15px;
+    font-weight: bold;
+}
+
+QPushButton:hover {
+    background-color: #3F8286;
+}
+
+QPushButton:pressed {
+    background-color: #255A5D;
+}
+
+QPushButton:disabled {
+    background-color: #D1D9D9;
+    color: #5F6B6B;
+}
+
+/* 주요 버튼 (주문하기, 확인 등) */
+QPushButton#btn_start_order,
+QPushButton#btn_confirm_order,
+QPushButton#btn_submit,
+QPushButton#btn_confirm_delivery {
+    background-color: #E07A5F;
+    font-size: 28px;
+}
+
+QPushButton#btn_start_order:hover,
+QPushButton#btn_confirm_order:hover,
+QPushButton#btn_submit:hover,
+QPushButton#btn_confirm_delivery:hover {
+    background-color: #EA8B74;
+}
+
+QPushButton#btn_start_order:pressed,
+QPushButton#btn_confirm_order:pressed,
+QPushButton#btn_submit:pressed,
+QPushButton#btn_confirm_delivery:pressed {
+    background-color: #C9654D;
+}
+
+/* 취소/뒤로가기 버튼 */
+QPushButton#btn_cancel,
+QPushButton#btn_back {
+    background-color: #D5DEDF;
+    color: #263333;
+}
+
+QPushButton#btn_cancel:hover,
+QPushButton#btn_back:hover {
+    background-color: #C3CFD0;
+}
+
+QPushButton#btn_cancel:pressed,
+QPushButton#btn_back:pressed {
+    background-color: #B1C1C3;
+}
+
+/* 레이블 */
+QLabel {
+    background-color: transparent;
+    color: #263333;
+}
+
+/* 제목 레이블 */
+QLabel#label_welcome,
+QLabel#label_title {
+    color: #E07A5F;
+}
+
+QLabel#label_menu_title,
+QLabel#label_cart_title {
+    color: #3F8286;
+    background-color: #BFD4D2;
+    padding: 10px;
+    border-radius: 5px;
+}
+
+/* 합계 레이블 */
+QLabel#label_total {
+    color: #B55541;
+    background-color: #BFD4D2;
+    padding: 10px;
+    border-radius: 5px;
+}
+
+/* 리스트 위젯 */
+QListWidget {
+    background-color: #FFFFFF;
+    border: 2px solid #BFD4D2;
+    border-radius: 10px;
+    padding: 5px;
+}
+
+QListWidget::item {
+    background-color: #F9FBFA;
+    border: 1px solid #BFD4D2;
+    border-radius: 5px;
+    padding: 10px;
+    margin: 3px;
+}
+
+QListWidget::item:hover {
+    background-color: #E7F0EE;
+    border-color: #2F6F73;
+}
+
+QListWidget::item:selected {
+    background-color: #BFD4D2;
+    border-color: #255A5D;
+    color: #263333;
+}
+
+/* 품절 메뉴 (회색) */
+QListWidget::item[unavailable="true"] {
+    background-color: #F1F6F5;
+    color: #6F7A7A;
+}
+
+/* 스크롤 영역 */
+QScrollArea {
+    background-color: transparent;
+    border: none;
+}
+
+/* 스크롤바 */
+QScrollBar:vertical {
+    background-color: #BFD4D2;
+    width: 15px;
+    border-radius: 7px;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #2F6F73;
+    border-radius: 7px;
+    min-height: 30px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #3F8286;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+QScrollBar:horizontal {
+    background-color: #BFD4D2;
+    height: 15px;
+    border-radius: 7px;
+}
+
+QScrollBar::handle:horizontal {
+    background-color: #2F6F73;
+    border-radius: 7px;
+    min-width: 30px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background-color: #3F8286;
+}
+
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    width: 0px;
+}
+
+/* 텍스트 편집기 */
+QTextEdit {
+    background-color: #FFFFFF;
+    border: 2px solid #BFD4D2;
+    border-radius: 10px;
+    padding: 10px;
+}
+
+QTextEdit[readOnly="true"] {
+    background-color: #F9FBFA;
+}
+
+/* 구분선 */
+Line {
+    background-color: #2F6F73;
+}
+
+/* 다이얼로그 */
+QDialog {
+    background-color: #F9FBFA;
+}
+
+/* 스핀박스 */
+QSpinBox {
+    background-color: #FFFFFF;
+    border: 2px solid #BFD4D2;
+    border-radius: 5px;
+    padding: 5px;
+    font-size: 18px;
+}
+
+QSpinBox::up-button,
+QSpinBox::down-button {
+    background-color: #2F6F73;
+    border-radius: 3px;
+}
+
+QSpinBox::up-button:hover,
+QSpinBox::down-button:hover {
+    background-color: #3F8286;
+}
+
+/* 메시지박스 */
+QMessageBox {
+    background-color: #F9FBFA;
+}
+
+QMessageBox QPushButton {
+    min-width: 100px;
+    min-height: 40px;
+}
+
+/* 음성 피드백 위젯 특수 스타일 */
+VoiceFeedbackWidget {
+    background-color: #D6E6E5;
+    border-radius: 15px;
+}
+
+/* 영수증 위젯 */
+QWidget#widget_receipt {
+    background-color: #FFFFFF;
+    border: 3px solid #2F6F73;
+    border-radius: 15px;
+    padding: 20px;
+}
+
+/* 도착 알림 위젯 */
+QWidget#DeliveryNotification {
+    background-color: #E0F2F1;
+}

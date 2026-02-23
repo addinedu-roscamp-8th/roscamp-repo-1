@@ -1,0 +1,280 @@
+/* Admin GUI 밝은 컬러 테마 스타일시트 */
+
+/* 전체 배경 */
+QWidget {
+    background-color: #FFF8E1;
+    color: #333333;
+    font-family: "맑은 고딕", "Malgun Gothic", sans-serif;
+}
+
+/* 메인 윈도우 */
+QMainWindow {
+    background-color: #FFF8E1;
+}
+
+/* 탭 위젯 */
+QTabWidget::pane {
+    border: 2px solid #FFE0B2;
+    border-radius: 5px;
+    background-color: #FFF8E1;
+}
+
+QTabBar::tab {
+    background-color: #FFE0B2;
+    color: #333333;
+    padding: 10px 20px;
+    margin-right: 5px;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+QTabBar::tab:selected {
+    background-color: #FFB74D;
+    color: #FFFFFF;
+}
+
+QTabBar::tab:hover {
+    background-color: #FFA726;
+}
+
+/* 버튼 스타일 */
+QPushButton {
+    background-color: #FFB74D;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 15px;
+    font-weight: bold;
+    font-size: 12px;
+}
+
+QPushButton:hover {
+    background-color: #FFA726;
+}
+
+QPushButton:pressed {
+    background-color: #FF9800;
+}
+
+QPushButton:disabled {
+    background-color: #CCCCCC;
+    color: #888888;
+}
+
+/* 체크 가능한 버튼 (필터 버튼) */
+QPushButton:checkable {
+    background-color: #E0E0E0;
+    color: #666666;
+}
+
+QPushButton:checked {
+    background-color: #FFB74D;
+    color: #FFFFFF;
+}
+
+/* 주요 액션 버튼 */
+QPushButton#btn_confirm_inspection,
+QPushButton#btn_start_serving,
+QPushButton#btn_add_recipe {
+    background-color: #66BB6A;
+    font-size: 14px;
+}
+
+QPushButton#btn_confirm_inspection:hover,
+QPushButton#btn_start_serving:hover,
+QPushButton#btn_add_recipe:hover {
+    background-color: #4CAF50;
+}
+
+/* 위험 버튼 */
+QPushButton#btn_cancel,
+QPushButton#btn_halt,
+QPushButton#btn_delete_recipe {
+    background-color: #EF5350;
+}
+
+QPushButton#btn_cancel:hover,
+QPushButton#btn_halt:hover,
+QPushButton#btn_delete_recipe:hover {
+    background-color: #E53935;
+}
+
+/* 레이블 */
+QLabel {
+    background-color: transparent;
+    color: #333333;
+}
+
+/* 제목 레이블 */
+QLabel#label_title {
+    color: #FF6F00;
+}
+
+QLabel#label_detail_title {
+    color: #FF8A65;
+    background-color: #FFE0B2;
+    padding: 5px 10px;
+    border-radius: 5px;
+}
+
+/* 테이블 위젯 */
+QTableWidget {
+    background-color: #FFFFFF;
+    border: 2px solid #FFE0B2;
+    border-radius: 5px;
+    gridline-color: #FFE0B2;
+}
+
+QTableWidget::item {
+    padding: 5px;
+    border: none;
+}
+
+QTableWidget::item:selected {
+    background-color: #FFE0B2;
+    color: #333333;
+}
+
+QTableWidget::item:hover {
+    background-color: #FFF3E0;
+}
+
+/* 테이블 헤더 */
+QHeaderView::section {
+    background-color: #FFB74D;
+    color: #FFFFFF;
+    padding: 8px;
+    border: none;
+    font-weight: bold;
+}
+
+QHeaderView::section:hover {
+    background-color: #FFA726;
+}
+
+/* 텍스트 편집기 */
+QTextEdit {
+    background-color: #FFFFFF;
+    border: 2px solid #FFE0B2;
+    border-radius: 5px;
+    padding: 10px;
+    font-size: 12px;
+}
+
+QTextEdit[readOnly="true"] {
+    background-color: #FFFBF0;
+}
+
+/* 스크롤바 */
+QScrollBar:vertical {
+    background-color: #FFE0B2;
+    width: 12px;
+    border-radius: 6px;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #FFB74D;
+    border-radius: 6px;
+    min-height: 20px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #FFA726;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+QScrollBar:horizontal {
+    background-color: #FFE0B2;
+    height: 12px;
+    border-radius: 6px;
+}
+
+QScrollBar::handle:horizontal {
+    background-color: #FFB74D;
+    border-radius: 6px;
+    min-width: 20px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background-color: #FFA726;
+}
+
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    width: 0px;
+}
+
+/* 입력 다이얼로그 */
+QInputDialog {
+    background-color: #FFF8E1;
+}
+
+QLineEdit {
+    background-color: #FFFFFF;
+    border: 2px solid #FFE0B2;
+    border-radius: 5px;
+    padding: 8px;
+    font-size: 12px;
+}
+
+QLineEdit:focus {
+    border-color: #FFB74D;
+}
+
+QSpinBox, QDoubleSpinBox {
+    background-color: #FFFFFF;
+    border: 2px solid #FFE0B2;
+    border-radius: 5px;
+    padding: 5px;
+    font-size: 12px;
+}
+
+QSpinBox::up-button, QDoubleSpinBox::up-button,
+QSpinBox::down-button, QDoubleSpinBox::down-button {
+    background-color: #FFB74D;
+    border-radius: 3px;
+}
+
+QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
+QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {
+    background-color: #FFA726;
+}
+
+/* 메시지박스 */
+QMessageBox {
+    background-color: #FFF8E1;
+}
+
+QMessageBox QPushButton {
+    min-width: 80px;
+    min-height: 35px;
+}
+
+/* 콤보박스 */
+QComboBox {
+    background-color: #FFFFFF;
+    border: 2px solid #FFE0B2;
+    border-radius: 5px;
+    padding: 5px;
+}
+
+QComboBox:hover {
+    border-color: #FFB74D;
+}
+
+QComboBox::drop-down {
+    border: none;
+}
+
+QComboBox::down-arrow {
+    image: none;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid #FFB74D;
+}

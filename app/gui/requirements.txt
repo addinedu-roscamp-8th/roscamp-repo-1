@@ -1,0 +1,13 @@
+# PyQt5 GUI Framework
+PyQt5==5.15.10
+PyQt5-Qt5==5.15.2
+PyQt5-sip==12.13.0
+
+# 환경 변수 관리
+python-dotenv==1.0.0
+
+# JSON 데이터 처리 (Python 기본 json 모듈 사용)
+
+# 로깅 (Python 기본 logging 모듈 사용)
+
+# 날짜/시간 처리 (Python 기본 datetime 모듈 사용)
