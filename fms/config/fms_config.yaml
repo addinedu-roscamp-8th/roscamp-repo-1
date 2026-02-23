@@ -16,130 +16,193 @@ robots:
     parking_spot: "pinky3_spot"
 
 # Map Positions (in meters, based on map frame)
-# TODO: Calibrate these positions based on actual map measurements
+# Calibrated positions based on real.png (410x210px, 0.005m/pixel, origin [-0.025, -0.025, 0.0])
 positions:
+  # Pickup zone (food loading from kitchen)
   pickup_spot:
-    x: 1.0
-    y: 0.3
+    x: 0.47
+    y: 0.63
     theta: 0.0
 
-  # Table positions (left side)
+  # Table positions
   table1:
-    x: 0.3
-    y: 0.2
+    x: 1.785
+    y: 0.35
     theta: 0.0
   table2:
-    x: 0.3
-    y: 0.4
+    x: 1.415
+    y: 0.35
     theta: 0.0
   table3:
-    x: 0.3
-    y: 0.6
+    x: 1.785
+    y: 0.65
     theta: 0.0
   table4:
-    x: 0.3
-    y: 0.8
+    x: 1.415
+    y: 0.65
+    theta: 0.0
+  table5:
+    x: 1.235
+    y: 0.35
+    theta: 0.0
+  table6:
+    x: 0.865
+    y: 0.35
+    theta: 0.0
+  table7:
+    x: 1.235
+    y: 0.65
+    theta: 0.0
+  table8:
+    x: 0.865
+    y: 0.65
     theta: 0.0
 
-  # Table positions (right side)
-  table5:
-    x: 1.7
-    y: 0.2
-    theta: 3.14159
-  table6:
-    x: 1.7
-    y: 0.4
-    theta: 3.14159
-  table7:
-    x: 1.7
-    y: 0.6
-    theta: 3.14159
-  table8:
-    x: 1.7
-    y: 0.8
-    theta: 3.14159
-
-  # Parking spots
+  # Robot spawn/parking/charging spots
   pinky1_spot:
-    x: 1.0
-    y: 0.1
-    theta: 1.5708  # 90 degrees
+    x: 0.585
+    y: 0.085
+    theta: 0.0
   pinky2_spot:
-    x: 1.15
-    y: 0.1
-    theta: 1.5708
+    x: 0.585
+    y: 0.255
+    theta: 0.0
   pinky3_spot:
-    x: 1.3
-    y: 0.1
-    theta: 1.5708
+    x: 0.585
+    y: 0.915
+    theta: 0.0
+
+  # Navigation waypoints (grid points for path planning)
+  point1:
+    x: 0.78
+    y: 0.15
+    theta: 0.0
+  point2:
+    x: 0.78
+    y: 0.35
+    theta: 0.0
+  point3:
+    x: 0.78
+    y: 0.65
+    theta: 0.0
+  point4:
+    x: 0.78
+    y: 0.85
+    theta: 0.0
+  point5:
+    x: 1.325
+    y: 0.15
+    theta: 0.0
+  point6:
+    x: 1.325
+    y: 0.35
+    theta: 0.0
+  point7:
+    x: 1.325
+    y: 0.65
+    theta: 0.0
+  point8:
+    x: 1.325
+    y: 0.85
+    theta: 0.0
+  point9:
+    x: 1.85
+    y: 0.15
+    theta: 0.0
+  point10:
+    x: 1.85
+    y: 0.35
+    theta: 0.0
+  point11:
+    x: 1.85
+    y: 0.65
+    theta: 0.0
+  point12:
+    x: 1.85
+    y: 0.85
+    theta: 0.0
+  point13:
+    x: 0.585
+    y: 0.63
+    theta: 0.0
 
 # Zone Configuration for Collision Avoidance
-# TODO: Calibrate these zones based on actual robot size and map layout
+# Robot radius: 0.055m, safety margin added
 zones:
   - id: "zone_pickup"
-    center_x: 1.0
-    center_y: 0.3
-    radius: 0.15
+    center_x: 0.47
+    center_y: 0.63
+    radius: 0.10
 
-  # Table zones (left side)
+  # Table zones
   - id: "zone_table1"
-    center_x: 0.3
-    center_y: 0.2
-    radius: 0.12
+    center_x: 1.785
+    center_y: 0.35
+    radius: 0.10
   - id: "zone_table2"
-    center_x: 0.3
-    center_y: 0.4
-    radius: 0.12
+    center_x: 1.415
+    center_y: 0.35
+    radius: 0.10
   - id: "zone_table3"
-    center_x: 0.3
-    center_y: 0.6
-    radius: 0.12
+    center_x: 1.785
+    center_y: 0.65
+    radius: 0.10
   - id: "zone_table4"
-    center_x: 0.3
-    center_y: 0.8
-    radius: 0.12
-
-  # Table zones (right side)
+    center_x: 1.415
+    center_y: 0.65
+    radius: 0.10
   - id: "zone_table5"
-    center_x: 1.7
-    center_y: 0.2
-    radius: 0.12
+    center_x: 1.235
+    center_y: 0.35
+    radius: 0.10
   - id: "zone_table6"
-    center_x: 1.7
-    center_y: 0.4
-    radius: 0.12
+    center_x: 0.865
+    center_y: 0.35
+    radius: 0.10
   - id: "zone_table7"
-    center_x: 1.7
-    center_y: 0.6
-    radius: 0.12
+    center_x: 1.235
+    center_y: 0.65
+    radius: 0.10
   - id: "zone_table8"
-    center_x: 1.7
-    center_y: 0.8
-    radius: 0.12
+    center_x: 0.865
+    center_y: 0.65
+    radius: 0.10
 
-  # Parking zones
+  # Parking/Charging zones
   - id: "zone_parking1"
-    center_x: 1.0
-    center_y: 0.1
-    radius: 0.1
+    center_x: 0.585
+    center_y: 0.085
+    radius: 0.08
   - id: "zone_parking2"
-    center_x: 1.15
-    center_y: 0.1
-    radius: 0.1
+    center_x: 0.585
+    center_y: 0.255
+    radius: 0.08
   - id: "zone_parking3"
-    center_x: 1.3
-    center_y: 0.1
-    radius: 0.1
+    center_x: 0.585
+    center_y: 0.915
+    radius: 0.08
 
-  # Corridor zones (pathways)
-  - id: "zone_corridor1"
-    center_x: 0.7
-    center_y: 0.5
-    radius: 0.15
-  - id: "zone_corridor2"
-    center_x: 1.3
-    center_y: 0.5
-    radius: 0.15
+  # Waypoint zones (for multi-robot coordination)
+  - id: "zone_point1"
+    center_x: 0.78
+    center_y: 0.15
+    radius: 0.08
+  - id: "zone_point2"
+    center_x: 0.78
+    center_y: 0.35
+    radius: 0.08
+  - id: "zone_point3"
+    center_x: 0.78
+    center_y: 0.65
+    radius: 0.08
+  - id: "zone_point4"
+    center_x: 0.78
+    center_y: 0.85
+    radius: 0.08
+  - id: "zone_point13"
+    center_x: 0.585
+    center_y: 0.63
+    radius: 0.08
 
 # Fleet Management Parameters
 parameters:
