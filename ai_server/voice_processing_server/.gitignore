@@ -1,0 +1,41 @@
+# Environment and secrets (API Key 등 비밀 관리)
+.env
+.env.local
+.env.*.local
+*.key
+secrets/
+config/.env
+config/*.key
+!config/.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build / dist
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Logs and temp
+*.log
+tmp/
+temp/
+.cache/
+
+# OS
+.DS_Store
+Thumbs.db

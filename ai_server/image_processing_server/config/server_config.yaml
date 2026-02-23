@@ -1,0 +1,6 @@
+# 분석 서버 설정
+# 포트가 다른 프로세스에 의해 점유된 경우 여기서 변경하거나
+# 환경변수 YOLO_SERVER_PORT, YOLO_SERVER_HOST 로 지정 가능
+
+host: "0.0.0.0"
+port: 5001

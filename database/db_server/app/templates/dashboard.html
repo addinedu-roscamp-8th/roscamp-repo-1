@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pinky Sandwich - 관리 대시보드</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #009639 0%, #7AB800 100%);
+            color: white;
+            padding: 1.5rem 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .header .subtitle {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            margin-top: 0.5rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 12px rgba(0,0,0,0.15);
+        }
+
+        .stat-card h3 {
+            color: #666;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-card .value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #009639;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card .sub-value {
+            font-size: 0.85rem;
+            color: #999;
+        }
+
+        .content-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 1024px) {
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .card h2 {
+            color: #009639;
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 3px solid #7AB800;
+        }
+
+        .order-item {
+            padding: 1rem;
+            border-left: 4px solid #009639;
+            margin-bottom: 1rem;
+            background: #f9f9f9;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .order-item:hover {
+            background: #f0f0f0;
+        }
+
+        .order-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .order-id {
+            font-weight: 600;
+            color: #333;
+            font-size: 0.9rem;
+        }
+
+        .order-status {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-completed {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-placed {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-canceled {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-preparing {
+            background: #cfe2ff;
+            color: #084298;
+        }
+
+        .order-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .order-items {
+            margin-top: 0.5rem;
+            padding-top: 0.5rem;
+            border-top: 1px solid #ddd;
+        }
+
+        .item-tag {
+            display: inline-block;
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin-right: 0.5rem;
+            margin-top: 0.25rem;
+        }
+
+        .inventory-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            border-bottom: 1px solid #eee;
+        }
+
+        .inventory-item:last-child {
+            border-bottom: none;
+        }
+
+        .inventory-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .inventory-sku {
+            font-size: 0.75rem;
+            color: #999;
+        }
+
+        .inventory-stats {
+            text-align: right;
+        }
+
+        .stat-value {
+            font-weight: 600;
+            color: #009639;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #999;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        .refresh-btn {
+            background: #009639;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            transition: background 0.2s;
+        }
+
+        .refresh-btn:hover {
+            background: #007a2f;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .page-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .page-btn:hover {
+            background: #f0f0f0;
+        }
+
+        .page-btn.active {
+            background: #009639;
+            color: white;
+            border-color: #009639;
+        }
+
+        .top-product {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            border-bottom: 1px solid #eee;
+        }
+
+        .top-product:last-child {
+            border-bottom: none;
+        }
+
+        .product-rank {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #7AB800;
+            width: 40px;
+        }
+
+        .product-info {
+            flex: 1;
+        }
+
+        .product-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .product-sku {
+            font-size: 0.75rem;
+            color: #999;
+        }
+
+        .product-qty {
+            font-weight: 600;
+            color: #009639;
+            font-size: 1.1rem;
+        }
+
+        .toggle-section {
+            margin-bottom: 1rem;
+        }
+
+        .toggle-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .toggle-btn {
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .toggle-btn:hover {
+            background: #e0e0e0;
+        }
+
+        .toggle-btn.active {
+            background: #009639;
+            color: white;
+            border-color: #009639;
+        }
+
+        .hidden-section {
+            display: none;
+        }
+
+        .visible-section {
+            display: block;
+        }
+
+        .stats-grid.hidden-section {
+            display: none;
+        }
+
+        .stats-grid.visible-section {
+            display: grid;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🥪 Pinky Sandwich</h1>
+        <div class="subtitle">주문 및 재고 관리 대시보드</div>
+    </div>
+
+    <div class="container">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
+            <button class="refresh-btn" onclick="loadDashboard()">🔄 새로고침</button>
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                <button class="toggle-btn" id="toggleStatsBtn" onclick="toggleStats()">
+                    <span id="statsIcon">👁️</span>
+                    <span id="statsText">집계 카드 보기</span>
+                </button>
+                <button class="toggle-btn" id="toggleInventoryBtn" onclick="toggleInventory()">
+                    <span id="inventoryIcon">👁️</span>
+                    <span id="inventoryText">재고 현황 보기</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 통계 카드 -->
+        <div class="stats-grid hidden-section" id="statsGrid">
+            <div class="stat-card">
+                <h3>총 주문 수</h3>
+                <div class="value" id="totalOrders">-</div>
+                <div class="sub-value">전체 주문</div>
+            </div>
+            <div class="stat-card">
+                <h3>오늘 주문</h3>
+                <div class="value" id="todayOrders">-</div>
+                <div class="sub-value">오늘 접수된 주문</div>
+            </div>
+            <div class="stat-card">
+                <h3>오늘 매출</h3>
+                <div class="value" id="todayRevenue">-</div>
+                <div class="sub-value">완료된 주문 기준</div>
+            </div>
+            <div class="stat-card">
+                <h3>주문 상태</h3>
+                <div class="value" id="statusCount">-</div>
+                <div class="sub-value" id="statusDetail">-</div>
+            </div>
+        </div>
+
+        <!-- 메인 콘텐츠 -->
+        <div class="content-grid">
+            <!-- 주문 목록 -->
+            <div class="card">
+                <h2>📋 최근 주문</h2>
+                <div id="ordersList" class="loading">로딩 중...</div>
+                <div class="pagination" id="pagination"></div>
+            </div>
+
+            <!-- 사이드바 -->
+            <div>
+                <!-- 재고 요약 -->
+                <div class="card hidden-section" id="inventoryCard" style="margin-bottom: 2rem;">
+                    <h2>📦 재고 현황</h2>
+                    <div id="inventoryList" class="loading">로딩 중...</div>
+                </div>
+
+                <!-- TOP 판매 상품 -->
+                <div class="card">
+                    <h2>🏆 인기 상품</h2>
+                    <div id="topProducts" class="loading">로딩 중...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 1;
+
+        // localStorage에서 토글 상태 불러오기
+        function loadToggleStates() {
+            const statsVisible = localStorage.getItem('statsVisible') === 'true';
+            const inventoryVisible = localStorage.getItem('inventoryVisible') === 'true';
+            
+            if (statsVisible) {
+                showStats();
+            }
+            if (inventoryVisible) {
+                showInventory();
+            }
+        }
+
+        // 집계 카드 토글
+        function toggleStats() {
+            const statsGrid = document.getElementById('statsGrid');
+            const isVisible = statsGrid.classList.contains('visible-section');
+            
+            if (isVisible) {
+                hideStats();
+            } else {
+                showStats();
+            }
+        }
+
+        function showStats() {
+            const statsGrid = document.getElementById('statsGrid');
+            const toggleBtn = document.getElementById('toggleStatsBtn');
+            const icon = document.getElementById('statsIcon');
+            const text = document.getElementById('statsText');
+            
+            statsGrid.classList.remove('hidden-section');
+            statsGrid.classList.add('visible-section');
+            toggleBtn.classList.add('active');
+            icon.textContent = '🙈';
+            text.textContent = '집계 카드 숨기기';
+            
+            localStorage.setItem('statsVisible', 'true');
+        }
+
+        function hideStats() {
+            const statsGrid = document.getElementById('statsGrid');
+            const toggleBtn = document.getElementById('toggleStatsBtn');
+            const icon = document.getElementById('statsIcon');
+            const text = document.getElementById('statsText');
+            
+            statsGrid.classList.remove('visible-section');
+            statsGrid.classList.add('hidden-section');
+            toggleBtn.classList.remove('active');
+            icon.textContent = '👁️';
+            text.textContent = '집계 카드 보기';
+            
+            localStorage.setItem('statsVisible', 'false');
+        }
+
+        // 재고 현황 토글
+        function toggleInventory() {
+            const inventoryCard = document.getElementById('inventoryCard');
+            const isVisible = inventoryCard.classList.contains('visible-section');
+            
+            if (isVisible) {
+                hideInventory();
+            } else {
+                showInventory();
+            }
+        }
+
+        function showInventory() {
+            const inventoryCard = document.getElementById('inventoryCard');
+            const toggleBtn = document.getElementById('toggleInventoryBtn');
+            const icon = document.getElementById('inventoryIcon');
+            const text = document.getElementById('inventoryText');
+            
+            inventoryCard.classList.remove('hidden-section');
+            inventoryCard.classList.add('visible-section');
+            toggleBtn.classList.add('active');
+            icon.textContent = '🙈';
+            text.textContent = '재고 현황 숨기기';
+            
+            localStorage.setItem('inventoryVisible', 'true');
+            
+            // 재고 데이터 로드
+            loadInventory();
+        }
+
+        function hideInventory() {
+            const inventoryCard = document.getElementById('inventoryCard');
+            const toggleBtn = document.getElementById('toggleInventoryBtn');
+            const icon = document.getElementById('inventoryIcon');
+            const text = document.getElementById('inventoryText');
+            
+            inventoryCard.classList.remove('visible-section');
+            inventoryCard.classList.add('hidden-section');
+            toggleBtn.classList.remove('active');
+            icon.textContent = '👁️';
+            text.textContent = '재고 현황 보기';
+            
+            localStorage.setItem('inventoryVisible', 'false');
+        }
+
+        async function loadDashboard() {
+            const statsVisible = localStorage.getItem('statsVisible') === 'true';
+            const inventoryVisible = localStorage.getItem('inventoryVisible') === 'true';
+            
+            const promises = [
+                loadOrders(),
+                loadTopProducts()
+            ];
+            
+            // 집계 카드가 보이는 경우에만 로드
+            if (statsVisible) {
+                promises.push(loadStats());
+            }
+            
+            // 재고 현황이 보이는 경우에만 로드
+            if (inventoryVisible) {
+                promises.push(loadInventory());
+            }
+            
+            await Promise.all(promises);
+        }
+
+        async function loadStats() {
+            try {
+                const response = await fetch('/dashboard/api/stats');
+                const data = await response.json();
+                
+                document.getElementById('totalOrders').textContent = data.total_orders || 0;
+                document.getElementById('todayOrders').textContent = data.today_orders || 0;
+                document.getElementById('todayRevenue').textContent = 
+                    new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' })
+                        .format(data.today_revenue || 0);
+                
+                // 상태별 통계
+                const statusCount = Object.values(data.status_stats || {}).reduce((a, b) => a + b, 0);
+                document.getElementById('statusCount').textContent = statusCount;
+                
+                const statusDetail = Object.entries(data.status_stats || {})
+                    .map(([status, count]) => `${status}: ${count}`)
+                    .join(', ');
+                document.getElementById('statusDetail').textContent = statusDetail || '-';
+            } catch (error) {
+                console.error('Stats load error:', error);
+            }
+        }
+
+        async function loadOrders(page = 1) {
+            try {
+                const response = await fetch(`/dashboard/api/orders?page=${page}&per_page=10`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    document.getElementById('ordersList').innerHTML = 
+                        `<div class="error">오류: ${data.error}</div>`;
+                    return;
+                }
+
+                const ordersHtml = data.orders.map(order => {
+                    const statusClass = `status-${order.status}`;
+                    const items = order.items || [];
+                    const itemsHtml = items.map(item => 
+                        `<span class="item-tag">${item.name || item.sku} x${item.qty || 1}</span>`
+                    ).join('');
+
+                    return `
+                        <div class="order-item">
+                            <div class="order-header">
+                                <span class="order-id">주문 #${order.order_id.substring(0, 8)}</span>
+                                <span class="order-status ${statusClass}">${order.status}</span>
+                            </div>
+                            <div class="order-details">
+                                <div><strong>고객:</strong> ${order.customer_name || '-'}</div>
+                                <div><strong>채널:</strong> ${order.channel || '-'}</div>
+                                <div><strong>금액:</strong> ${new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(order.total_amount || 0)}</div>
+                                <div><strong>시간:</strong> ${new Date(order.ordered_at).toLocaleString('ko-KR')}</div>
+                            </div>
+                            ${itemsHtml ? `<div class="order-items">${itemsHtml}</div>` : ''}
+                        </div>
+                    `;
+                }).join('');
+
+                document.getElementById('ordersList').innerHTML = ordersHtml || '<div class="loading">주문이 없습니다.</div>';
+
+                // 페이지네이션
+                if (data.pages > 1) {
+                    let paginationHtml = '';
+                    for (let i = 1; i <= data.pages; i++) {
+                        paginationHtml += `
+                            <button class="page-btn ${i === page ? 'active' : ''}" 
+                                    onclick="loadOrders(${i})">${i}</button>
+                        `;
+                    }
+                    document.getElementById('pagination').innerHTML = paginationHtml;
+                } else {
+                    document.getElementById('pagination').innerHTML = '';
+                }
+            } catch (error) {
+                document.getElementById('ordersList').innerHTML = 
+                    `<div class="error">오류: ${error.message}</div>`;
+            }
+        }
+
+        async function loadInventory() {
+            try {
+                const response = await fetch('/dashboard/api/inventory');
+                const data = await response.json();
+                
+                if (data.error) {
+                    document.getElementById('inventoryList').innerHTML = 
+                        `<div class="error">오류: ${data.error}</div>`;
+                    return;
+                }
+
+                const inventoryHtml = data.inventory.map(item => `
+                    <div class="inventory-item">
+                        <div>
+                            <div class="inventory-name">${item.ingredient_name || item.ingredient_sku}</div>
+                            <div class="inventory-sku">${item.ingredient_sku} (${item.category})</div>
+                        </div>
+                        <div class="inventory-stats">
+                            <div class="stat-value">입고: ${item.total_in.toFixed(2)} ${item.base_unit}</div>
+                            <div style="font-size: 0.75rem; color: #999;">사용: ${item.total_out.toFixed(2)} ${item.base_unit}</div>
+                        </div>
+                    </div>
+                `).join('');
+
+                document.getElementById('inventoryList').innerHTML = 
+                    inventoryHtml || '<div class="loading">재고 데이터가 없습니다.</div>';
+            } catch (error) {
+                document.getElementById('inventoryList').innerHTML = 
+                    `<div class="error">오류: ${error.message}</div>`;
+            }
+        }
+
+        async function loadTopProducts() {
+            try {
+                const response = await fetch('/dashboard/api/analytics');
+                const data = await response.json();
+                
+                if (data.error) {
+                    document.getElementById('topProducts').innerHTML = 
+                        `<div class="error">오류: ${data.error}</div>`;
+                    return;
+                }
+
+                const productsHtml = (data.top_products || []).map((product, index) => `
+                    <div class="top-product">
+                        <div class="product-rank">${index + 1}</div>
+                        <div class="product-info">
+                            <div class="product-name">${product.display_name || product.sku}</div>
+                            <div class="product-sku">${product.sku}</div>
+                        </div>
+                        <div class="product-qty">${product.total_sold_qty.toFixed(0)}개</div>
+                    </div>
+                `).join('');
+
+                document.getElementById('topProducts').innerHTML = 
+                    productsHtml || '<div class="loading">데이터가 없습니다.</div>';
+            } catch (error) {
+                document.getElementById('topProducts').innerHTML = 
+                    `<div class="error">오류: ${error.message}</div>`;
+            }
+        }
+
+        // 초기 로드
+        loadToggleStates();
+        loadDashboard();
+
+        // 30초마다 자동 새로고침
+        setInterval(loadDashboard, 30000);
+    </script>
+</body>
+</html>
+
