@@ -124,7 +124,7 @@
 ### 5. Admin GUI 통합 ✅
 
 #### 5.1 UI 파일 이동
-- [x] `/home/gw/kitchmatics/ui_sample/` → `/home/gw/kitchmatics/roscamp-repo-1/kitchmatics/app/gui/` 복사 ✅
+- [x] `/home/gw/kitchmatics/ui_sample/` → `/home/gw/kitchmat0ics/roscamp-repo-1/kitchmatics/app/gui/` 복사 ✅
 
 #### 5.2 서빙 로봇 모니터링 탭 추가
 - [x] Admin GUI에 새로운 탭 생성 ✅

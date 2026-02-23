@@ -67,7 +67,7 @@ cat README.md
 ### 3. ROS 2 패키지 빌드
 
 ```bash
-cd /home/gw/kitchmatics/roscamp-repo-1/kitchmatics
+cd ~/roscamp-repo-1/
 
 # fleet_interfaces 빌드
 cd fleet_interfaces
@@ -90,7 +90,7 @@ source install/setup.bash
 ### 터미널 1: Main Server 실행
 
 ```bash
-cd /home/gw/kitchmatics/roscamp-repo-1/kitchmatics/app/backend
+cd ~/roscamp-repo-1/app/backend
 source install/setup.bash
 
 # Main Server 시작
@@ -105,7 +105,7 @@ ros2 run main_server main_server
 ### 터미널 2: FMS 실행
 
 ```bash
-cd /home/gw/kitchmatics/roscamp-repo-1/kitchmatics/fms
+cd ~/roscamp-repo-1/fms
 source install/setup.bash
 
 # FMS 노드 시작
