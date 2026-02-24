@@ -1,43 +1,49 @@
 #!/usr/bin/env python3
 """
-Kitchmatics - Multi-Robot Navigation Launch File with Frame Prefix Support
+Kitchmatics - Multi-Robot Navigation Launch File
 
-이 파일을 로봇의 ~/pinky_pro/src/pinky_pro/pinky_navigation/launch/bringup_launch.py에 오버라이드
+로봇에서 직접 실행:
+  ros2 launch ~/roscamp-repo-1/mobile_robot/launch/bringup_launch.py namespace:=pinky1 map:=~/real.yaml
 
 핵심 기능:
   - RewrittenYaml을 사용하여 frame 이름에 namespace prefix 자동 추가
   - 하나의 nav2_params.yaml로 pinky1, pinky2, pinky3 모두 지원
-
-사용법 (로봇에서):
-  ros2 launch pinky_navigation bringup_launch.py namespace:=pinky1 map:=real.yaml
-  ros2 launch pinky_navigation bringup_launch.py namespace:=pinky2 map:=real.yaml
+  - roscamp-repo-1의 params 파일 사용 (로봇 내장 코드 수정 불필요)
 """
 
 import os
-from ament_index_python.packages import get_package_share_directory
+from pathlib import Path
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, SetEnvironmentVariable
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node, PushRosNamespace
-from launch_ros.substitutions import FindPackageShare
 from nav2_common.launch import RewrittenYaml
 
 
 def generate_launch_description():
-    # Package directories
-    pkg_nav = get_package_share_directory('pinky_navigation')
+    # roscamp-repo-1 경로 (이 파일 기준으로 계산)
+    launch_dir = Path(__file__).parent
+    repo_dir = launch_dir.parent.parent  # roscamp-repo-1
+    params_dir = launch_dir.parent / 'params'
+
+    # 기본 params 파일 경로
+    default_params_file = str(params_dir / 'nav2_params.yaml')
+
+    # 홈 디렉토리
+    home_dir = Path.home()
+    default_map_file = str(home_dir / 'real.yaml')
 
     # Launch arguments
     namespace_arg = DeclareLaunchArgument(
         'namespace',
-        default_value='',
+        default_value='pinky1',
         description='Robot namespace (pinky1, pinky2, pinky3)'
     )
 
     map_arg = DeclareLaunchArgument(
         'map',
-        default_value='map.yaml',
-        description='Map file name (will look in home directory)'
+        default_value=default_map_file,
+        description='Full path to map yaml file'
     )
 
     use_sim_time_arg = DeclareLaunchArgument(
@@ -54,7 +60,7 @@ def generate_launch_description():
 
     params_file_arg = DeclareLaunchArgument(
         'params_file',
-        default_value=os.path.join(pkg_nav, 'params', 'nav2_params.yaml'),
+        default_value=default_params_file,
         description='Nav2 parameters file'
     )
 
@@ -77,7 +83,7 @@ def generate_launch_description():
         'global_frame': 'map',  # map frame은 공유
         # Behavior server
         'local_frame': [namespace, '/odom'],
-        # Topics
+        # Topics - namespace 적용
         'odom_topic': [namespace, '/odom'],
         'scan_topic': '/scan',
     }
