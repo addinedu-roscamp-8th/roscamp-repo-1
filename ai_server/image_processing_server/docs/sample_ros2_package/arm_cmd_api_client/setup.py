@@ -14,7 +14,7 @@ setup(
     zip_safe=True,
     maintainer='GueHoJung88',
     maintainer_email='emotionalmachine88@gmail.com',
-    description='Calls /analyze/arm_cmd API and optionally verifies /arm_b/cmd topic',
+    description='Calls /analyze/arm_cmd API and optionally verifies /verify/cmd topic',
     license='Apache-2.0',
     entry_points={
         'console_scripts': [

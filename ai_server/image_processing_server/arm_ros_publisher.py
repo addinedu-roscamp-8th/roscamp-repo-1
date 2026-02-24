@@ -14,7 +14,7 @@ def _load_config() -> dict:
     if not CONFIG_PATH.exists():
         return {
             "ros_domain_id": 21,
-            "topic_name": "/arm_b/cmd",
+            "topic_name": "/verify/cmd",
             "message_type": "std_msgs/msg/String",
             "commands": {
                 "handoff_pinky": "j1|HANDOFF_PINKY",
@@ -43,7 +43,7 @@ def publish_arm_cmd(command_key: str) -> dict:
     cfg = _load_config()
     env = dict(__import__("os").environ)
     env["ROS_DOMAIN_ID"] = str(cfg.get("ros_domain_id", 21))
-    topic = cfg.get("topic_name", "/arm_b/cmd")
+    topic = cfg.get("topic_name", "/verify/cmd")
     msg_type = cfg.get("message_type", "std_msgs/msg/String")
     commands = cfg.get("commands", {})
     data = commands.get(command_key)
@@ -54,7 +54,7 @@ def publish_arm_cmd(command_key: str) -> dict:
             "message": f"Unknown command_key: {command_key}",
             "returncode": -1,
         }
-    # ros2 topic pub --once /arm_b/cmd std_msgs/msg/String "data: 'j1|HANDOFF_PINKY'"
+    # ros2 topic pub --once /verify/cmd std_msgs/msg/String "data: 'j1|HANDOFF_PINKY'"
     cmd = [
         "ros2", "topic", "pub", "--once",
         topic,

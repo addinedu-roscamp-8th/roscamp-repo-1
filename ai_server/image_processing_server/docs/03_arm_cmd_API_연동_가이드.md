@@ -1,6 +1,6 @@
 # 이미지 분석 → ROS2 토픽 발행 API 연동 가이드 (로봇 팔)
 
-이미지 분석 서버의 **GET /analyze/arm_cmd** API를 호출하면, 서버가 스냅샷을 분석한 뒤 결과에 따라 **ROS_DOMAIN_ID=21** 환경에서 `/arm_b/cmd` 토픽으로 명령을 발행합니다. 로봇 팔 패키지에서 이 API를 호출하여 연동할 수 있습니다.
+이미지 분석 서버의 **GET /analyze/arm_cmd** API를 호출하면, 서버가 스냅샷을 분석한 뒤 결과에 따라 **ROS_DOMAIN_ID=21** 환경에서 `/verify/cmd` 토픽으로 명령을 발행합니다. 로봇 팔 패키지에서 이 API를 호출하여 연동할 수 있습니다.
 
 ---
 
@@ -51,10 +51,10 @@ python tests/test_arm_cmd_api.py
 
 ### 0.4 ROS2 토픽 수신 확인 (선택, ROS2 설치된 환경)
 
-서버가 **ROS_DOMAIN_ID=21** 로 `/arm_b/cmd` 를 발행하므로, 같은 도메인에서 echo 하려면:
+서버가 **ROS_DOMAIN_ID=21** 로 `/verify/cmd` 를 발행하므로, 같은 도메인에서 echo 하려면:
 
 ```bash
-ROS_DOMAIN_ID=21 ros2 topic echo /arm_b/cmd
+ROS_DOMAIN_ID=21 ros2 topic echo /verify/cmd
 ```
 
 그 다음 다른 터미널에서 `python tests/test_arm_cmd_api.py` 또는 `curl "http://<서버IP>:5001/analyze/arm_cmd"` 를 호출하면, echo 터미널에 수신 메시지가 출력됩니다.
@@ -67,7 +67,7 @@ ROS_DOMAIN_ID=21 ros2 topic echo /arm_b/cmd
 |------|------|
 | URL | `GET http://192.168.0.27:5001/analyze/arm_cmd` |
 | 동작 | 1) JetBot 스냅샷 수집 → 2) YOLO 분석 → 3) 클래스에 따라 ROS2 토픽 발행 |
-| ROS | `ROS_DOMAIN_ID=21`, 토픽 `/arm_b/cmd`, 메시지 `std_msgs/msg/String` |
+| ROS | `ROS_DOMAIN_ID=21`, 토픽 `/verify/cmd`, 메시지 `std_msgs/msg/String` |
 
 ### 클래스 → 명령 매핑
 
@@ -131,14 +131,14 @@ if data.get("success"):
 | 실행 명령 | 설명 |
 |-----------|------|
 | `ros2 run arm_cmd_api_client arm_cmd_api_client_node` | 주기적으로 /analyze/arm_cmd 호출 (파라미터: api_base, interval_sec) |
-| `ros2 run arm_cmd_api_client arm_cmd_echo_test` | /arm_b/cmd 구독하여 API가 발행한 명령 수신 확인 (ROS_DOMAIN_ID=21 필요) |
+| `ros2 run arm_cmd_api_client arm_cmd_echo_test` | /verify/cmd 구독하여 API가 발행한 명령 수신 확인 (ROS_DOMAIN_ID=21 필요) |
 
 ### 연동 테스트 절차
 
 1. 터미널 1: 이미지 분석 서버 실행  
    `python app.py` (또는 해당 서버 실행)
 2. 터미널 2: `ROS_DOMAIN_ID=21 ros2 run arm_cmd_api_client arm_cmd_echo_test`  
-   → /arm_b/cmd 수신 대기
+   → /verify/cmd 수신 대기
 3. 터미널 3: `curl "http://192.168.0.27:5001/analyze/arm_cmd"`  
    → 서버가 분석 후 ros2 topic pub 실행, 터미널 2에서 메시지 확인
 
@@ -167,13 +167,13 @@ python tests/test_arm_cmd_api.py
 
 ```bash
 # HANDOFF_PINKY (배달로봇 인수)
-ros2 topic pub --once /arm_b/cmd std_msgs/msg/String "data: 'j1|HANDOFF_PINKY'"
+ros2 topic pub --once /verify/cmd std_msgs/msg/String "data: 'j1|HANDOFF_PINKY'"
 
 # DISCARD (폐기)
-ros2 topic pub --once /arm_b/cmd std_msgs/msg/String "data: 'j1|DISCARD'"
+ros2 topic pub --once /verify/cmd std_msgs/msg/String "data: 'j1|DISCARD'"
 
 # CANCEL
-ros2 topic pub --once /arm_b/cmd std_msgs/msg/String "data: 'j1|CANCEL'"
+ros2 topic pub --once /verify/cmd std_msgs/msg/String "data: 'j1|CANCEL'"
 ```
 
 위 명령은 **ROS_DOMAIN_ID=21** 환경에서 실행해야 로봇 팔 노드와 동일 도메인에서 수신됩니다.

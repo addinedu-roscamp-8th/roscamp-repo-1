@@ -251,7 +251,7 @@
 
 ## 6. 이미지 분석 + ROS2 토픽 발행 (GET `/analyze/arm_cmd`) — 로봇 팔 연동
 
-이미지(스냅샷)를 분석한 뒤, 검출 클래스에 따라 **ROS_DOMAIN_ID=21** 환경에서 **ros2 topic pub --once /arm_b/cmd std_msgs/msg/String** 를 실행합니다. 로봇 팔 패키지에서 이 API를 호출하면, 서버가 분석과 토픽 발행까지 수행합니다.
+이미지(스냅샷)를 분석한 뒤, 검출 클래스에 따라 **ROS_DOMAIN_ID=21** 환경에서 **ros2 topic pub --once /verify/cmd std_msgs/msg/String** 를 실행합니다. 로봇 팔 패키지에서 이 API를 호출하면, 서버가 분석과 토픽 발행까지 수행합니다.
 
 **클래스 → 명령**
 

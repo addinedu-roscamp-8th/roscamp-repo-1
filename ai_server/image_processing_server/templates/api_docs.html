@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YOLO 분석 서버 API 문서</title>
+  <style>
+    :root { --bg: #0f1116; --card: #161b22; --border: #30363d; --text: #e6edf3; --text-muted: #8b949e; --accent: #58a6ff; --success: #3fb950; --error: #f85149; }
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 900px; margin: 0 auto; padding: 24px 20px; }
+    h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
+    h2 { font-size: 1.25rem; margin-top: 2rem; margin-bottom: 0.75rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.25rem; }
+    h3 { font-size: 1rem; margin-top: 1.25rem; color: var(--text-muted); }
+    p { margin: 0.5rem 0; color: var(--text-muted); }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .meta { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.5rem; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem 0; }
+    .method { display: inline-block; font-weight: 700; padding: 2px 8px; border-radius: 4px; font-size: 0.85rem; margin-right: 8px; }
+    .method.get { background: #238636; color: #fff; }
+    .method.post { background: #1f6feb; color: #fff; }
+    .path { font-family: ui-monospace, monospace; font-size: 0.95rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin: 0.75rem 0; }
+    th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+    th { color: var(--text-muted); font-weight: 600; }
+    pre { background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; overflow-x: auto; font-size: 0.85rem; margin: 0.5rem 0; }
+    code { font-family: ui-monospace, monospace; font-size: 0.9em; background: rgba(110,118,129,0.2); padding: 2px 6px; border-radius: 4px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; }
+    .badge.optional { background: rgba(88,166,255,0.2); color: var(--accent); }
+    .badge.required { background: rgba(248,81,73,0.2); color: var(--error); }
+    .nav { margin-bottom: 2rem; }
+    .nav a { margin-right: 1rem; }
+    .endpoint-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 0.5rem; }
+    .http-code { font-size: 0.8rem; color: var(--success); }
+    .http-code.err { color: var(--error); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <nav class="nav">
+      <a href="/">← API 정보</a>
+      <a href="/view">실시간 뷰</a>
+    </nav>
+    <h1>YOLO 분석 서버 API 문서</h1>
+    <p class="meta">JetBot 영상/이미지를 가져와 YOLO로 객체 검출 후 JSON으로 반환하는 Flask API</p>
+
+    <h2>개요</h2>
+    <div class="card">
+      <p><strong>Base URL</strong>: <code>http://&lt;서버IP&gt;:5001</code> (포트는 <code>config/server_config.yaml</code> 또는 환경변수 <code>YOLO_SERVER_PORT</code>, <code>YOLO_SERVER_HOST</code>로 변경 가능)</p>
+      <p><strong>Content-Type</strong>: <code>application/json</code> (요청/응답 공통)</p>
+      <p><strong>에러 시</strong>: HTTP 4xx/5xx + JSON body에 <code>success</code>, <code>error</code>, <code>message</code> 등 포함</p>
+    </div>
+
+    <h2>공통 에러 응답</h2>
+    <table>
+      <thead><tr><th>HTTP 코드</th><th>의미</th><th>JSON 예시</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>503</td>
+          <td>소스 연결 실패 (JetBot 스냅샷/영상 가져오기 실패)</td>
+          <td><code>{"success": false, "error": "source_fetch_failed", "message": "..."}</code></td>
+        </tr>
+        <tr>
+          <td>500</td>
+          <td>서버 내부 오류 (YOLO 추론 실패, 모델 로드 실패 등)</td>
+          <td><code>{"success": false, "error": "inference_failed", "message": "..."}</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>엔드포인트 목록</h2>
+    <table>
+      <thead><tr><th>메서드</th><th>경로</th><th>설명</th></tr></thead>
+      <tbody>
+        <tr><td>GET</td><td><code>/</code></td><td>API 정보 및 엔드포인트 목록</td></tr>
+        <tr><td>GET</td><td><code>/health</code></td><td>서버·모델 상태 확인</td></tr>
+        <tr><td>GET</td><td><code>/model_info</code></td><td>YOLO 모델 경로(best.pt)·로드 상태·클래스 목록</td></tr>
+        <tr><td>GET</td><td><code>/analyze/image</code></td><td>스냅샷 이미지 분석 결과 반환</td></tr>
+        <tr><td>GET</td><td><code>/analyze/video</code></td><td>영상 스트림 분석 결과 반환 (일괄 JSON)</td></tr>
+        <tr><td>GET</td><td><code>/analyze/video/stream</code></td><td>영상 분석 결과 실시간 스트리밍 (SSE)</td></tr>
+        <tr><td>GET</td><td><code>/stream/preview</code></td><td>MJPEG 스트리밍 + bbox·검출 상태 오버레이</td></tr>
+        <tr><td>GET</td><td><code>/view</code></td><td>스트리밍 + 검출 상태 표시용 HTML 페이지</td></tr>
+        <tr><td>GET</td><td><code>/analyze/arm_cmd</code></td><td>이미지 분석 후 ROS2 토픽 발행 (로봇 팔 연동)</td></tr>
+        <tr><td>POST</td><td><code>/reload_model</code></td><td>YOLO 모델 재로드</td></tr>
+      </tbody>
+    </table>
+
+    <h2>1. API 정보</h2>
+    <div class="card">
+      <div class="endpoint-title"><span class="method get">GET</span><span class="path">/</span></div>
+      <p>서비스 설명과 사용 가능한 엔드포인트 목록을 반환합니다.</p>
+      <h3>Request</h3>
+      <p>Body 없음. Query 없음.</p>
+      <h3>Response <span class="http-code">200 OK</span></h3>
+      <pre>{
+  "service": "yolo-analysis",
+  "description": "YOLO 기반 영상/이미지 분석 API (JetBot 소스 연동)",
+  "endpoints": {
+    "health": "/health",
+    "model_info": "GET /model_info",
+    "analyze_image": "GET /analyze/image",
+    "analyze_video": "GET /analyze/video",
+    "analyze_video_stream": "GET /analyze/video/stream (SSE)",
+    "stream_preview": "GET /stream/preview (MJPEG)",
+    "view": "GET /view",
+    "reload_model": "POST /reload_model",
+    "analyze_arm_cmd": "GET /analyze/arm_cmd",
+    "interface_spec": "See INTERFACE_SPEC.md"
+  }
+}</pre>
+    </div>
+
+    <h2>2. 헬스 체크</h2>
+    <div class="card">
+      <div class="endpoint-title"><span class="method get">GET</span><span class="path">/health</span></div>
+      <p>서버 동작 여부 및 YOLO 모델 로드 상태를 확인합니다.</p>
+      <h3>Request</h3>
+      <p>Body 없음. Query 없음.</p>
+      <h3>Response <span class="http-code">200 OK</span></h3>
+      <pre>{
+  "status": "ok",
+  "model": "loaded"
+}</pre>
+      <p>모델 로드 실패 시 <code>model</code> 필드에 <code>"error: &lt;메시지&gt;"</code> 형태로 들어갑니다.</p>
+    </div>
+
+    <h2>3. 모델 정보</h2>
+    <div class="card">
+      <div class="endpoint-title"><span class="method get">GET</span><span class="path">/model_info</span></div>
+      <p>현재 사용 중인 YOLO 모델의 절대 경로, 파일 존재 여부, 클래스 목록, 로드 상태를 반환합니다.</p>
+      <h3>Request</h3>
+      <p>Body 없음. Query 없음.</p>
+      <h3>Response <span class="http-code">200 OK</span></h3>
+      <pre>{
+  "model_path": "/path/to/best.pt",
+  "model_path_exists": true,
+  "class_names": ["Hamcheese", "Mushroom", "All-in-one", "NG"],
+  "load_status": "loaded"
+}</pre>
+      <table>
+        <tr><th>필드</th><th>설명</th></tr>
+        <tr><td>model_path</td><td>로드에 사용된 모델 파일 절대 경로</td></tr>
+        <tr><td>model_path_exists</td><td>해당 경로에 파일 존재 여부</td></tr>
+        <tr><td>class_names</td><td>config에 정의된 클래스명</td></tr>
+        <tr><td>load_status</td><td><code>loaded</code> | <code>file_not_found</code> | <code>load_error: ...</code></td></tr>
+      </table>
+      <h3>Error <span class="http-code err">500</span></h3>
+      <pre>{
+  "error": "...",
+  "model_path": null,
+  "model_path_exists": false,
+  "class_names": [],
+  "load_status": "error: ..."
+}</pre>
+    </div>
+
+    <h2>4. 이미지 분석</h2>
+    <div class="card">
+      <div class="endpoint-title"><span class="method get">GET</span><span class="path">/analyze/image</span></div>
+      <p>JetBot <code>/snapshot</code>에서 이미지를 다운로드한 뒤 YOLO 분석 결과를 반환합니다. 호출 측은 이미지를 전송할 필요 없이 GET만 하면 됩니다.</p>
+      <h3>Request</h3>
+      <p>Body 없음. Query 없음.</p>
+      <h3>Response <span class="http-code">200 OK</span></h3>
+      <pre>{
+  "success": true,
+  "source": "snapshot",
+  "image_size": { "width": 640, "height": 480 },
+  "detections": [
+    {
+      "class_id": 0,
+      "class_name": "Hamcheese",
+      "confidence": 0.92,
+      "bbox": [100, 150, 300, 400]
+    }
+  ],
+  "count": 1
+}</pre>
+      <table>
+        <tr><th>필드</th><th>타입</th><th>설명</th></tr>
+        <tr><td>detections[].class_id</td><td>int</td><td>클래스 ID</td></tr>
+        <tr><td>detections[].class_name</td><td>string</td><td>클래스 이름</td></tr>
+        <tr><td>detections[].confidence</td><td>float</td><td>신뢰도 (0~1)</td></tr>
+        <tr><td>detections[].bbox</td><td>[x1,y1,x2,y2]</td><td>바운딩 박스 픽셀 좌표</td></tr>
+      </table>
+      <h3>Error <span class="http-code err">503</span></h3>
+      <pre>{"success": false, "error": "source_fetch_failed", "message": "Connection error ..."}</pre>
+      <h3>Error <span class="http-code err">500</span></h3>
+      <pre>{"success": false, "error": "inference_failed", "message": "..."}</pre>
+    </div>
+
+    <h2>5. 영상 분석 (일괄)</h2>
+    <div class="card">
+      <div class="endpoint-title"><span class="method get">GET</span><span class="path">/analyze/video</span></div>
+      <p>JetBot <code>/video_feed</code> 스트림에서 프레임을 읽어 YOLO 분석 후, 프레임별 검출 결과를 묶어 반환합니다.</p>
+      <h3>Request</h3>
+      <table>
+        <tr><th>Query</th><th>타입</th><th>설명</th></tr>
+        <tr><td>num_frames</td><td>int <span class="badge optional">optional</span></td><td>분석할 프레임 수. 생략 시 config 기준(기본 5)</td></tr>
+      </table>
+      <h3>Response <span class="http-code">200 OK</span></h3>
+      <pre>{
+  "success": true,
+  "source": "video_feed",
+  "num_frames": 5,
+  "frames": [
+    { "frame_index": 0, "image_size": {...}, "detections": [...], "count": 1 }
+  ],
+  "detections": [...],
+  "total_detections": 3
+}</pre>
+      <h3>Error <span class="http-code err">503</span></h3>
+      <pre>{"success": false, "error": "source_fetch_failed", "message": "..."}</pre>
+      <h3>Error <span class="http-code err">500</span></h3>
+      <pre>{"success": false, "error": "inference_failed", "message": "...", "frame_index": 2}</pre>
+    </div>
+
+    <h2>6. 이미지 분석 + ROS2 토픽 발행 (로봇 팔 연동)</h2>
+    <div class="card">
+      <div class="endpoint-title"><span class="method get">GET</span><span class="path">/analyze/arm_cmd</span></div>
+      <p>스냅샷을 분석한 뒤, 검출 클래스에 따라 <strong>ROS_DOMAIN_ID=21</strong> 환경에서 <strong>/verify/cmd</strong> 토픽으로 명령을 발행합니다.</p>
+      <p><strong>클래스 → 명령</strong>: Hamcheese, Mushroom, All-in-one → HANDOFF_PINKY | NG → DISCARD | 검출 없음 → 발행 안 함(또는 config에서 no_detection_command)</p>
+      <h3>Request</h3>
+      <p>Body 없음. Query 없음.</p>
+      <h3>Response <span class="http-code">200 OK</span></h3>
+      <pre>{
+  "success": true,
+  "source": "snapshot",
+  "image_size": { "width": 640, "height": 480 },
+  "detections": [{ "class_name": "Hamcheese", "confidence": 0.92, "bbox": [...] }],
+  "count": 1,
+  "command_key": "handoff_pinky",
+  "ros_published": {
+    "success": true,
+    "command": "handoff_pinky",
+    "data": "j1|HANDOFF_PINKY",
+    "returncode": 0,
+    "message": "ok"
+  }
+}</pre>
+      <table>
+        <tr><th>필드</th><th>설명</th></tr>
+        <tr><td>command_key</td><td><code>handoff_pinky</code> | <code>discard</code> | null</td></tr>
+        <tr><td>ros_published</td><td>서버가 실행한 ros2 topic pub 결과. 없으면 null</td></tr>
+      </table>
+      <h3>Error <span class="http-code err">503</span></h3>
+      <pre>{"success": false, "error": "source_fetch_failed", "message": "...", "ros_published": null}</pre>
+      <h3>Error <span class="http-code err">500</span></h3>
+      <pre>{"success": false, "error": "inference_failed", "message": "...", "ros_published": null}</pre>
+    </div>
+
+    <h2>7. 영상 분석 스트리밍 (SSE)</h2>
+    <div class="card">
+      <div class="endpoint-title"><span class="method get">GET</span><span class="path">/analyze/video/stream</span></div>
+      <p>JetBot <code>/video_feed</code> 스트림을 실시간으로 읽어, 프레임마다 YOLO 분석 결과를 Server-Sent Events로 전송합니다.</p>
+      <h3>Request</h3>
+      <table>
+        <tr><th>Query</th><th>타입</th><th>설명</th></tr>
+        <tr><td>max_frames</td><td>int <span class="badge optional">optional</span></td><td>최대 전송 프레임 수. 생략 시 stream_timeout_seconds까지</td></tr>
+      </table>
+      <h3>Response <span class="http-code">200 OK</span></h3>
+      <p><strong>Content-Type</strong>: <code>text/event-stream</code>. 각 이벤트: <code>data: &lt;JSON&gt;\n\n</code></p>
+      <pre>{"frame_index": 0, "image_size": {"width": 640, "height": 480}, "detections": [...], "count": 1}</pre>
+      <h3>에러 이벤트 (스트림 내)</h3>
+      <pre>{"error": "source_fetch_failed", "message": "..."}
+{"error": "inference_failed", "message": "...", "frame_index": 3}</pre>
+    </div>
+
+    <h2>8. 스트리밍 프리뷰 / 뷰 페이지</h2>
+    <div class="card">
+      <div class="endpoint-title"><span class="method get">GET</span><span class="path">/stream/preview</span></div>
+      <p>JetBot 영상을 받아 프레임마다 YOLO 분석 후, bbox와 "Detected: ..." / "No detection" 문구를 그려 MJPEG 스트리밍. <code>Content-Type: multipart/x-mixed-replace; boundary=frame</code></p>
+      <div class="endpoint-title" style="margin-top:1rem"><span class="method get">GET</span><span class="path">/view</span></div>
+      <p>위 스트림을 보여주는 HTML 페이지. 브라우저에서 <code>/view</code> 로 접속하면 영상과 검출 여부를 함께 볼 수 있습니다.</p>
+    </div>
+
+    <h2>9. 모델 재로드</h2>
+    <div class="card">
+      <div class="endpoint-title"><span class="method post">POST</span><span class="path">/reload_model</span></div>
+      <p><code>config/yolo_config.yaml</code> 변경 후 서버 재시작 없이 YOLO 모델만 다시 로드할 때 사용합니다.</p>
+      <h3>Request</h3>
+      <p>Body 없음 (또는 빈 JSON <code>{}</code>).</p>
+      <h3>Response <span class="http-code">200 OK</span></h3>
+      <pre>{"success": true, "message": "Model reloaded from config."}</pre>
+      <h3>Error <span class="http-code err">500</span></h3>
+      <pre>{"success": false, "error": "모델 파일을 찾을 수 없음 ..."}</pre>
+    </div>
+
+    <h2>설정 파일 요약</h2>
+    <table>
+      <tr><th>파일</th><th>용도</th></tr>
+      <tr><td>config/yolo_config.yaml</td><td>모델 경로(model_path), 클래스명(class_names), 추론 옵션</td></tr>
+      <tr><td>config/jetbot_config.yaml</td><td>JetBot base URL, /snapshot, /video_feed, 프레임 수·타임아웃</td></tr>
+      <tr><td>config/arm_ros_config.yaml</td><td>ROS_DOMAIN_ID, /verify/cmd 토픽, 클래스→명령 매핑</td></tr>
+      <tr><td>config/server_config.yaml</td><td>서버 host, port (기본 5001)</td></tr>
+    </table>
+    <p class="meta" style="margin-top:2rem">문서 끝. <a href="/">API 정보로 돌아가기</a></p>
+  </div>
+</body>
+</html>

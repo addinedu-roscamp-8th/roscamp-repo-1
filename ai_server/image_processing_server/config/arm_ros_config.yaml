@@ -1,8 +1,8 @@
 # 로봇 팔 제어용 ROS2 토픽 발행 설정
-# 이미지 분석 결과(클래스)에 따라 /arm_b/cmd 토픽으로 명령 발행
+# 이미지 분석 결과(클래스)에 따라 /verify/cmd 토픽으로 명령 발행
 
 ros_domain_id: 21
-topic_name: "/arm_b/cmd"
+topic_name: "/verify/cmd"
 message_type: "std_msgs/msg/String"
 
 # 클래스별 발행할 데이터 (data 필드 값)

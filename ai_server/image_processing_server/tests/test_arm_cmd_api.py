@@ -20,7 +20,7 @@ def call_analyze_arm_cmd(api_base: str = "http://192.168.0.27:5001", timeout: fl
     """
     이미지 분석 서버 GET /analyze/arm_cmd 호출.
     서버가 스냅샷을 받아 분석하고, 결과에 따라 ROS_DOMAIN_ID=21 로
-    ros2 topic pub --once /arm_b/cmd std_msgs/msg/String "data: 'j1|HANDOFF_PINKY'" 등 실행.
+    ros2 topic pub --once /verify/cmd std_msgs/msg/String "data: 'j1|HANDOFF_PINKY'" 등 실행.
 
     Returns:
         {

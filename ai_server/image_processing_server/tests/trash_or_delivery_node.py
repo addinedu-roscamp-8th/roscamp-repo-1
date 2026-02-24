@@ -133,7 +133,7 @@ def call_analyze_arm_cmd(api_base: str = "http://192.168.0.27:5001", timeout: fl
     """
     이미지 분석 서버 GET /analyze/arm_cmd 호출.
     서버가 스냅샷을 받아 분석하고, 결과에 따라 ROS_DOMAIN_ID=21 로
-    ros2 topic pub --once /arm_b/cmd std_msgs/msg/String "data: 'j1|HANDOFF_PINKY'" 등 실행.
+    ros2 topic pub --once /verify/cmd std_msgs/msg/String "data: 'j1|HANDOFF_PINKY'" 등 실행.
 
     Returns:
         {
@@ -175,7 +175,7 @@ class BTrayOrchestratorNode(Node):
     """
     Arm B tray orchestrator (single node).
 
-    /arm_b/cmd:
+    /verify/cmd:
       "<job_id>|TRANSPORT_TO_VERIFY"
       "<job_id>|HANDOFF_PINKY"
       "<job_id>|DISCARD"
@@ -216,7 +216,7 @@ class BTrayOrchestratorNode(Node):
         self.poses = load_yaml(self.get_parameter("poses_yaml").value)
 
         # topic interface
-        self.cmd_sub = self.create_subscription(String, "/arm_b/cmd", self._on_cmd, 10)
+        self.cmd_sub = self.create_subscription(String, "/verify/cmd", self._on_cmd, 10)
         self.status_pub = self.create_publisher(String, "/arm_b/status", 10)
 
         # clients
@@ -239,7 +239,7 @@ class BTrayOrchestratorNode(Node):
         self._lock = threading.Lock()
 
         self._publish_status("sys", "IDLE")
-        self.get_logger().info("Ready: /arm_b/cmd -> tray orchestrator")
+        self.get_logger().info("Ready: /verify/cmd -> tray orchestrator")
 
     # -----------------------------
     # infra
@@ -538,7 +538,7 @@ class BTrayOrchestratorNode(Node):
             raise RuntimeError(f"gripper_open:{msg}")
         await asyncio.sleep(m.settle)
 
-        # 이미지 분석 API 호출 (서버가 /arm_b/cmd 로도 발행하므로, 여기서는 응답만 사용해 다음 동작을 결정)
+        # 이미지 분석 API 호출 (서버가 /verify/cmd 로도 발행하므로, 여기서는 응답만 사용해 다음 동작을 결정)
         data = await asyncio.to_thread(call_analyze_arm_cmd)
         if data.get("success"):
             command_key = data.get("command_key")  # "handoff_pinky" | "discard" | None

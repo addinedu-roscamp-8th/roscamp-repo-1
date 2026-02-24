@@ -8,9 +8,9 @@ model_path: "/home/addinedu/Documents/roscamp-repo-1/ai_server/image_processing_
 # 클래스 이름 리스트 (모델 학습 시 사용한 순서와 동일해야 함)
 # 사전학습 COCO 모델 사용 시 ultralytics 데이터셋 클래스명을 사용
 class_names:
+  - "All-in-one"
   - "Hamcheese"
   - "Mushroom"
-  - "All-in-one"
   - "NG"
 
 # 추론 옵션

@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 import yaml
-from flask import Flask, Response, jsonify, request, stream_with_context
+from flask import Flask, Response, jsonify, render_template, request, stream_with_context
 
 import cv2
 from source_fetcher import get_snapshot_image, get_video_frames, stream_video_frames
@@ -44,9 +44,16 @@ def index():
             "view": "GET /view (스트리밍 + 검출 상태 표시)",
             "reload_model": "POST /reload_model",
             "analyze_arm_cmd": "GET /analyze/arm_cmd (이미지 분석 후 ROS2 토픽 발행)",
+            "api_docs": "GET /api_docs (API 문서 페이지)",
             "interface_spec": "See INTERFACE_SPEC.md",
         },
     })
+
+
+@app.route("/api_docs")
+def api_docs():
+    """API 사용법, 스펙, Request/Response, 에러 메시지가 정리된 문서 페이지."""
+    return render_template("api_docs.html")
 
 
 @app.route("/health")
