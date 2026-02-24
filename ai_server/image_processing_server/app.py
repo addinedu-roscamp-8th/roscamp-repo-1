@@ -12,6 +12,7 @@ from flask import Flask, Response, jsonify, request, stream_with_context
 import cv2
 from source_fetcher import get_snapshot_image, get_video_frames, stream_video_frames
 from yolo_analyzer import analyze_image, analyze_and_draw, get_model_info, reload_model
+from arm_ros_publisher import detection_to_command, publish_arm_cmd
 
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = ROOT / "config" / "server_config.yaml"
@@ -42,6 +43,7 @@ def index():
             "stream_preview": "GET /stream/preview (MJPEG)",
             "view": "GET /view (스트리밍 + 검출 상태 표시)",
             "reload_model": "POST /reload_model",
+            "analyze_arm_cmd": "GET /analyze/arm_cmd (이미지 분석 후 ROS2 토픽 발행)",
             "interface_spec": "See INTERFACE_SPEC.md",
         },
     })
@@ -266,6 +268,49 @@ def analyze_video_stream_endpoint():
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@app.route("/analyze/arm_cmd", methods=["GET"])
+def analyze_arm_cmd_endpoint():
+    """
+    이미지 분석 후 결과에 따라 ROS2 토픽 발행 (ROS_DOMAIN_ID=21).
+    - 샌드위치 클래스(Hamcheese, Mushroom, All-in-one) -> HANDOFF_PINKY
+    - NG 클래스 -> DISCARD
+    - 검출 없음 -> 발행 안 함 (또는 config에서 no_detection_command 설정 시 CANCEL 등)
+    """
+    try:
+        img = get_snapshot_image()
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": "source_fetch_failed",
+            "message": str(e),
+            "ros_published": None,
+        }), 503
+    try:
+        detections = analyze_image(img)
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": "inference_failed",
+            "message": str(e),
+            "ros_published": None,
+        }), 500
+
+    command_key = detection_to_command(detections)
+    ros_result = None
+    if command_key:
+        ros_result = publish_arm_cmd(command_key)
+
+    return jsonify({
+        "success": True,
+        "source": "snapshot",
+        "image_size": {"width": img.shape[1], "height": img.shape[0]},
+        "detections": detections,
+        "count": len(detections),
+        "command_key": command_key,
+        "ros_published": ros_result,
+    })
 
 
 @app.route("/reload_model", methods=["POST"])

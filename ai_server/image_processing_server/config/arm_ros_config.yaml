@@ -1,0 +1,27 @@
+# 로봇 팔 제어용 ROS2 토픽 발행 설정
+# 이미지 분석 결과(클래스)에 따라 /arm_b/cmd 토픽으로 명령 발행
+
+ros_domain_id: 21
+topic_name: "/arm_b/cmd"
+message_type: "std_msgs/msg/String"
+
+# 클래스별 발행할 데이터 (data 필드 값)
+# 샌드위치 클래스 -> HANDOFF_PINKY(배달로봇으로 인수)
+# NG 클래스 -> DISCARD(폐기)
+commands:
+  handoff_pinky: "j1|HANDOFF_PINKY"
+  discard: "j1|DISCARD"
+  cancel: "j1|CANCEL"
+
+# 분석 결과 클래스명 -> 명령 매핑
+# 여기 있는 클래스명은 YOLO class_names와 일치해야 함
+class_to_command:
+  # 샌드위치 클래스 -> handoff
+  Hamcheese: handoff_pinky
+  Mushroom: handoff_pinky
+  "All-in-one": handoff_pinky
+  # NG -> discard
+  NG: discard
+
+# 검출이 없을 때 발행할 명령 (선택). 비우면 발행 안 함
+# no_detection_command: cancel

@@ -1,0 +1,12 @@
+# Request
+string job_id
+string image_topic        # 예: /camera/image_raw
+string server_ip
+uint16 server_port
+float32 timeout_sec
+---
+# Response
+bool success
+bool ok
+float32 score
+string message

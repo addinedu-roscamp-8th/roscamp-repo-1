@@ -1,0 +1,9 @@
+# Goal
+string sauce_key        
+---
+# Result
+bool success
+string message
+---
+# Feedback
+string state

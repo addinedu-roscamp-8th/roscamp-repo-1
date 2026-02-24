@@ -1,6 +1,6 @@
 # JetBot 라즈베리파이 영상/이미지 소스 설정
 
-base_url: "http://192.168.0.59:5000"
+base_url: "http://192.168.1.10:5000"
 
 endpoints:
   snapshot: "/snapshot"      # 이미지 다운로드

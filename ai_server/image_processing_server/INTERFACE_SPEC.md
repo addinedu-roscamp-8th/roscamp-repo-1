@@ -28,6 +28,7 @@
 | GET | `/analyze/video/stream` | 영상 분석 결과 실시간 스트리밍 (SSE) |
 | GET | `/stream/preview` | 영상 MJPEG 스트리밍 + bbox·검출 상태 오버레이 |
 | GET | `/view` | 스트리밍 + 검출 상태 표시용 HTML 페이지 |
+| GET | `/analyze/arm_cmd` | 이미지 분석 후 결과에 따라 ROS2 토픽 발행 (로봇 팔 연동) |
 | POST | `/reload_model` | YOLO 모델 재로드 (설정 변경 후) |
 
 ---
@@ -248,7 +249,40 @@
 
 ---
 
-## 6. 영상 분석 실시간 스트리밍 (GET `/analyze/video/stream`)
+## 6. 이미지 분석 + ROS2 토픽 발행 (GET `/analyze/arm_cmd`) — 로봇 팔 연동
+
+이미지(스냅샷)를 분석한 뒤, 검출 클래스에 따라 **ROS_DOMAIN_ID=21** 환경에서 **ros2 topic pub --once /arm_b/cmd std_msgs/msg/String** 를 실행합니다. 로봇 팔 패키지에서 이 API를 호출하면, 서버가 분석과 토픽 발행까지 수행합니다.
+
+**클래스 → 명령**
+
+- **Hamcheese, Mushroom, All-in-one** → `data: 'j1|HANDOFF_PINKY'` (배달로봇 인수)
+- **NG** → `data: 'j1|DISCARD'` (폐기)
+- 검출 없음 → 발행 안 함 (설정 시 CANCEL 가능)
+
+**요청**: `GET /analyze/arm_cmd` (Body 없음)
+
+**성공 응답 (200 OK)**
+
+```json
+{
+  "success": true,
+  "source": "snapshot",
+  "image_size": {"width": 640, "height": 480},
+  "detections": [{"class_name": "Hamcheese", "confidence": 0.92, "bbox": [100, 150, 300, 400]}],
+  "count": 1,
+  "command_key": "handoff_pinky",
+  "ros_published": {"success": true, "command": "handoff_pinky", "data": "j1|HANDOFF_PINKY", "returncode": 0}
+}
+```
+
+- `command_key`: `handoff_pinky` | `discard` | null
+- `ros_published`: 서버가 실행한 ros2 topic pub 결과. `success`, `returncode` 등 포함.
+
+설정: `config/arm_ros_config.yaml`. 상세 연동 방법: **docs/03_arm_cmd_API_연동_가이드.md**.
+
+---
+
+## 7. 영상 분석 실시간 스트리밍 (GET `/analyze/video/stream`)
 
 JetBot `/video_feed` 스트림을 **실시간**으로 읽어, 프레임마다 YOLO 분석 결과를 **Server-Sent Events(SSE)** 로 전송합니다. 클라이언트는 스트림을 구독하다가 연결을 끊으면 수신이 종료됩니다.
 
@@ -338,14 +372,14 @@ es.onerror = () => es.close();
 
 ---
 
-## 7. 스트리밍 프리뷰 (GET `/stream/preview`) 및 뷰 페이지 (GET `/view`)
+## 8. 스트리밍 프리뷰 (GET `/stream/preview`) 및 뷰 페이지 (GET `/view`)
 
 - **GET /stream/preview**: JetBot 영상을 받아 프레임마다 YOLO 분석 후, bbox와 상단에 **Detected: m1, m2** 또는 **No detection** 문구를 그려 **MJPEG** 스트리밍. `Content-Type: multipart/x-mixed-replace; boundary=frame`.
 - **GET /view**: 위 스트림을 보여주는 HTML 페이지. 브라우저에서 `http://<서버>:5001/view` 로 접속하면 영상과 검출 여부를 함께 볼 수 있음.
 
 ---
 
-## 8. 모델 재로드 (POST `/reload_model`)
+## 9. 모델 재로드 (POST `/reload_model`)
 
 `config/yolo_config.yaml`에서 모델 경로·클래스명 등을 변경한 뒤, 서버를 재시작하지 않고 YOLO 모델만 다시 로드할 때 사용합니다.
 

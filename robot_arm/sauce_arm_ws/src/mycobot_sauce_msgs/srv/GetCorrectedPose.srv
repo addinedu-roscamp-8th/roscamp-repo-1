@@ -1,0 +1,5 @@
+float64[6] raw_pose
+---
+float64[6] corrected_pose
+bool applied
+string message
