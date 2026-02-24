@@ -7,12 +7,13 @@ import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from nav2_msgs.action import NavigateToPose
-from geometry_msgs.msg import PoseStamped, Pose
+from geometry_msgs.msg import PoseStamped, Pose, PoseWithCovarianceStamped
 from fleet_interfaces.msg import (
     OrderRequest,
     RobotStatus,
     FleetStatus,
-    DeliveryComplete
+    DeliveryComplete,
+    RobotArrival
 )
 from std_msgs.msg import Float32, Bool
 from builtin_interfaces.msg import Time
@@ -77,17 +78,35 @@ class FMSNode(Node):
 
         # Navigation action clients for each robot
         self.nav_clients = {}
+        # Initial pose publishers for AMCL
+        self.initialpose_pubs = {}
+
         for config in robot_configs:
             robot_id = config['robot_id']
             namespace = config['namespace']
+
+            # Navigation action client
             action_name = f"{namespace}/navigate_to_pose"
             self.nav_clients[robot_id] = ActionClient(self, NavigateToPose, action_name)
             logger.info(f"Created navigation client for {robot_id}: {action_name}")
+
+            # Initial pose publisher for AMCL
+            initialpose_topic = f"{namespace}/initialpose"
+            self.initialpose_pubs[robot_id] = self.create_publisher(
+                PoseWithCovarianceStamped, initialpose_topic, 10)
+            logger.info(f"Created initialpose publisher for {robot_id}: {initialpose_topic}")
 
         # Publishers
         self.fleet_status_pub = self.create_publisher(
             FleetStatus,
             '/fms/fleet_status',
+            10
+        )
+
+        # Robot arrival publisher (notifies Main Server when robot reaches table)
+        self.robot_arrival_pub = self.create_publisher(
+            RobotArrival,
+            '/fms/robot_arrival',
             10
         )
 
@@ -115,8 +134,12 @@ class FMSNode(Node):
         # Task assignment timer (check for pending tasks every 0.5 seconds)
         self.assignment_timer = self.create_timer(0.5, self.process_pending_tasks)
 
-        # TODO: Load map positions from config file
+        # Load map positions from config file
         self.map_positions = self._load_map_positions()
+
+        # Set initial poses for robots after a short delay (wait for AMCL to start)
+        self.create_timer(3.0, self._set_initial_poses_once)
+        self._initial_pose_set = False
 
         logger.info("Fleet Management System initialized successfully")
 
@@ -159,29 +182,117 @@ class FMSNode(Node):
 
     def _load_map_positions(self) -> Dict[str, Pose]:
         """
-        Load map positions from config
-
-        TODO: Load from actual config file based on map coordinates
+        Load map positions from fms_config.yaml
 
         Returns:
             Dictionary mapping location names to Pose objects
         """
-        # Placeholder positions (TODO: calibrate based on actual map)
-        positions = {
-            'pickup_spot': self._create_pose(1.0, 0.3, 0.0),
-            'table1': self._create_pose(0.3, 0.2, 0.0),
-            'table2': self._create_pose(0.3, 0.4, 0.0),
-            'table3': self._create_pose(0.3, 0.6, 0.0),
-            'table4': self._create_pose(0.3, 0.8, 0.0),
-            'table5': self._create_pose(1.7, 0.2, 0.0),
-            'table6': self._create_pose(1.7, 0.4, 0.0),
-            'table7': self._create_pose(1.7, 0.6, 0.0),
-            'table8': self._create_pose(1.7, 0.8, 0.0),
-            'pinky1_spot': self._create_pose(1.0, 0.1, 0.0),
-            'pinky2_spot': self._create_pose(1.15, 0.1, 0.0),
-            'pinky3_spot': self._create_pose(1.3, 0.1, 0.0),
-        }
+        import yaml
+        import os
+        from ament_index_python.packages import get_package_share_directory
+
+        positions = {}
+
+        try:
+            # Try to load from config file
+            pkg_dir = get_package_share_directory('fms')
+            config_file = os.path.join(pkg_dir, 'config', 'fms_config.yaml')
+
+            if os.path.exists(config_file):
+                with open(config_file, 'r') as f:
+                    config = yaml.safe_load(f)
+
+                if 'positions' in config:
+                    for name, pos in config['positions'].items():
+                        x = pos.get('x', 0.0)
+                        y = pos.get('y', 0.0)
+                        theta = pos.get('theta', 0.0)
+                        positions[name] = self._create_pose(x, y, theta)
+                        logger.debug(f"Loaded position {name}: ({x}, {y}, {theta})")
+
+                    logger.info(f"Loaded {len(positions)} positions from fms_config.yaml")
+                else:
+                    logger.warning("No 'positions' section found in fms_config.yaml")
+            else:
+                logger.warning(f"Config file not found: {config_file}")
+
+        except Exception as e:
+            logger.error(f"Error loading config file: {e}")
+
+        # Fallback to default positions if config loading failed
+        if not positions:
+            logger.warning("Using fallback positions (config loading failed)")
+            positions = {
+                'pickup_spot': self._create_pose(0.47, 0.63, 0.0),
+                'table1': self._create_pose(1.785, 0.35, 0.0),
+                'table2': self._create_pose(1.415, 0.35, 0.0),
+                'table3': self._create_pose(1.785, 0.65, 0.0),
+                'table4': self._create_pose(1.415, 0.65, 0.0),
+                'table5': self._create_pose(1.235, 0.35, 0.0),
+                'table6': self._create_pose(0.865, 0.35, 0.0),
+                'table7': self._create_pose(1.235, 0.65, 0.0),
+                'table8': self._create_pose(0.865, 0.65, 0.0),
+                'pinky1_spot': self._create_pose(0.585, 0.085, 0.0),
+                'pinky2_spot': self._create_pose(0.585, 0.255, 0.0),
+                'pinky3_spot': self._create_pose(0.585, 0.915, 0.0),
+            }
+
         return positions
+
+    def _set_initial_poses_once(self):
+        """
+        Set initial poses for all robots at their parking spots (one-time call)
+        This is called after AMCL has started to set the initial localization
+        """
+        if self._initial_pose_set:
+            return
+
+        self._initial_pose_set = True
+        logger.info("Setting initial poses for all robots...")
+
+        robot_spots = {
+            'pinky1': 'pinky1_spot',
+            'pinky2': 'pinky2_spot',
+            'pinky3': 'pinky3_spot',
+        }
+
+        for robot_id, spot_name in robot_spots.items():
+            spot_pose = self.map_positions.get(spot_name)
+            if spot_pose:
+                self.set_initial_pose(robot_id, spot_pose)
+                logger.info(f"Set initial pose for {robot_id} at {spot_name}")
+
+    def set_initial_pose(self, robot_id: str, pose: Pose):
+        """
+        Set initial pose for AMCL localization
+
+        Args:
+            robot_id: Robot ID
+            pose: Initial pose
+        """
+        pub = self.initialpose_pubs.get(robot_id)
+        if not pub:
+            logger.warning(f"No initialpose publisher for robot {robot_id}")
+            return
+
+        msg = PoseWithCovarianceStamped()
+        msg.header.frame_id = 'map'
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.pose.pose = pose
+
+        # Set covariance (small values for good initial estimate)
+        # [x, y, z, roll, pitch, yaw] variance on diagonal
+        msg.pose.covariance = [
+            0.01, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.01, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.04
+        ]
+
+        pub.publish(msg)
+        logger.info(f"Published initial pose for {robot_id}: ({pose.position.x:.3f}, {pose.position.y:.3f})")
 
     def _create_pose(self, x: float, y: float, theta: float) -> Pose:
         """
@@ -389,6 +500,11 @@ class FMSNode(Node):
             logger.error(f"Navigation client not found for robot {robot_id}")
             return
 
+        # Wait for action server
+        if not nav_client.wait_for_server(timeout_sec=5.0):
+            logger.error(f"Navigation action server not available for robot {robot_id}")
+            return
+
         # Create goal
         goal_msg = NavigateToPose.Goal()
         goal_msg.pose = PoseStamped()
@@ -396,9 +512,55 @@ class FMSNode(Node):
         goal_msg.pose.header.stamp = self.get_clock().now().to_msg()
         goal_msg.pose.pose = goal_pose
 
-        # Send goal
-        nav_client.send_goal_async(goal_msg)
-        logger.debug(f"Sent navigation goal to robot {robot_id}")
+        logger.info(f"Sending nav goal to {robot_id}: ({goal_pose.position.x:.3f}, {goal_pose.position.y:.3f})")
+
+        # Send goal with callbacks
+        send_goal_future = nav_client.send_goal_async(
+            goal_msg,
+            feedback_callback=lambda fb: self._nav_feedback_callback(robot_id, fb)
+        )
+        send_goal_future.add_done_callback(
+            lambda future: self._nav_goal_response_callback(robot_id, future)
+        )
+
+    def _nav_goal_response_callback(self, robot_id: str, future):
+        """Handle navigation goal response"""
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            logger.warning(f"Navigation goal rejected for robot {robot_id}")
+            return
+
+        logger.info(f"Navigation goal accepted for robot {robot_id}")
+
+        # Get result
+        result_future = goal_handle.get_result_async()
+        result_future.add_done_callback(
+            lambda future: self._nav_result_callback(robot_id, future)
+        )
+
+    def _nav_result_callback(self, robot_id: str, future):
+        """Handle navigation result"""
+        result = future.result()
+        status = result.status
+
+        # Status codes: 2=CANCELED, 4=SUCCEEDED, 5=ABORTED
+        if status == 4:  # SUCCEEDED
+            logger.info(f"Navigation succeeded for robot {robot_id}")
+            # Robot reached destination - let _check_navigation_status handle state transition
+        elif status == 5:  # ABORTED
+            logger.error(f"Navigation aborted for robot {robot_id}")
+            self.fleet_controller.robot_error(robot_id, "Navigation aborted")
+        elif status == 2:  # CANCELED
+            logger.warning(f"Navigation canceled for robot {robot_id}")
+        else:
+            logger.warning(f"Navigation finished with status {status} for robot {robot_id}")
+
+    def _nav_feedback_callback(self, robot_id: str, feedback_msg):
+        """Handle navigation feedback"""
+        feedback = feedback_msg.feedback
+        # Current pose during navigation
+        current_pose = feedback.current_pose.pose
+        logger.debug(f"Robot {robot_id} at ({current_pose.position.x:.2f}, {current_pose.position.y:.2f})")
 
     def _check_navigation_status(self, robot_id: str):
         """
@@ -439,6 +601,9 @@ class FMSNode(Node):
                 # Reached table
                 self.fleet_controller.robot_reached_table(robot_id)
                 logger.info(f"Robot {robot_id} reached table, waiting for customer")
+
+                # Publish robot arrival notification to Main Server
+                self._publish_robot_arrival(robot_id)
 
             elif robot.status == RobotState.STATUS_RETURNING:
                 # Returned home
@@ -488,6 +653,34 @@ class FMSNode(Node):
         time_msg.sec = int(timestamp)
         time_msg.nanosec = int((timestamp - int(timestamp)) * 1e9)
         return time_msg
+
+    def _publish_robot_arrival(self, robot_id: str):
+        """
+        Publish robot arrival notification when robot reaches table
+
+        Args:
+            robot_id: Robot ID
+        """
+        # Find current task for this robot
+        task = None
+        for t in self.task_manager.assigned_tasks.values():
+            if t.assigned_robot == robot_id:
+                task = t
+                break
+
+        if not task:
+            logger.warning(f"No task found for robot {robot_id} when publishing arrival")
+            return
+
+        # Create and publish RobotArrival message
+        arrival_msg = RobotArrival()
+        arrival_msg.robot_id = robot_id
+        arrival_msg.order_id = task.order_id
+        arrival_msg.table_number = task.table_number
+        arrival_msg.arrived_at = self.get_clock().now().to_msg()
+
+        self.robot_arrival_pub.publish(arrival_msg)
+        logger.info(f"Published robot arrival: {robot_id} at {task.table_number} for order {task.order_id}")
 
     # ========================================
     # Auto Food Loading (Skip Robot Arm Mode)

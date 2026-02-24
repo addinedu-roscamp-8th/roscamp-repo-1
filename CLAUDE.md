@@ -74,12 +74,16 @@ pinky1, pinky2, pinky3이 FMS를 통해 제어되어야 함
 
 ## 네트워크 구성
 
+> Closed Network (단일 WiFi)
+
 | 장치 | IP 주소 | 역할 |
 |------|---------|------|
-| Master PC | 192.168.1.3 | FMS Server |
-| pinky_b4bc (pinky1) | 192.168.1.7 | Mobile Robot |
-| pinky_e2a8 (pinky2) | 192.168.1.6 | Mobile Robot |
-| pinky_d29d (pinky3) | 192.168.1.11 | Mobile Robot |
+| gw PC | 192.168.1.3 | FMS Server (Master) |
+| pinky_b4bc | 192.168.1.7 | Mobile Robot |
+| pinky_e2a8 | 192.168.1.6 | Mobile Robot |
+| pinky_d29d | 192.168.1.11 | Mobile Robot |
+| jetcobot_aa1f | 192.168.1.4 | Robot Arm |
+| jetcobot_aa85 | 192.168.1.10 | Robot Arm |
 
 ---
 
@@ -92,13 +96,13 @@ source install/setup.bash
 ros2 launch fms fms_closed_network.launch.py
 ```
 
-### 로봇에서 실행 (SSH 접속 후)
+### 로봇에서 실행 (SSH 접속 후, home에서 시작)
 ```bash
-# 터미널 1: 로봇 하드웨어
-ros2 launch pinky_bringup bringup_robot.launch.xml namespace:=pinky1
+# 터미널 1: Pinky Bringup
+ros2 launch pinky_bringup bringup_robot.launch.xml
 
-# 터미널 2: 네비게이션
-ros2 launch ~/roscamp-repo-1/mobile_robot/launch/bringup_launch.py namespace:=pinky1 map:=~/real.yaml
+# 터미널 2: 내비게이션
+ros2 launch pinky_navigation bringup_launch.xml map:=real.yaml
 ```
 
 ---

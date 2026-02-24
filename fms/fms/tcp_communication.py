@@ -186,8 +186,8 @@ class FMSTCPServer:
                 if conn.client_socket:
                     try:
                         conn.client_socket.close()
-                    except:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Error closing socket for {robot_id}: {e}")
             self.clients.clear()
 
         # Close server socket
@@ -221,6 +221,8 @@ class FMSTCPServer:
     def _handle_client(self, client_socket: socket.socket, addr):
         """Handle client connection"""
         robot_id = None
+        # Set socket timeout to prevent indefinite blocking
+        client_socket.settimeout(5.0)
         file_wrapper = client_socket.makefile("rwb")
 
         try:
@@ -435,10 +437,24 @@ class FMSTCPClient:
         # Reconnection settings
         self.reconnect_interval = 3.0
         self.max_reconnect_attempts = 10
+        self.reconnecting = False  # Prevent recursive reconnection
 
-    def connect(self) -> bool:
-        """Connect to FMS server"""
+    def connect(self, start_threads: bool = True) -> bool:
+        """Connect to FMS server
+
+        Args:
+            start_threads: Whether to start receive/heartbeat threads.
+                          Set to False during reconnection to avoid duplicate threads.
+        """
         try:
+            # Clean up existing socket if any
+            if self.socket:
+                try:
+                    self.socket.close()
+                except Exception:
+                    pass
+                self.socket = None
+
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.settimeout(5.0)
             self.socket.connect((self.server_host, self.server_port))
@@ -457,13 +473,15 @@ class FMSTCPClient:
             )
             self.send_message(connect_msg)
 
-            # Start receive thread
-            recv_thread = threading.Thread(target=self._receive_loop, daemon=True)
-            recv_thread.start()
+            # Only start threads on initial connection, not reconnection
+            if start_threads:
+                # Start receive thread
+                recv_thread = threading.Thread(target=self._receive_loop, daemon=True)
+                recv_thread.start()
 
-            # Start heartbeat thread
-            heartbeat_thread = threading.Thread(target=self._heartbeat_loop, daemon=True)
-            heartbeat_thread.start()
+                # Start heartbeat thread
+                heartbeat_thread = threading.Thread(target=self._heartbeat_loop, daemon=True)
+                heartbeat_thread.start()
 
             logger.info(f"Connected to FMS server at {self.server_host}:{self.server_port}")
             return True
@@ -489,8 +507,8 @@ class FMSTCPClient:
         if self.socket:
             try:
                 self.socket.close()
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Error closing socket: {e}")
 
         self.connected = False
         logger.info("Disconnected from FMS server")
@@ -516,39 +534,49 @@ class FMSTCPClient:
         self.handlers[msg_type] = handler
 
     def _receive_loop(self):
-        """Receive messages from server"""
-        file_wrapper = self.socket.makefile("rwb")
-
-        try:
-            while self.running and self.connected:
-                try:
-                    line = file_wrapper.readline()
-                    if not line:
-                        break
-
-                    message_str = line.decode('utf-8').strip()
-                    if not message_str:
-                        continue
-
-                    message = TCPMessage.from_json(message_str)
-
-                    # Call handler
-                    handler = self.handlers.get(message.msg_type)
-                    if handler:
-                        handler(message)
-
-                except socket.timeout:
+        """Receive messages from server with auto-reconnection"""
+        while self.running:
+            file_wrapper = None
+            try:
+                if not self.socket:
+                    time.sleep(0.1)
                     continue
-                except json.JSONDecodeError as e:
-                    logger.error(f"JSON decode error: {e}")
 
-        except Exception as e:
-            logger.error(f"Receive loop error: {e}")
-        finally:
-            self.connected = False
-            file_wrapper.close()
+                file_wrapper = self.socket.makefile("rwb")
 
-            # Attempt reconnection
+                while self.running and self.connected:
+                    try:
+                        line = file_wrapper.readline()
+                        if not line:
+                            break
+
+                        message_str = line.decode('utf-8').strip()
+                        if not message_str:
+                            continue
+
+                        message = TCPMessage.from_json(message_str)
+
+                        # Call handler
+                        handler = self.handlers.get(message.msg_type)
+                        if handler:
+                            handler(message)
+
+                    except socket.timeout:
+                        continue
+                    except json.JSONDecodeError as e:
+                        logger.error(f"JSON decode error: {e}")
+
+            except Exception as e:
+                logger.error(f"Receive loop error: {e}")
+            finally:
+                self.connected = False
+                if file_wrapper:
+                    try:
+                        file_wrapper.close()
+                    except Exception:
+                        pass
+
+            # Attempt reconnection if still running
             if self.running:
                 self._reconnect()
 
@@ -565,18 +593,33 @@ class FMSTCPClient:
             time.sleep(1.0)
 
     def _reconnect(self):
-        """Attempt to reconnect to server"""
-        attempt = 0
-        while self.running and attempt < self.max_reconnect_attempts:
-            attempt += 1
-            logger.info(f"Reconnection attempt {attempt}/{self.max_reconnect_attempts}")
-
-            time.sleep(self.reconnect_interval)
-
-            if self.connect():
+        """Attempt to reconnect to server (non-recursive)"""
+        # Prevent concurrent reconnection attempts
+        with self.lock:
+            if self.reconnecting:
+                logger.debug("Reconnection already in progress, skipping")
                 return
+            self.reconnecting = True
 
-        logger.error("Max reconnection attempts reached")
+        try:
+            attempt = 0
+            while self.running and attempt < self.max_reconnect_attempts:
+                attempt += 1
+                logger.info(f"Reconnection attempt {attempt}/{self.max_reconnect_attempts}")
+
+                time.sleep(self.reconnect_interval)
+
+                # Use start_threads=False to avoid creating duplicate threads
+                # The existing _receive_loop will continue after successful reconnection
+                if self.connect(start_threads=False):
+                    logger.info("Reconnection successful")
+                    return
+
+            logger.error("Max reconnection attempts reached")
+            self.running = False
+        finally:
+            with self.lock:
+                self.reconnecting = False
 
     def _next_sequence(self) -> int:
         """Get next sequence number"""
@@ -592,7 +635,8 @@ class FMSTCPClient:
             ip = s.getsockname()[0]
             s.close()
             return ip
-        except:
+        except Exception as e:
+            logger.debug(f"Could not determine local IP: {e}")
             return "127.0.0.1"
 
     # Convenience methods for sending specific messages

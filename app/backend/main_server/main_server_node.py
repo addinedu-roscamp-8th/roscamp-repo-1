@@ -99,6 +99,7 @@ class MainServer:
         """Register ROS message handlers"""
         self.ros_bridge.set_loading_complete_handler(self.handle_loading_complete)
         self.ros_bridge.set_fleet_status_handler(self.handle_fleet_status_update)
+        self.ros_bridge.set_robot_arrival_handler(self.handle_robot_arrival)
 
     # ========================================
     # TCP Message Handlers (from Kiosk/Admin GUI)
@@ -398,6 +399,43 @@ class MainServer:
 
         except Exception as e:
             logger.error(f"Error handling fleet status update: {e}")
+
+    def handle_robot_arrival(self, order_id: str, robot_id: str, table_number: str,
+                            arrived_at: datetime):
+        """
+        Handle robot arrival notification from FMS
+
+        This is called when a robot reaches the customer's table.
+        Broadcasts 'delivery_notification' to Customer GUI so it can display
+        the delivery confirmation screen.
+        """
+        logger.info(f"Robot arrival: robot={robot_id}, order={order_id}, table={table_number}")
+
+        try:
+            # Update order status to DELIVERED in database
+            self.db.update_order_status(order_id, 'DELIVERED')
+
+            # Get order details for more context
+            order = self.db.get_order(order_id)
+
+            # Broadcast delivery notification to all TCP clients (Customer GUI)
+            # Customer GUI will filter by table_number to show only relevant notifications
+            self.tcp_server.broadcast({
+                'type': 'delivery_notification',
+                'data': {
+                    'order_id': order_id,
+                    'robot_id': robot_id,
+                    'table_number': table_number,
+                    'menu_id': order.menu_id if order else None,
+                    'arrived_at': arrived_at.isoformat(),
+                    'timestamp': datetime.utcnow().isoformat()
+                }
+            })
+
+            logger.info(f"Broadcast delivery notification for order {order_id} at {table_number}")
+
+        except Exception as e:
+            logger.error(f"Error handling robot arrival: {e}")
 
     # ========================================
     # Server Control

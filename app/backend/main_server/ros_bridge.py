@@ -11,7 +11,8 @@ from fleet_interfaces.msg import (
     LoadingComplete,
     RobotStatus,
     FleetStatus,
-    DeliveryComplete
+    DeliveryComplete,
+    RobotArrival
 )
 from builtin_interfaces.msg import Time
 import logging
@@ -64,9 +65,18 @@ class ROSBridge(Node):
             10
         )
 
+        # Subscribe to robot arrival notifications from FMS
+        self.robot_arrival_sub = self.create_subscription(
+            RobotArrival,
+            '/fms/robot_arrival',
+            self.robot_arrival_callback,
+            10
+        )
+
         # Callback handlers (to be set by main_server_node)
         self.on_loading_complete = None
         self.on_fleet_status_update = None
+        self.on_robot_arrival = None
 
         # Latest fleet status cache
         self.latest_fleet_status = None
@@ -250,6 +260,38 @@ class ROSBridge(Node):
         """
         self.on_fleet_status_update = handler
         logger.info("Fleet status handler registered")
+
+    def set_robot_arrival_handler(self, handler: Callable):
+        """
+        Set callback handler for robot arrival notifications
+
+        Args:
+            handler: Function with signature:
+                     handler(order_id: str, robot_id: str, table_number: str, arrived_at: datetime)
+        """
+        self.on_robot_arrival = handler
+        logger.info("Robot arrival handler registered")
+
+    def robot_arrival_callback(self, msg: RobotArrival):
+        """
+        Handle RobotArrival message from FMS
+
+        This is called when a robot reaches the customer's table.
+        The Main Server should notify the Customer GUI to display delivery notification.
+        """
+        logger.info(f"Received robot arrival: robot={msg.robot_id}, order={msg.order_id}, table={msg.table_number}")
+
+        if self.on_robot_arrival:
+            # Convert ROS time to datetime
+            arrived_at = self._ros_time_to_datetime(msg.arrived_at)
+
+            # Call handler
+            self.on_robot_arrival(
+                order_id=msg.order_id,
+                robot_id=msg.robot_id,
+                table_number=msg.table_number,
+                arrived_at=arrived_at
+            )
 
 
 def spin_ros_bridge(bridge: ROSBridge):

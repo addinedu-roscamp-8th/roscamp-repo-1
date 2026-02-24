@@ -16,7 +16,7 @@ from ui_menu_selection import MenuSelectionWidget
 from ui_order_confirmation import OrderConfirmationWidget
 from ui_delivery_notification import DeliveryNotificationWidget
 from voice_feedback_widget import VoiceFeedbackWidget
-from tcp_client import MockOrderServiceClient
+from tcp_client import MockOrderServiceClient, FMSClient, MockFMSClient
 
 
 class CustomerGUIApp(QStackedWidget):
@@ -27,9 +27,14 @@ class CustomerGUIApp(QStackedWidget):
 
         # 현재 주문
         self.current_order = None
+        self.pending_order_id = None  # 주문 후 배달 대기 중인 주문 ID
 
-        # TCP 클라이언트 (Mock 사용)
+        # TCP 클라이언트 (Mock 사용 - 메뉴 조회용)
         self.order_client = MockOrderServiceClient()
+
+        # FMS 클라이언트 (Main Server와 통신 - 주문, 배달 알림)
+        # 실제 서버 연결시 FMSClient 사용, 테스트시 MockFMSClient 사용
+        self.fms_client = MockFMSClient(Config.TABLE_NUMBER)
 
         # 화면 위젯들
         self.main_window = None
@@ -99,11 +104,17 @@ class CustomerGUIApp(QStackedWidget):
 
     def setup_client(self):
         """TCP 클라이언트 설정"""
-        # 서버 연결
+        # 메뉴 서버 연결 (Mock)
         if self.order_client.connect():
-            print('[App] 주문 서버 연결 성공')
+            print('[App] 메뉴 서버 연결 성공')
         else:
-            print('[App] 주문 서버 연결 실패 (Mock 모드)')
+            print('[App] 메뉴 서버 연결 실패 (Mock 모드)')
+
+        # FMS (Main Server) 연결
+        if self.fms_client.connect():
+            print('[App] FMS 서버 연결 성공')
+        else:
+            print('[App] FMS 서버 연결 실패 (Mock 모드)')
 
     def connect_signals(self):
         """시그널 연결"""
@@ -123,6 +134,10 @@ class CustomerGUIApp(QStackedWidget):
 
         # TCP 클라이언트
         self.order_client.error_signal.connect(self.on_client_error)
+
+        # FMS 클라이언트 - 배달 알림 수신
+        self.fms_client.delivery_notification_signal.connect(self.on_delivery_notification)
+        self.fms_client.error_signal.connect(self.on_client_error)
 
     def on_start_order(self):
         """주문 시작"""
@@ -157,8 +172,8 @@ class CustomerGUIApp(QStackedWidget):
         """주문 전송"""
         print('[App] 주문 전송 중...')
 
-        # 주문 전송
-        order_id = self.order_client.submit_order(order)
+        # FMS 클라이언트를 통해 주문 전송
+        order_id = self.fms_client.submit_order(order)
 
         if not order_id:
             QMessageBox.critical(
@@ -171,6 +186,8 @@ class CustomerGUIApp(QStackedWidget):
 
         # 주문 번호 설정
         order.order_id = order_id
+        self.current_order = order
+        self.pending_order_id = order_id  # 배달 대기 중인 주문 저장
 
         # 주문 성공 메시지
         QMessageBox.information(
@@ -181,12 +198,8 @@ class CustomerGUIApp(QStackedWidget):
             QMessageBox.Ok
         )
 
-        # 메인 화면으로 돌아가기
+        # 메인 화면으로 돌아가기 (배달 알림은 서버에서 푸시로 수신)
         self.go_to_main()
-
-        # 시뮬레이션: 5초 후 배달 알림 (실제로는 TCP로 알림 수신)
-        from PyQt5.QtCore import QTimer
-        QTimer.singleShot(5000, lambda: self.show_delivery_notification(order))
 
     def on_back_to_menu_selection(self):
         """메뉴 선택으로 돌아가기"""
@@ -203,8 +216,8 @@ class CustomerGUIApp(QStackedWidget):
         """수령 확인"""
         print(f'[App] 수령 확인 - 주문 {order_id}')
 
-        # 수령 확인 전송
-        if self.order_client.confirm_delivery(order_id):
+        # FMS 클라이언트를 통해 수령 완료 전송 (로봇 복귀 명령 트리거)
+        if self.fms_client.confirm_delivery(order_id):
             QMessageBox.information(
                 self,
                 '감사합니다',
@@ -219,8 +232,34 @@ class CustomerGUIApp(QStackedWidget):
                 QMessageBox.Ok
             )
 
+        # 대기 중인 주문 ID 초기화
+        self.pending_order_id = None
+
         # 메인 화면으로 돌아가기
         self.go_to_main()
+
+    def on_delivery_notification(self, data: dict):
+        """
+        배달 알림 수신 (서버에서 푸시)
+
+        로봇이 테이블에 도착하면 Main Server에서 이 알림을 보냅니다.
+        """
+        order_id = data.get('order_id', '')
+        robot_id = data.get('robot_id', '')
+        table_number = data.get('table_number', '')
+
+        print(f'[App] 배달 알림 수신: 주문={order_id}, 로봇={robot_id}, 테이블={table_number}')
+
+        # 현재 주문 정보가 있으면 사용, 없으면 새로 생성
+        if self.current_order and self.current_order.order_id == order_id:
+            order = self.current_order
+        else:
+            # 기존 주문 정보가 없는 경우 (앱 재시작 등)
+            order = Order(table_number=Config.TABLE_NUMBER)
+            order.order_id = order_id
+
+        # 배달 알림 화면으로 전환
+        self.show_delivery_notification(order)
 
     def show_delivery_notification(self, order: Order):
         """배달 알림 표시 (SR-16: 도착 알림)"""
@@ -260,6 +299,7 @@ class CustomerGUIApp(QStackedWidget):
         """종료 이벤트"""
         # TCP 클라이언트 연결 종료
         self.order_client.disconnect()
+        self.fms_client.disconnect()
         print('[App] 애플리케이션 종료')
         event.accept()
 

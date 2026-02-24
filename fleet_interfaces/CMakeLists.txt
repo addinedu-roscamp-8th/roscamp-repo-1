@@ -20,6 +20,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/RobotStatus.msg"
   "msg/FleetStatus.msg"
   "msg/DeliveryComplete.msg"
+  "msg/RobotArrival.msg"
   DEPENDENCIES builtin_interfaces geometry_msgs std_msgs
 )
 
