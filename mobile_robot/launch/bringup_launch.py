@@ -71,20 +71,20 @@ def generate_launch_description():
     autostart = LaunchConfiguration('autostart')
     params_file = LaunchConfiguration('params_file')
 
-    # Frame substitutions - namespace를 frame 이름 앞에 추가
-    # 예: base_footprint -> pinky1/base_footprint
+    # Frame substitutions - 로봇이 namespace prefix 없이 TF 발행하므로 그대로 사용
+    # 로봇 TF: odom -> base_footprint (prefix 없음)
     param_substitutions = {
         'use_sim_time': use_sim_time,
-        # AMCL frames
-        'base_frame_id': [namespace, '/base_footprint'],
-        'odom_frame_id': [namespace, '/odom'],
-        # Costmap frames
-        'robot_base_frame': [namespace, '/base_footprint'],
-        'global_frame': 'map',  # map frame은 공유
+        # AMCL frames - prefix 없음
+        'base_frame_id': 'base_footprint',
+        'odom_frame_id': 'odom',
+        # Costmap frames - prefix 없음
+        'robot_base_frame': 'base_footprint',
+        'global_frame': 'map',
         # Behavior server
-        'local_frame': [namespace, '/odom'],
-        # Topics - namespace 적용
-        'odom_topic': [namespace, '/odom'],
+        'local_frame': 'odom',
+        # Topics - namespace 내에서 상대 경로
+        'odom_topic': 'odom',
         'scan_topic': '/scan',
     }
 
