@@ -2,19 +2,115 @@
 
 Kitchmatic 프로젝트의 Fleet Management System (FMS) 및 Main Server 구현입니다.
 
+## 빠른 시작 (Quick Start)
+
+### 옵션 A: 주문 → Pinky 로봇 이동 테스트 (로봇팔 스킵 모드)
+
+**터미널 1: FMS 실행**
+```bash
+cd /home/gw/kitchmatics/roscamp-repo-1
+source install/setup.bash
+ros2 run fms fms_node --ros-args -p skip_robot_arm:=true
+```
+
+**터미널 2: 테스트 주문 전송**
+```bash
+cd /home/gw/kitchmatics/roscamp-repo-1
+
+# 테이블 1번으로 주문
+python3 fms/scripts/send_order.py --table 1
+
+# 인터랙티브 모드
+python3 fms/scripts/send_order.py --interactive
+```
+
+> **로봇팔 스킵 모드**: Pinky가 pickup_spot 도착 후 3초 뒤 자동으로 테이블로 이동
+
+---
+
+### 옵션 B: Customer GUI → 전체 시스템
+
+**터미널 1: FMS 실행**
+```bash
+cd /home/gw/kitchmatics/roscamp-repo-1
+source install/setup.bash
+ros2 run fms fms_node --ros-args -p skip_robot_arm:=true
+```
+
+**터미널 2: Main Server 실행**
+```bash
+cd /home/gw/kitchmatics/roscamp-repo-1
+source install/setup.bash
+ros2 run main_server main_server
+```
+
+**터미널 3: Customer GUI 실행**
+```bash
+cd /home/gw/kitchmatics/roscamp-repo-1/app/gui/customer_gui
+python3 src/main.py
+```
+
+---
+
+### 옵션 C: Closed Network TCP 서버 (로봇 직접 통신)
+
+**1단계: FMS 서버 시작 (PC: 192.168.1.3)**
+```bash
+cd /home/gw/kitchmatics/roscamp-repo-1
+./fms/scripts/start_fms_server.sh
+```
+
+**2단계: 관리자 GUI 실행**
+```bash
+cd /home/gw/kitchmatics/roscamp-repo-1/app/gui/admin_gui
+python3 src/main.py
+```
+
+**3단계: 로봇 파라미터 동기화 (필요시)**
+```bash
+# 모든 로봇에 nav2_params.yaml 동기화
+python3 fms/scripts/robot_file_sync.py --all --sync
+```
+
+---
+
+## Closed Network 구성 (WiFi: kitchmatics)
+
+| 장치 | IP 주소 | 포트 | 상태 |
+|------|---------|------|------|
+| **Master PC** | 192.168.1.3 | 9000 | FMS Server |
+| pinky_b4bc | 192.168.1.7 | 9001 | Mobile Robot |
+| pinky_e2a8 | 192.168.1.6 | 9001 | Mobile Robot |
+| pinky_d29d | - | - | 보류중 |
+| jetcobot_aa1f | 192.168.1.4 | 9002 | Cobot Arm |
+| jetcobot_aa85 | 192.168.0.59 | 9002 | Cobot Arm |
+
+---
+
 ## 시스템 아키텍처
 
 ```
-┌─────────────┐         ┌──────────────┐         ┌─────────────┐
-│   Kiosks    │◄──TCP──►│ Main Server  │◄──ROS──►│     FMS     │
-│ (8 tables)  │         │  (Backend)   │         │   (Fleet)   │
-└─────────────┘         └──────┬───────┘         └──────┬──────┘
-                               │                        │
-                               │                        │
-                        ┌──────▼───────┐         ┌──────▼──────┐
-                        │ PostgreSQL   │         │ 3x Serving  │
-                        │   Database   │         │   Robots    │
-                        └──────────────┘         └─────────────┘
+                          ┌─────────────────────────────────────────┐
+                          │         WiFi: kitchmatics               │
+                          └─────────────────────────────────────────┘
+                                            │
+        ┌───────────────────────────────────┼───────────────────────────────────┐
+        │                                   │                                   │
+        ▼                                   ▼                                   ▼
+┌───────────────┐                  ┌───────────────┐                   ┌───────────────┐
+│  Mobile Robot │                  │   Master PC   │                   │  Cobot Arm    │
+│  (PinkyPro)   │◄────TCP 9001────►│  192.168.1.3  │◄────TCP 9002─────►│  (JetCobot)   │
+│  192.168.1.7  │                  │   Port 9000   │                   │  192.168.1.4  │
+│  192.168.1.6  │                  │               │                   │ 192.168.0.59  │
+└───────────────┘                  └───────┬───────┘                   └───────────────┘
+                                           │
+                    ┌──────────────────────┼──────────────────────┐
+                    │                      │                      │
+                    ▼                      ▼                      ▼
+           ┌──────────────┐       ┌──────────────┐       ┌──────────────┐
+           │  Admin GUI   │       │  PostgreSQL  │       │    Kiosks    │
+           │ Fleet Monitor│       │   Database   │       │  (8 tables)  │
+           └──────────────┘       └──────────────┘       └──────────────┘
 ```
 
 ### 주요 컴포넌트
@@ -87,7 +183,69 @@ source install/setup.bash
 
 ## 실행 방법
 
-### 터미널 1: Main Server 실행
+### 방법 1: Closed Network FMS (권장)
+
+#### 터미널 1: FMS TCP 서버 시작 (PC: 192.168.1.3)
+
+```bash
+cd /home/gw/kitchmatics/roscamp-repo-1
+
+# 네트워크 연결 확인 및 서버 시작
+./fms/scripts/start_fms_server.sh
+```
+
+**출력 예시:**
+```
+==========================================================
+     Kitchmatics FMS - Closed Network Server
+==========================================================
+
+Checking network connectivity...
+✓ Connected to WiFi: kitchmatics
+✓ Local IP: 192.168.1.3
+
+Mobile Robots (PinkyPro):
+  ✓ 192.168.1.7 - Reachable
+  ✓ 192.168.1.6 - Reachable
+
+Cobot Arms (JetCobot):
+  ✓ 192.168.0.56 - Reachable
+  ✓ 192.168.0.59 - Reachable
+
+Starting server on port 9000...
+```
+
+#### 터미널 2: 관리자 GUI (Fleet Monitor)
+
+```bash
+cd /home/gw/kitchmatics/roscamp-repo-1/app/gui/admin_gui
+python3 src/main.py
+```
+
+GUI 기능:
+- Mobile Robots 탭: PinkyPro 로봇 상태 모니터링
+- Cobot Arms 탭: JetCobot 로봇팔 상태 모니터링
+- 전체 통계 탭: Fleet 통계 및 이벤트 로그
+
+#### 터미널 3: 로봇에서 클라이언트 실행 (SSH로 로봇 접속 후)
+
+```bash
+# PinkyPro 로봇에서 (예: pinky_b4bc)
+ssh pinky@192.168.1.7
+cd ~/roscamp-repo-1/fms/scripts
+python3 robot_client.py --robot-id pinky1 --server 192.168.1.3
+
+# JetCobot에서 (예: jetcobot_aa1f)
+ssh jetson@192.168.1.4
+cd ~/roscamp-repo-1/fms/scripts
+python3 robot_client.py --robot-id cobot1 --server 192.168.1.3 --type JETCOBOT
+```
+
+---
+
+### 방법 2: 기존 ROS 2 방식
+
+#### 터미널 1: Main Server 실행
 
 ```bash
 cd ~/roscamp-repo-1/app/backend
@@ -102,7 +260,7 @@ ros2 run main_server main_server
 - `main_server/database_manager.py`의 TODO 주석에서 DB 연결 정보 설정
 - TCP 포트 9999가 사용 가능한지 확인
 
-### 터미널 2: FMS 실행
+#### 터미널 2: FMS 실행
 
 ```bash
 cd ~/roscamp-repo-1/fms
@@ -118,7 +276,7 @@ ros2 launch fms fms_launch.py
 - Nav2가 각 로봇에서 실행 중인지 확인
 - AMCL 초기 위치가 설정되어 있는지 확인
 
-### 터미널 3: 로봇 네임스페이스 확인
+#### 터미널 3: 로봇 네임스페이스 확인
 
 ```bash
 # 실행 중인 로봇 Topics 확인
@@ -132,7 +290,75 @@ ros2 topic list | grep pinky
 # (pinky2, pinky3도 동일)
 ```
 
+## 로봇 파라미터 동기화 (File Override)
+
+로봇 내부의 nav2_params.yaml, mapper_params.yaml 파일을 프로젝트에서 관리하고 동기화합니다.
+
+### 사용법
+
+```bash
+cd /home/gw/kitchmatics/roscamp-repo-1
+
+# 설정된 로봇 목록 확인
+python3 fms/scripts/robot_file_sync.py --list
+
+# 특정 로봇에 파일 동기화
+python3 fms/scripts/robot_file_sync.py --robot pinky_b4bc --sync
+
+# 모든 활성화된 로봇에 동기화
+python3 fms/scripts/robot_file_sync.py --all --sync
+
+# 동기화 전 미리보기 (dry-run)
+python3 fms/scripts/robot_file_sync.py --robot pinky_b4bc --sync --dry-run
+
+# SSH 연결 테스트
+python3 fms/scripts/robot_file_sync.py --robot pinky_b4bc --check
+
+# 파일 비교 (로컬 vs 원격)
+python3 fms/scripts/robot_file_sync.py --robot pinky_b4bc --compare
+
+# 원격 파일 백업 후 동기화
+python3 fms/scripts/robot_file_sync.py --robot pinky_b4bc --sync --backup
+```
+
+### 동기화 경로
+
+| 로컬 (PC) | 원격 (PinkyPro 로봇) |
+|-----------|---------------------|
+| `mobile_robot/params/nav2_params.yaml` | `~/pinky_pro/src/pinky_pro/pinky_navigation/params/nav2_params.yaml` |
+| `mobile_robot/params/mapper_params.yaml` | `~/pinky_pro/src/pinky_pro/pinky_navigation/params/mapper_params.yaml` |
+
+---
+
 ## 설정 파일
+
+### 네트워크 설정 (`fms/config/network_config.yaml`)
+
+Closed Network 환경의 로봇 IP 주소 및 연결 설정:
+
+```yaml
+# Master PC
+master:
+  host: "192.168.1.3"
+  tcp_port: 9000
+
+# Mobile Robots
+mobile_robots:
+  pinky_b4bc:
+    ip_address: "192.168.1.7"
+    enabled: true
+  pinky_e2a8:
+    ip_address: "192.168.1.6"
+    enabled: true
+  # pinky_d29d: 보류중
+
+# Cobot Arms
+cobot_arms:
+  jetcobot_aa1f:
+    ip_address: "192.168.1.4"
+  jetcobot_aa85:
+    ip_address: "192.168.0.59"
+```
 
 ### FMS 설정 (`fms/config/fms_config.yaml`)
 
@@ -263,7 +489,47 @@ FMS
 
 ## 트러블슈팅
 
-### 1. Main Server가 데이터베이스에 연결 실패
+### 1. WiFi kitchmatics에 연결되지 않음
+
+```bash
+# 현재 WiFi 확인
+iwgetid -r
+
+# 사용 가능한 네트워크 확인
+nmcli device wifi list
+
+# kitchmatics에 연결
+nmcli device wifi connect kitchmatics password "YOUR_PASSWORD"
+```
+
+### 2. 로봇에 SSH 연결 실패
+
+```bash
+# 로봇 IP에 ping 테스트
+ping 192.168.1.7
+
+# SSH 연결 테스트
+ssh -v pinky@192.168.1.7
+
+# SSH 키 설정 (비밀번호 없이 접속)
+ssh-keygen -t rsa
+ssh-copy-id pinky@192.168.1.7
+```
+
+### 3. FMS TCP 서버 연결 실패
+
+```bash
+# 포트 9000이 사용 중인지 확인
+sudo lsof -i :9000
+
+# 방화벽 확인
+sudo ufw status
+
+# 포트 열기
+sudo ufw allow 9000/tcp
+```
+
+### 4. Main Server가 데이터베이스에 연결 실패
 
 ```bash
 # PostgreSQL 상태 확인
@@ -273,7 +539,7 @@ sudo systemctl status postgresql
 psql -U kitchmatic_user -d kitchmatic -c "SELECT 1;"
 ```
 
-### 2. FMS가 로봇 Topics을 찾지 못함
+### 5. FMS가 로봇 Topics을 찾지 못함
 
 ```bash
 # 로봇 네임스페이스 확인
@@ -286,11 +552,24 @@ ros2 topic list | grep "/pinky"
 ros2 action list | grep navigate_to_pose
 ```
 
-### 3. 로봇이 목표 지점에 도달하지 못함
+### 6. 로봇이 목표 지점에 도달하지 못함
 
 - `fms/config/fms_config.yaml`에서 위치 좌표 확인
 - Nav2 설정 확인 (`inflation_radius`, `goal_tolerance` 등)
 - AMCL 초기화가 제대로 되었는지 확인
+
+### 7. 파일 동기화 실패
+
+```bash
+# rsync 설치 확인
+which rsync
+
+# SSH 연결 확인
+python3 fms/scripts/robot_file_sync.py --robot pinky_b4bc --check
+
+# 파일 권한 확인
+ls -la mobile_robot/params/
+```
 
 ## 개발 팁
 
@@ -322,6 +601,49 @@ ros2 topic echo /fms/fleet_status
 
 # 주문 요청 모니터링
 ros2 topic echo /fms/order_request
+```
+
+## 프로젝트 구조
+
+```
+roscamp-repo-1/
+├── fms/                              # Fleet Management System
+│   ├── config/
+│   │   ├── fms_config.yaml           # 로봇 위치, 존 설정
+│   │   └── network_config.yaml       # Closed Network IP 설정
+│   ├── fms/
+│   │   ├── fms_node.py               # FMS ROS 2 노드
+│   │   ├── fms_tcp_node.py           # FMS TCP 통합 노드
+│   │   ├── tcp_communication.py      # TCP Server/Client 모듈
+│   │   ├── fleet_controller.py       # Fleet 상태 관리
+│   │   ├── task_manager.py           # 작업 큐 관리
+│   │   └── zone_manager.py           # 충돌 방지
+│   ├── scripts/
+│   │   ├── start_fms_server.sh       # FMS 서버 시작 스크립트
+│   │   ├── robot_client.py           # 로봇용 TCP 클라이언트
+│   │   └── robot_file_sync.py        # 파일 동기화 스크립트
+│   └── launch/
+│       └── fms_closed_network.launch.py
+│
+├── mobile_robot/                     # Mobile Robot 설정
+│   └── params/
+│       ├── nav2_params.yaml          # Navigation2 파라미터 (오버라이드용)
+│       └── mapper_params.yaml        # Mapper 파라미터 (오버라이드용)
+│
+├── app/
+│   ├── backend/                      # Main Server
+│   │   └── main_server/
+│   └── gui/
+│       ├── admin_gui/                # 관리자 GUI
+│       │   └── src/
+│       │       ├── ui_fleet_monitor.py  # Fleet 모니터링 화면
+│       │       └── fleet_client.py      # TCP 클라이언트
+│       └── common/
+│           └── config.py             # 네트워크 설정 로더
+│
+├── fleet_interfaces/                 # ROS 2 메시지 정의
+├── database/                         # PostgreSQL 스키마
+└── README.md
 ```
 
 ## 라이선스

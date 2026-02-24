@@ -1,0 +1,113 @@
+# =========================================================
+# Kitchmatics FMS - Closed Network Configuration
+# WiFi SSID: kitchmatics
+# =========================================================
+
+# Master Control PC (FMS Server)
+master:
+  host: "192.168.1.3"
+  tcp_port: 9000          # FMS TCP Server port
+  ros_domain_id: 0        # ROS 2 Domain ID
+
+# Mobile Robots (PinkyPro)
+mobile_robots:
+  pinky_b4bc:
+    robot_id: "pinky1"
+    namespace: "/pinky1"
+    ip_address: "192.168.1.7"
+    tcp_port: 9001
+    ssh_user: "pinky"
+    ssh_port: 22
+    type: "PINKYPRO"
+    enabled: true
+
+  pinky_e2a8:
+    robot_id: "pinky2"
+    namespace: "/pinky2"
+    ip_address: "192.168.1.6"
+    tcp_port: 9001
+    ssh_user: "pinky"
+    ssh_port: 22
+    type: "PINKYPRO"
+    enabled: true
+
+  pinky_d29d:
+    robot_id: "pinky3"
+    namespace: "/pinky3"
+    ip_address: "192.168.1.11"
+    tcp_port: 9001
+    ssh_user: "pinky"
+    ssh_port: 22
+    type: "PINKYPRO"
+    enabled: true
+
+# Cobot Arms (JetCobot)
+cobot_arms:
+  jetcobot_aa1f:
+    robot_id: "cobot1"
+    namespace: "/cobot1"
+    ip_address: "192.168.1.4"
+    tcp_port: 9002
+    ssh_user: "jetson"
+    ssh_port: 22
+    type: "JETCOBOT"
+    enabled: true
+
+  jetcobot_aa85:
+    robot_id: "cobot2"
+    namespace: "/cobot2"
+    ip_address: "192.168.1.10"
+    tcp_port: 9002
+    ssh_user: "jetson"
+    ssh_port: 22
+    type: "JETCOBOT"
+    enabled: true
+
+# Network Settings
+network:
+  wifi_ssid: "kitchmatics"
+  connection_timeout: 5.0       # seconds
+  reconnect_interval: 3.0       # seconds
+  heartbeat_interval: 1.0       # seconds
+  max_reconnect_attempts: 10
+
+# TCP Communication Settings
+tcp:
+  buffer_size: 4096
+  message_delimiter: "\n"
+  encoding: "utf-8"
+  socket_timeout: 5.0           # seconds
+
+# File Sync Settings (for param override)
+file_sync:
+  enabled: true
+
+  # 공통 params 동기화
+  params:
+    local_path: "${PROJECT_ROOT}/mobile_robot/params"
+    remote_path: "~/pinky_pro/src/pinky_pro/pinky_navigation/params"
+    files:
+      - "nav2_params.yaml"
+      - "mapper_params.yaml"
+
+  # 로봇별 config 동기화
+  config:
+    local_path: "${PROJECT_ROOT}/mobile_robot/config"
+    remote_path: "~/pinky_pro/config"
+    # 로봇 이름에 맞는 파일만 동기화 (pinky_b4bc.yaml → robot_config.yaml)
+    rename_to: "robot_config.yaml"
+
+  # launch 파일 동기화 (비활성화 - 로봇 기존 launch 사용)
+  # launch:
+  #   local_path: "${PROJECT_ROOT}/mobile_robot/launch"
+  #   remote_path: "~/pinky_pro/src/pinky_pro/pinky_navigation/launch"
+  #   files:
+  #     - "pinky_navigation.launch.py"
+
+  # map 파일 동기화 (install 폴더로 직접)
+  maps:
+    local_path: "${PROJECT_ROOT}/mobile_robot/maps"
+    remote_path: "~/pinky_pro/install/pinky_navigation/share/pinky_navigation/maps"
+    files:
+      - "real.yaml"
+      - "real.png"

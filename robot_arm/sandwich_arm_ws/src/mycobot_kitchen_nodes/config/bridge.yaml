@@ -1,0 +1,5 @@
+bridges:
+  - topic: /pour_sauce_cmd
+    type: std_msgs/msg/String
+  - topic: /pour_sauce_status
+    type: std_msgs/msg/String

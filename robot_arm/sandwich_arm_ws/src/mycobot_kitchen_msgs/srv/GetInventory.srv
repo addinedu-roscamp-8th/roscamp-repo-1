@@ -1,0 +1,6 @@
+string item_key
+---
+int32 remaining_inven
+int32 remaining_vat
+bool ok
+string message

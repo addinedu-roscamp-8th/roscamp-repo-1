@@ -1,0 +1,9 @@
+# Goal
+uint8 decision            # 0=SERVE, 1=DISCARD
+int32 speed               # <=0 이면 노드 기본값 사용
+---
+# Result
+bool success
+string message
+---
+# Feedback (unused)

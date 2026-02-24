@@ -1,0 +1,154 @@
+# RMF Navigation Graph for Kitchmatic Fleet
+# Map: real.png (410x210px, 0.005m/pixel, origin [-0.025, -0.025, 0.0])
+# Coordinates in meters (world frame, bottom-left = [0,0])
+
+# All vertices (waypoints, spots, tables)
+vertices:
+  # Pickup zone
+  - name: pickup_spot
+    x: 0.47
+    y: 0.63
+
+  # Robot spawn/parking/charging spots
+  - name: pinky1_spot
+    x: 0.585
+    y: 0.085
+    spawn_robot_name: pinky1
+    spawn_robot_type: pinkypro
+  - name: pinky2_spot
+    x: 0.585
+    y: 0.255
+    spawn_robot_name: pinky2
+    spawn_robot_type: pinkypro
+  - name: pinky3_spot
+    x: 0.585
+    y: 0.915
+    spawn_robot_name: pinky3
+    spawn_robot_type: pinkypro
+
+  # Table positions (serving destinations)
+  - name: table1
+    x: 1.785
+    y: 0.35
+  - name: table2
+    x: 1.415
+    y: 0.35
+  - name: table3
+    x: 1.785
+    y: 0.65
+  - name: table4
+    x: 1.415
+    y: 0.65
+  - name: table5
+    x: 1.235
+    y: 0.35
+  - name: table6
+    x: 0.865
+    y: 0.35
+  - name: table7
+    x: 1.235
+    y: 0.65
+  - name: table8
+    x: 0.865
+    y: 0.65
+
+  # Navigation waypoints (grid for path planning)
+  - name: point1
+    x: 0.78
+    y: 0.15
+  - name: point2
+    x: 0.78
+    y: 0.35
+  - name: point3
+    x: 0.78
+    y: 0.65
+  - name: point4
+    x: 0.78
+    y: 0.85
+  - name: point5
+    x: 1.325
+    y: 0.15
+  - name: point6
+    x: 1.325
+    y: 0.35
+  - name: point7
+    x: 1.325
+    y: 0.65
+  - name: point8
+    x: 1.325
+    y: 0.85
+  - name: point9
+    x: 1.85
+    y: 0.15
+  - name: point10
+    x: 1.85
+    y: 0.35
+  - name: point11
+    x: 1.85
+    y: 0.65
+  - name: point12
+    x: 1.85
+    y: 0.85
+  - name: point13
+    x: 0.585
+    y: 0.63
+
+# Lane connections (bidirectional paths)
+lanes:
+  # ========================================
+  # 1. Waypoint ↔ Waypoint Lanes (Main Grid)
+  # ========================================
+
+  # Vertical lanes (x = 0.78)
+  - [point1, point2, {bidirectional: true}]
+  - [point2, point3, {bidirectional: true}]
+  - [point3, point4, {bidirectional: true}]
+
+  # Vertical lanes (x = 1.325)
+  - [point5, point6, {bidirectional: true}]
+  - [point6, point7, {bidirectional: true}]
+  - [point7, point8, {bidirectional: true}]
+
+  # Vertical lanes (x = 1.85)
+  - [point9, point10, {bidirectional: true}]
+  - [point10, point11, {bidirectional: true}]
+  - [point11, point12, {bidirectional: true}]
+
+  # Horizontal lanes (y = 0.15)
+  - [point1, point5, {bidirectional: true}]
+  - [point5, point9, {bidirectional: true}]
+
+  # Horizontal lanes (y = 0.35) with table connections
+  - [point2, table6, {bidirectional: true}]
+  - [table5, point6, {bidirectional: true}]
+  - [point6, table2, {bidirectional: true}]
+  - [table1, point10, {bidirectional: true}]
+
+  # Horizontal lanes (y = 0.65) with table connections
+  - [point3, table8, {bidirectional: true}]
+  - [table7, point7, {bidirectional: true}]
+  - [point7, table4, {bidirectional: true}]
+  - [table3, point11, {bidirectional: true}]
+
+  # Horizontal lanes (y = 0.85)
+  - [point4, point8, {bidirectional: true}]
+  - [point8, point12, {bidirectional: true}]
+
+  # ========================================
+  # 2. Spot ↔ Waypoint Connection Lanes
+  # ========================================
+
+  # Pickup zone connections (via point13 hub)
+  - [pickup_spot, point13, {bidirectional: true}]
+  - [point13, point3, {bidirectional: true}]
+  - [point13, point2, {bidirectional: true}]
+
+  # Spawn/Charger connections (to x=0.78 vertical line)
+  - [pinky1_spot, point1, {bidirectional: true}]
+  - [pinky2_spot, point2, {bidirectional: true}]
+  - [pinky3_spot, point3, {bidirectional: true}]
+  - [pinky3_spot, point4, {bidirectional: true}]
+
+# Floor metadata
+floor_name: "kitchen_floor"
+map_name: "real"

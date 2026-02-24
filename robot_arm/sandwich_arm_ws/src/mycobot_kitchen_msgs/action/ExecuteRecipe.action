@@ -1,0 +1,11 @@
+# Goal
+string recipe_name
+---
+# Result
+bool success
+string message
+---
+# Feedback
+int32 step_i
+string item_key
+string phase
