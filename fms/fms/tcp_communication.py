@@ -267,7 +267,7 @@ class FMSTCPServer:
                 with self.lock:
                     if robot_id in self.clients:
                         self.clients[robot_id].connected = False
-                        self.clients[robot_id].socket = None
+                        self.clients[robot_id].client_socket = None
             file_wrapper.close()
             client_socket.close()
             logger.info(f"Connection closed: {addr}")
@@ -334,7 +334,7 @@ class FMSTCPServer:
                 robot_id=robot_id,
                 ip_address=ip_address,
                 port=self.port,
-                socket=client_socket,
+                client_socket=client_socket,
                 connected=True,
                 last_heartbeat=time.time()
             )
