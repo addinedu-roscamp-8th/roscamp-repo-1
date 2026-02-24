@@ -13,7 +13,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/config', glob('config/*.yaml')),
-        ('share/' + package_name + '/launch', glob('launch/*_launch.py')),
+        ('share/' + package_name + '/launch', glob('launch/*.launch.py') + glob('launch/*_launch.py')),
         ('share/' + package_name + '/maps', glob('maps/*')),
     ],
     install_requires=['setuptools'],
@@ -26,6 +26,7 @@ setup(
     entry_points={
         'console_scripts': [
             'fms_node = fms.fms_node:main',
+            'fms_tcp_node = fms.fms_tcp_node:main',
         ],
     },
 )

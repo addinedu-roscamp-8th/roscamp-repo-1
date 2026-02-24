@@ -1,0 +1,28 @@
+# =========================================================
+# Pinky Robot Configuration - pinky_d29d
+# FMS Robot ID: pinky3
+# IP: 192.168.1.11
+# =========================================================
+
+robot:
+  name: "pinky_d29d"
+  robot_id: "pinky3"
+  namespace: "/pinky3"
+  ip_address: "192.168.1.11"
+
+# FMS Server 연결
+fms:
+  server_host: "192.168.1.3"
+  server_port: 9000
+
+# Navigation namespace 설정
+navigation:
+  namespace: "pinky3"
+  use_namespace: true
+  use_sim_time: false
+
+# 시작 위치 (parking spot)
+initial_pose:
+  x: 0.585
+  y: 0.915
+  yaw: 0.0

@@ -1,16 +1,33 @@
 """
 서빙 로봇 Fleet 모니터링 화면
-3대의 서빙 로봇 상태를 실시간으로 모니터링
+Closed Network (WiFi: kitchmatics)에서 로봇 상태를 실시간으로 모니터링
+
+Mobile Robots (PinkyPro):
+  - pinky_b4bc: 192.168.1.7
+  - pinky_e2a8: 192.168.1.6
+  - pinky_d29d: 보류중
+
+Cobot Arms (JetCobot):
+  - jetcobot_aa1f: 192.168.1.4
+  - jetcobot_aa85: 192.168.0.59
 """
+import sys
+import os
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'common'))
+
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget,
-    QTableWidgetItem, QHeaderView, QPushButton, QGroupBox, QGridLayout
+    QTableWidgetItem, QHeaderView, QPushButton, QGroupBox, QGridLayout,
+    QTabWidget, QFrame, QSplitter, QTextEdit
 )
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtGui import QColor, QFont, QPalette
 from datetime import datetime
 
 from fleet_client import FleetClient, MockFleetClient
+from config import Config
 
 
 class FleetMonitorWidget(QWidget):
@@ -20,12 +37,18 @@ class FleetMonitorWidget(QWidget):
         super().__init__(parent)
         self.use_mock = use_mock
 
+        # Load network config
+        self.network_config = Config._network_config
+
         # Fleet 클라이언트 초기화
         if use_mock:
             self.client = MockFleetClient()
         else:
-            # TODO: 실제 Main Server IP 주소 설정
-            self.client = FleetClient(host='localhost', port=9999)
+            # FMS TCP Server 주소 (from network_config.yaml)
+            self.client = FleetClient(
+                host=Config.FMS_HOST,
+                port=Config.FMS_PORT
+            )
 
         # UI 설정
         self.setup_ui()
@@ -48,30 +71,231 @@ class FleetMonitorWidget(QWidget):
         layout = QVBoxLayout(self)
 
         # 헤더
-        header_label = QLabel('🚗 서빙 로봇 Fleet 모니터링')
+        header_layout = QHBoxLayout()
+        header_label = QLabel('Fleet 모니터링 - Closed Network')
         header_font = QFont()
         header_font.setPointSize(18)
         header_font.setBold(True)
         header_label.setFont(header_font)
-        layout.addWidget(header_label)
+        header_layout.addWidget(header_label)
 
-        # Fleet 통계 섹션
+        # 네트워크 상태 표시
+        self.network_status_label = QLabel(f'WiFi: {Config.WIFI_SSID} | Server: {Config.FMS_HOST}:{Config.FMS_PORT}')
+        self.network_status_label.setStyleSheet("color: #666; font-size: 12px;")
+        header_layout.addStretch()
+        header_layout.addWidget(self.network_status_label)
+        layout.addLayout(header_layout)
+
+        # 탭 위젯 생성
+        tab_widget = QTabWidget()
+
+        # 탭 1: Mobile Robots (PinkyPro)
+        mobile_tab = QWidget()
+        mobile_layout = QVBoxLayout(mobile_tab)
+
+        # Mobile Robot 통계
+        mobile_stats = self.create_mobile_stats_section()
+        mobile_layout.addWidget(mobile_stats)
+
+        # Mobile Robot 테이블
+        self.mobile_robot_table = self.create_mobile_robot_table()
+        mobile_layout.addWidget(self.mobile_robot_table)
+        tab_widget.addTab(mobile_tab, "Mobile Robots (PinkyPro)")
+
+        # 탭 2: Cobot Arms (JetCobot)
+        cobot_tab = QWidget()
+        cobot_layout = QVBoxLayout(cobot_tab)
+
+        # Cobot 통계
+        cobot_stats = self.create_cobot_stats_section()
+        cobot_layout.addWidget(cobot_stats)
+
+        # Cobot 테이블
+        self.cobot_table = self.create_cobot_table()
+        cobot_layout.addWidget(self.cobot_table)
+        tab_widget.addTab(cobot_tab, "Cobot Arms (JetCobot)")
+
+        # 탭 3: 전체 통계
+        stats_tab = QWidget()
+        stats_layout = QVBoxLayout(stats_tab)
         stats_group = self.create_stats_section()
-        layout.addWidget(stats_group)
+        stats_layout.addWidget(stats_group)
 
-        # 로봇 상태 테이블
-        self.robot_table = self.create_robot_table()
-        layout.addWidget(self.robot_table)
+        # 이벤트 로그
+        log_group = QGroupBox('이벤트 로그')
+        log_layout = QVBoxLayout(log_group)
+        self.event_log = QTextEdit()
+        self.event_log.setReadOnly(True)
+        self.event_log.setMaximumHeight(200)
+        log_layout.addWidget(self.event_log)
+        stats_layout.addWidget(log_group)
+        stats_layout.addStretch()
+        tab_widget.addTab(stats_tab, "전체 통계")
+
+        layout.addWidget(tab_widget)
+
+        # 기존 robot_table 호환성 유지
+        self.robot_table = self.mobile_robot_table
 
         # 하단 버튼
         button_layout = QHBoxLayout()
+
+        # 연결 상태 표시
+        self.connection_status = QLabel('연결 대기중...')
+        self.connection_status.setStyleSheet("color: orange; font-weight: bold;")
+        button_layout.addWidget(self.connection_status)
+
         button_layout.addStretch()
 
-        refresh_btn = QPushButton('🔄 새로고침')
+        refresh_btn = QPushButton('새로고침')
         refresh_btn.clicked.connect(self.refresh_fleet_status)
         button_layout.addWidget(refresh_btn)
 
         layout.addLayout(button_layout)
+
+    def create_mobile_stats_section(self) -> QGroupBox:
+        """Mobile Robot 통계 섹션"""
+        group = QGroupBox('Mobile Robot 상태')
+        layout = QGridLayout()
+
+        self.mobile_total_label = QLabel('0')
+        self.mobile_connected_label = QLabel('0')
+        self.mobile_idle_label = QLabel('0')
+        self.mobile_busy_label = QLabel('0')
+
+        stat_font = QFont()
+        stat_font.setPointSize(20)
+        stat_font.setBold(True)
+
+        for label in [self.mobile_total_label, self.mobile_connected_label,
+                     self.mobile_idle_label, self.mobile_busy_label]:
+            label.setFont(stat_font)
+            label.setAlignment(Qt.AlignCenter)
+
+        layout.addWidget(QLabel('전체:'), 0, 0)
+        layout.addWidget(self.mobile_total_label, 0, 1)
+        layout.addWidget(QLabel('연결됨:'), 0, 2)
+        layout.addWidget(self.mobile_connected_label, 0, 3)
+        layout.addWidget(QLabel('대기:'), 0, 4)
+        layout.addWidget(self.mobile_idle_label, 0, 5)
+        layout.addWidget(QLabel('작업중:'), 0, 6)
+        layout.addWidget(self.mobile_busy_label, 0, 7)
+
+        group.setLayout(layout)
+        return group
+
+    def create_cobot_stats_section(self) -> QGroupBox:
+        """Cobot 통계 섹션"""
+        group = QGroupBox('Cobot Arm 상태')
+        layout = QGridLayout()
+
+        self.cobot_total_label = QLabel('0')
+        self.cobot_connected_label = QLabel('0')
+        self.cobot_idle_label = QLabel('0')
+        self.cobot_cooking_label = QLabel('0')
+
+        stat_font = QFont()
+        stat_font.setPointSize(20)
+        stat_font.setBold(True)
+
+        for label in [self.cobot_total_label, self.cobot_connected_label,
+                     self.cobot_idle_label, self.cobot_cooking_label]:
+            label.setFont(stat_font)
+            label.setAlignment(Qt.AlignCenter)
+
+        layout.addWidget(QLabel('전체:'), 0, 0)
+        layout.addWidget(self.cobot_total_label, 0, 1)
+        layout.addWidget(QLabel('연결됨:'), 0, 2)
+        layout.addWidget(self.cobot_connected_label, 0, 3)
+        layout.addWidget(QLabel('대기:'), 0, 4)
+        layout.addWidget(self.cobot_idle_label, 0, 5)
+        layout.addWidget(QLabel('조리중:'), 0, 6)
+        layout.addWidget(self.cobot_cooking_label, 0, 7)
+
+        group.setLayout(layout)
+        return group
+
+    def create_mobile_robot_table(self) -> QTableWidget:
+        """Mobile Robot (PinkyPro) 테이블 생성"""
+        table = QTableWidget()
+        table.setColumnCount(8)
+        table.setHorizontalHeaderLabels([
+            '로봇명', 'Robot ID', 'IP 주소', '상태', '연결',
+            '배터리 (V)', '현재 작업', '최종 업데이트'
+        ])
+
+        table.setAlternatingRowColors(True)
+        table.setSelectionBehavior(QTableWidget.SelectRows)
+        table.setEditTriggers(QTableWidget.NoEditTriggers)
+
+        header = table.horizontalHeader()
+        for i in range(8):
+            header.setSectionResizeMode(i, QHeaderView.Stretch if i in [3, 6] else QHeaderView.ResizeToContents)
+
+        # 설정된 Mobile Robot 목록 로드
+        mobile_robots = self.network_config.get('mobile_robots', {})
+        table.setRowCount(len(mobile_robots))
+
+        for row, (name, cfg) in enumerate(mobile_robots.items()):
+            enabled = cfg.get('enabled', False)
+            robot_id = cfg.get('robot_id', '-')
+            ip_addr = cfg.get('ip_address', '-')
+
+            table.setItem(row, 0, QTableWidgetItem(name))
+            table.setItem(row, 1, QTableWidgetItem(robot_id))
+            table.setItem(row, 2, QTableWidgetItem(ip_addr))
+            table.setItem(row, 3, QTableWidgetItem('대기중' if enabled else '비활성화'))
+            table.setItem(row, 4, QTableWidgetItem('연결 대기...' if enabled else '보류'))
+            table.setItem(row, 5, QTableWidgetItem('-'))
+            table.setItem(row, 6, QTableWidgetItem('-'))
+            table.setItem(row, 7, QTableWidgetItem('-'))
+
+            # 비활성화된 로봇은 회색 처리
+            if not enabled:
+                for col in range(8):
+                    item = table.item(row, col)
+                    if item:
+                        item.setBackground(QColor(220, 220, 220))
+                        item.setForeground(QColor(128, 128, 128))
+
+        return table
+
+    def create_cobot_table(self) -> QTableWidget:
+        """Cobot Arm (JetCobot) 테이블 생성"""
+        table = QTableWidget()
+        table.setColumnCount(8)
+        table.setHorizontalHeaderLabels([
+            '로봇명', 'Robot ID', 'IP 주소', '상태', '연결',
+            '온도', '현재 작업', '최종 업데이트'
+        ])
+
+        table.setAlternatingRowColors(True)
+        table.setSelectionBehavior(QTableWidget.SelectRows)
+        table.setEditTriggers(QTableWidget.NoEditTriggers)
+
+        header = table.horizontalHeader()
+        for i in range(8):
+            header.setSectionResizeMode(i, QHeaderView.Stretch if i in [3, 6] else QHeaderView.ResizeToContents)
+
+        # 설정된 Cobot 목록 로드
+        cobot_arms = self.network_config.get('cobot_arms', {})
+        table.setRowCount(len(cobot_arms))
+
+        for row, (name, cfg) in enumerate(cobot_arms.items()):
+            enabled = cfg.get('enabled', False)
+            robot_id = cfg.get('robot_id', '-')
+            ip_addr = cfg.get('ip_address', '-')
+
+            table.setItem(row, 0, QTableWidgetItem(name))
+            table.setItem(row, 1, QTableWidgetItem(robot_id))
+            table.setItem(row, 2, QTableWidgetItem(ip_addr))
+            table.setItem(row, 3, QTableWidgetItem('대기중' if enabled else '비활성화'))
+            table.setItem(row, 4, QTableWidgetItem('연결 대기...' if enabled else '보류'))
+            table.setItem(row, 5, QTableWidgetItem('-'))
+            table.setItem(row, 6, QTableWidgetItem('-'))
+            table.setItem(row, 7, QTableWidgetItem('-'))
+
+        return table
 
     def create_stats_section(self) -> QGroupBox:
         """Fleet 통계 섹션 생성"""
@@ -161,16 +385,29 @@ class FleetMonitorWidget(QWidget):
         self.client.robot_status_updated.connect(self.on_robot_status_updated)
 
     def on_connected(self):
-        """Main Server 연결 성공"""
-        print('[FleetMonitor] Main Server 연결됨')
+        """FMS Server 연결 성공"""
+        self.connection_status.setText('연결됨')
+        self.connection_status.setStyleSheet("color: green; font-weight: bold;")
+        self.log_event(f'FMS Server 연결됨 ({Config.FMS_HOST}:{Config.FMS_PORT})')
+        print('[FleetMonitor] FMS Server 연결됨')
 
     def on_disconnected(self):
-        """Main Server 연결 끊김"""
-        print('[FleetMonitor] Main Server 연결 끊김')
+        """FMS Server 연결 끊김"""
+        self.connection_status.setText('연결 끊김')
+        self.connection_status.setStyleSheet("color: red; font-weight: bold;")
+        self.log_event('FMS Server 연결 끊김')
+        print('[FleetMonitor] FMS Server 연결 끊김')
 
     def on_error(self, error_msg: str):
         """에러 발생"""
+        self.log_event(f'에러: {error_msg}')
         print(f'[FleetMonitor] 에러: {error_msg}')
+
+    def log_event(self, message: str):
+        """이벤트 로그에 메시지 추가"""
+        timestamp = datetime.now().strftime('%H:%M:%S')
+        if hasattr(self, 'event_log'):
+            self.event_log.append(f'[{timestamp}] {message}')
 
     def on_fleet_status_updated(self, fleet_data: dict):
         """

@@ -56,6 +56,13 @@ class FMSNode(Node):
 
         logger.info("Initializing Fleet Management System...")
 
+        # 로봇팔 스킵 모드 (로봇팔 연결 전 테스트용)
+        self.declare_parameter('skip_robot_arm', True)
+        self.skip_robot_arm = self.get_parameter('skip_robot_arm').value
+        if self.skip_robot_arm:
+            logger.info("*** SKIP ROBOT ARM MODE ENABLED ***")
+            logger.info("로봇이 pickup_spot 도착 후 3초 뒤 자동으로 테이블로 이동합니다.")
+
         # TODO: Load robot configurations from config file
         robot_configs = [
             {'robot_id': 'pinky1', 'namespace': '/pinky1'},
@@ -417,7 +424,16 @@ class FMSNode(Node):
             if robot.status == RobotState.STATUS_MOVING_TO_PICKUP:
                 # Reached pickup spot
                 self.fleet_controller.robot_reached_pickup(robot_id)
-                logger.info(f"Robot {robot_id} reached pickup spot, waiting for food loading")
+                logger.info(f"Robot {robot_id} reached pickup spot")
+
+                # 로봇팔 스킵 모드: 3초 후 자동으로 테이블로 이동
+                if self.skip_robot_arm:
+                    logger.info(f"[SKIP_ARM] 3초 후 자동으로 food_loaded 처리...")
+                    # 일회성 타이머 - threading 사용
+                    import threading
+                    threading.Timer(3.0, lambda: self._auto_food_loaded(robot_id)).start()
+                else:
+                    logger.info(f"Waiting for food loading from robot arm...")
 
             elif robot.status == RobotState.STATUS_MOVING_TO_TABLE:
                 # Reached table
@@ -472,6 +488,34 @@ class FMSNode(Node):
         time_msg.sec = int(timestamp)
         time_msg.nanosec = int((timestamp - int(timestamp)) * 1e9)
         return time_msg
+
+    # ========================================
+    # Auto Food Loading (Skip Robot Arm Mode)
+    # ========================================
+
+    def _auto_food_loaded(self, robot_id: str):
+        """
+        로봇팔 스킵 모드에서 자동으로 음식 적재 완료 처리
+
+        Args:
+            robot_id: Robot ID
+        """
+        robot = self.fleet_controller.get_robot(robot_id)
+        if not robot:
+            return
+
+        # 현재 task 찾기
+        task = None
+        for t in self.task_manager.assigned_tasks.values():
+            if t.assigned_robot == robot_id:
+                task = t
+                break
+
+        if task:
+            logger.info(f"[SKIP_ARM] Auto food loaded for {robot_id}, order {task.order_id}")
+            self.notify_food_loaded(robot_id, task.order_id)
+        else:
+            logger.warning(f"[SKIP_ARM] No task found for robot {robot_id}")
 
     # ========================================
     # External Interface (for robot arm team)
