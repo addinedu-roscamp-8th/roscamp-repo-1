@@ -23,11 +23,27 @@ from std_msgs.msg import Float32
 import sys
 import os
 
-# Add FMS module to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'fms'))
+# Add FMS module paths
+fms_base = os.path.join(os.path.dirname(__file__), '..')
+sys.path.insert(0, fms_base)
 
-from fms.task_manager import Task, TaskManager
-from fms.fleet_controller import RobotState, FleetController
+# Import directly from module files
+import importlib.util
+task_manager_path = os.path.join(fms_base, 'fms', 'fms', 'task_manager.py')
+fleet_controller_path = os.path.join(fms_base, 'fms', 'fms', 'fleet_controller.py')
+
+spec_tm = importlib.util.spec_from_file_location("task_manager", task_manager_path)
+task_manager_module = importlib.util.module_from_spec(spec_tm)
+spec_tm.loader.exec_module(task_manager_module)
+
+spec_fc = importlib.util.spec_from_file_location("fleet_controller", fleet_controller_path)
+fleet_controller_module = importlib.util.module_from_spec(spec_fc)
+spec_fc.loader.exec_module(fleet_controller_module)
+
+Task = task_manager_module.Task
+TaskManager = task_manager_module.TaskManager
+RobotState = fleet_controller_module.RobotState
+FleetController = fleet_controller_module.FleetController
 
 
 class TestTask:
@@ -280,15 +296,19 @@ class TestTaskManager:
             order_id = str(uuid.uuid4())
             manager.create_task(order_id, 'M001', f'T{i+1:02d}', 1, 'mayo', False)
 
-        # Assign and complete first one
-        task = manager.assign_task('pinky1')
-        manager.start_task(task.task_id)
-        manager.complete_task(task.task_id)
+        # Assign all 3 tasks
+        task1 = manager.assign_task('pinky1')
+        task2 = manager.assign_task('pinky2')
+        task3 = manager.assign_task('pinky3')
+
+        # Start and complete first one
+        manager.start_task(task1.task_id)
+        manager.complete_task(task1.task_id)
 
         summary = manager.get_status_summary()
 
-        assert summary['pending'] == 2
-        assert summary['assigned'] == 2
+        assert summary['pending'] == 0
+        assert summary['assigned'] == 2  # task2 and task3 are still assigned
         assert summary['completed'] == 1
 
 
@@ -504,7 +524,7 @@ class TestFleetController:
 
         robot = fleet.get_robot('pinky1')
         assert robot.status == RobotState.STATUS_MOVING_TO_TABLE
-        assert robot.target_location == 'table1'
+        assert robot.target_location == 'table01'  # T01.lower() -> t01 -> table01
 
     def test_robot_reached_table(self):
         """Test robot reached table"""

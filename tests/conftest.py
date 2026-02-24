@@ -12,11 +12,25 @@ import logging
 import sys
 import os
 
-# Add FMS module to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'fms'))
+# Add FMS module paths
+fms_base = os.path.join(os.path.dirname(__file__), '..')
+sys.path.insert(0, fms_base)
 
-from fms.task_manager import TaskManager
-from fms.fleet_controller import FleetController
+# Import directly from module files
+import importlib.util
+task_manager_path = os.path.join(fms_base, 'fms', 'fms', 'task_manager.py')
+fleet_controller_path = os.path.join(fms_base, 'fms', 'fms', 'fleet_controller.py')
+
+spec_tm = importlib.util.spec_from_file_location("task_manager", task_manager_path)
+task_manager_module = importlib.util.module_from_spec(spec_tm)
+spec_tm.loader.exec_module(task_manager_module)
+
+spec_fc = importlib.util.spec_from_file_location("fleet_controller", fleet_controller_path)
+fleet_controller_module = importlib.util.module_from_spec(spec_fc)
+spec_fc.loader.exec_module(fleet_controller_module)
+
+TaskManager = task_manager_module.TaskManager
+FleetController = fleet_controller_module.FleetController
 
 
 # Configure logging for tests

@@ -35,11 +35,27 @@ from geometry_msgs.msg import Pose
 import sys
 import os
 
-# Add FMS module to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'fms'))
+# Add FMS module paths
+fms_base = os.path.join(os.path.dirname(__file__), '..')
+sys.path.insert(0, fms_base)
 
-from fms.task_manager import Task, TaskManager
-from fms.fleet_controller import RobotState, FleetController
+# Import directly from module files
+import importlib.util
+task_manager_path = os.path.join(fms_base, 'fms', 'fms', 'task_manager.py')
+fleet_controller_path = os.path.join(fms_base, 'fms', 'fms', 'fleet_controller.py')
+
+spec_tm = importlib.util.spec_from_file_location("task_manager", task_manager_path)
+task_manager_module = importlib.util.module_from_spec(spec_tm)
+spec_tm.loader.exec_module(task_manager_module)
+
+spec_fc = importlib.util.spec_from_file_location("fleet_controller", fleet_controller_path)
+fleet_controller_module = importlib.util.module_from_spec(spec_fc)
+spec_fc.loader.exec_module(fleet_controller_module)
+
+Task = task_manager_module.Task
+TaskManager = task_manager_module.TaskManager
+RobotState = fleet_controller_module.RobotState
+FleetController = fleet_controller_module.FleetController
 
 
 class SkipModeSimulator:
@@ -517,7 +533,9 @@ class TestStateTransitions:
             {'robot_id': 'pinky1', 'namespace': '/pinky1'}
         ]
         fleet = FleetController(robot_configs)
+        # Create simulator without skip mode to test state transitions
         simulator = SkipModeSimulator(manager, fleet)
+        simulator.skip_mode = False  # Disable skip mode for this test
 
         order_id = str(uuid.uuid4())
         manager.create_task(order_id, 'M001', 'T01', 1, 'mayo', False)
@@ -525,23 +543,25 @@ class TestStateTransitions:
 
         simulator.simulate_robot_navigation('pinky1', 'pickup_spot')
 
+        # Without skip mode, robot stays in LOADED state
         assert fleet.get_robot('pinky1').status == RobotState.STATUS_LOADED
 
     def test_loaded_to_moving_to_table(self):
-        """Test LOADED -> MOVING_TO_TABLE transition"""
+        """Test LOADED -> MOVING_TO_TABLE transition (with skip mode)"""
         manager = TaskManager()
         robot_configs = [
             {'robot_id': 'pinky1', 'namespace': '/pinky1'}
         ]
         fleet = FleetController(robot_configs)
         simulator = SkipModeSimulator(manager, fleet)
+        simulator.skip_mode = True  # Enable skip mode for this test
 
         order_id = str(uuid.uuid4())
         manager.create_task(order_id, 'M001', 'T01', 1, 'mayo', False)
         simulator.process_pending_tasks()
         simulator.simulate_robot_navigation('pinky1', 'pickup_spot')
 
-        # After food_loaded is simulated, robot should move to table
+        # With skip mode enabled, after food_loaded is simulated, robot moves to table
         assert fleet.get_robot('pinky1').status == RobotState.STATUS_MOVING_TO_TABLE
 
     def test_moving_to_table_to_delivering(self):
