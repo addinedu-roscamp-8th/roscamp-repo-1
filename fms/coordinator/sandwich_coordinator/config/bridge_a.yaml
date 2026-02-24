@@ -1,0 +1,9 @@
+from_domain: 25
+to_domain: 20
+topics:
+  /arm_a/cmd:
+    type: std_msgs/msg/String
+  /arm_a/status:
+    type: std_msgs/msg/String
+    from_domain: 20
+    to_domain: 25
