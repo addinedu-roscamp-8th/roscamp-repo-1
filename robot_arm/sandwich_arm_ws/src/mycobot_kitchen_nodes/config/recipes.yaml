@@ -1,0 +1,41 @@
+# recipes.yaml
+recipes:
+  ham_cheese:
+    # 아래는 “재료 key”를 poses.yaml의 pick 키와 동일하게 맞춘다.
+    steps:
+      - bread
+      - lettuce
+      - cheese
+      - tomato
+      - ham
+      - bread
+  mushroom:
+    steps:
+      - bread
+      - mushroom
+      - tomato
+      - cheese
+      - ham
+      - bread
+  all:
+    steps:
+      - bread
+      - tomato
+      - cheese
+      - ham
+      - mushroom
+      - lettuce
+      - bread
+  ng:
+    steps:
+      - bread
+      - tomato
+      - cheese
+      - ham
+      - bread
+  bread:
+    steps:
+      - bread
+      - bread
+
+

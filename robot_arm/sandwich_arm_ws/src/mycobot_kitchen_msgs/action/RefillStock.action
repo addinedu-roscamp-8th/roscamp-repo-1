@@ -1,0 +1,11 @@
+# Goal
+string[] items
+---
+# Result
+bool success
+string message
+---
+# Feedback
+int32 idx
+string item_key
+string phase
