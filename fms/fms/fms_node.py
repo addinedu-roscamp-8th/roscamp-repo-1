@@ -26,6 +26,7 @@ from typing import Dict, List, Optional
 from .task_manager import TaskManager
 from .fleet_controller import FleetController, RobotState
 from .zone_manager import ZoneManager
+from .path_planner import PathPlanner
 
 # Configure logging
 logging.basicConfig(
@@ -75,6 +76,13 @@ class FMSNode(Node):
         self.task_manager = TaskManager()
         self.fleet_controller = FleetController(robot_configs)
         self.zone_manager = ZoneManager()
+
+        # Initialize path planner with navigation graph
+        self.path_planner = self._init_path_planner()
+
+        # Waypoint navigation state for each robot
+        # {robot_id: {'waypoints': [...], 'current_idx': 0, 'final_destination': 'table1'}}
+        self.robot_waypoints: Dict[str, Dict] = {}
 
         # Navigation action clients for each robot
         self.nav_clients = {}
@@ -238,6 +246,32 @@ class FMSNode(Node):
             }
 
         return positions
+
+    def _init_path_planner(self) -> Optional[PathPlanner]:
+        """
+        Initialize path planner with navigation graph
+
+        Returns:
+            PathPlanner instance or None if loading fails
+        """
+        import os
+        from ament_index_python.packages import get_package_share_directory
+
+        try:
+            pkg_dir = get_package_share_directory('fms')
+            graph_file = os.path.join(pkg_dir, 'config', 'navigation_graph.yaml')
+
+            if os.path.exists(graph_file):
+                planner = PathPlanner(graph_file)
+                logger.info(f"Path planner initialized with {graph_file}")
+                return planner
+            else:
+                logger.warning(f"Navigation graph not found: {graph_file}")
+                return None
+
+        except Exception as e:
+            logger.error(f"Failed to initialize path planner: {e}")
+            return None
 
     def _set_initial_poses_once(self):
         """
@@ -446,19 +480,18 @@ class FMSNode(Node):
 
     def _send_robot_to_pickup(self, robot_id: str):
         """
-        Send robot to pickup spot
+        Send robot to pickup spot via waypoints
 
         Args:
             robot_id: Robot ID
         """
-        pickup_pose = self.map_positions.get('pickup_spot')
-        if pickup_pose:
-            self._navigate_robot(robot_id, pickup_pose)
-            logger.info(f"Sending robot {robot_id} to pickup spot")
+        parking_spot = f"{robot_id}_spot"
+        self._navigate_via_waypoints(robot_id, parking_spot, 'pickup_spot')
+        logger.info(f"Sending robot {robot_id} to pickup spot via waypoints")
 
     def _send_robot_to_table(self, robot_id: str, table_number: str):
         """
-        Send robot to table
+        Send robot to table via waypoints
 
         Args:
             robot_id: Robot ID
@@ -466,26 +499,110 @@ class FMSNode(Node):
         """
         # Convert T01 -> table1
         table_name = table_number.lower().replace('t0', 'table').replace('t', 'table')
-        table_pose = self.map_positions.get(table_name)
 
-        if table_pose:
-            self._navigate_robot(robot_id, table_pose)
-            self.fleet_controller.robot_start_delivery(robot_id, table_number)
-            logger.info(f"Sending robot {robot_id} to {table_number}")
+        self._navigate_via_waypoints(robot_id, 'pickup_spot', table_name)
+        self.fleet_controller.robot_start_delivery(robot_id, table_number)
+        logger.info(f"Sending robot {robot_id} to {table_number} via waypoints")
 
     def _send_robot_to_parking(self, robot_id: str):
         """
-        Send robot to parking spot
+        Send robot to parking spot via waypoints
 
         Args:
             robot_id: Robot ID
         """
         parking_name = f"{robot_id}_spot"
-        parking_pose = self.map_positions.get(parking_name)
 
-        if parking_pose:
-            self._navigate_robot(robot_id, parking_pose)
-            logger.info(f"Sending robot {robot_id} to parking spot")
+        # Get current task to find where robot is coming from
+        task = None
+        for t in self.task_manager.assigned_tasks.values():
+            if t.assigned_robot == robot_id:
+                task = t
+                break
+
+        # Determine start location (table or pickup_spot)
+        if task:
+            table_name = task.table_number.lower().replace('t0', 'table').replace('t', 'table')
+            start_location = table_name
+        else:
+            start_location = 'pickup_spot'
+
+        self._navigate_via_waypoints(robot_id, start_location, parking_name)
+        logger.info(f"Sending robot {robot_id} to parking spot via waypoints")
+
+    def _navigate_via_waypoints(self, robot_id: str, start: str, goal: str):
+        """
+        Navigate robot through waypoints using Dijkstra path
+
+        Args:
+            robot_id: Robot ID
+            start: Start vertex name (e.g., 'pinky1_spot')
+            goal: Goal vertex name (e.g., 'pickup_spot')
+        """
+        if not self.path_planner:
+            logger.warning(f"Path planner not available, using direct navigation")
+            goal_pose = self.map_positions.get(goal)
+            if goal_pose:
+                self._navigate_robot(robot_id, goal_pose)
+            return
+
+        # Calculate waypoint path
+        path = self.path_planner.find_path(start, goal)
+        if not path:
+            logger.error(f"No path found from {start} to {goal}")
+            return
+
+        logger.info(f"[{robot_id}] Waypoint path: {' -> '.join(path)}")
+
+        # Store waypoint state for this robot
+        self.robot_waypoints[robot_id] = {
+            'waypoints': path,
+            'current_idx': 0,
+            'final_destination': goal
+        }
+
+        # Start navigating to first waypoint (skip start position)
+        self._navigate_to_next_waypoint(robot_id)
+
+    def _navigate_to_next_waypoint(self, robot_id: str):
+        """
+        Navigate to the next waypoint in the path
+
+        Args:
+            robot_id: Robot ID
+        """
+        wp_state = self.robot_waypoints.get(robot_id)
+        if not wp_state:
+            return
+
+        waypoints = wp_state['waypoints']
+        current_idx = wp_state['current_idx']
+
+        # Skip starting position (idx 0) on first call
+        if current_idx == 0:
+            current_idx = 1
+            wp_state['current_idx'] = 1
+
+        if current_idx >= len(waypoints):
+            logger.info(f"[{robot_id}] Reached final waypoint")
+            return
+
+        # Get next waypoint position
+        next_wp_name = waypoints[current_idx]
+        next_pos = self.path_planner.get_vertex_position(next_wp_name)
+
+        if next_pos:
+            next_pose = self._create_pose(next_pos[0], next_pos[1], 0.0)
+
+            # Update robot's target_location to current waypoint
+            robot = self.fleet_controller.get_robot(robot_id)
+            if robot:
+                robot.target_location = next_wp_name
+
+            logger.info(f"[{robot_id}] Navigating to waypoint [{current_idx}/{len(waypoints)-1}]: {next_wp_name}")
+            self._navigate_robot(robot_id, next_pose)
+        else:
+            logger.error(f"Waypoint position not found: {next_wp_name}")
 
     def _navigate_robot(self, robot_id: str, goal_pose: Pose):
         """
@@ -546,10 +663,31 @@ class FMSNode(Node):
         # Status codes: 2=CANCELED, 4=SUCCEEDED, 5=ABORTED
         if status == 4:  # SUCCEEDED
             logger.info(f"Navigation succeeded for robot {robot_id}")
-            # Robot reached destination - let _check_navigation_status handle state transition
+
+            # Check if there are more waypoints to navigate
+            wp_state = self.robot_waypoints.get(robot_id)
+            if wp_state:
+                wp_state['current_idx'] += 1
+                waypoints = wp_state['waypoints']
+                current_idx = wp_state['current_idx']
+
+                if current_idx < len(waypoints):
+                    # Navigate to next waypoint
+                    logger.info(f"[{robot_id}] Waypoint {current_idx-1} reached, moving to next")
+                    self._navigate_to_next_waypoint(robot_id)
+                else:
+                    # All waypoints reached - final destination
+                    logger.info(f"[{robot_id}] All waypoints reached, at final destination: {wp_state['final_destination']}")
+                    # Clean up waypoint state
+                    del self.robot_waypoints[robot_id]
+                    # Let _check_navigation_status handle state transition
+
         elif status == 5:  # ABORTED
             logger.error(f"Navigation aborted for robot {robot_id}")
             self.fleet_controller.robot_error(robot_id, "Navigation aborted")
+            # Clean up waypoint state on error
+            if robot_id in self.robot_waypoints:
+                del self.robot_waypoints[robot_id]
         elif status == 2:  # CANCELED
             logger.warning(f"Navigation canceled for robot {robot_id}")
         else:
@@ -564,13 +702,17 @@ class FMSNode(Node):
 
     def _check_navigation_status(self, robot_id: str):
         """
-        Check if robot reached its destination
+        Check if robot reached its final destination (not intermediate waypoints)
 
         Args:
             robot_id: Robot ID
         """
         robot = self.fleet_controller.get_robot(robot_id)
         if not robot or not robot.target_location:
+            return
+
+        # If robot is still navigating through waypoints, don't trigger state transition
+        if robot_id in self.robot_waypoints:
             return
 
         # Get target pose
