@@ -2,6 +2,22 @@
 
 이 문서는 Kitchmatic FMS의 구현 완료 후 적용/수정이 필요한 사항들을 정리한 것입니다.
 
+## 🟣 현재 진행 중 (SC-357)
+
+### 다중 로봇 네비게이션 테스트
+- [x] TCP 통신 버그 수정 (`socket` → `client_socket` 속성명) ✅
+- [x] `bringup_launch.py` 생성 (RewrittenYaml 기반 다중 로봇 지원) ✅
+- [x] TF frame prefix 이슈 해결 (로봇이 prefix 없이 TF 발행) ✅
+- [ ] FMS → 로봇 네비게이션 통합 테스트 진행 중
+- [ ] AMCL 초기 위치 설정 및 localization 확인
+
+### 관련 파일
+- `mobile_robot/launch/bringup_launch.py` - 다중 로봇 네비게이션 launch
+- `mobile_robot/params/nav2_params.yaml` - Nav2 파라미터 (소형 로봇용 튜닝)
+- `fms/fms/tcp_communication.py` - TCP 통신 버그 수정
+
+---
+
 ## 🔴 필수 설정 (시스템 실행 전 반드시 완료)
 
 ### 1. 데이터베이스 설정
@@ -66,25 +82,28 @@
 ### 3. 로봇 네임스페이스 설정
 
 #### 3.1 서빙 로봇 네임스페이스
-- [ ] 각 PinkyPro 로봇이 다음 네임스페이스로 실행되도록 설정:
+- [x] 각 PinkyPro 로봇이 다음 네임스페이스로 실행되도록 설정: ✅
   - `/pinky1`
   - `/pinky2`
   - `/pinky3`
 
-- [ ] **확인 방법**:
+- [x] **실행 방법** (로봇에서):
   ```bash
-  ros2 topic list | grep "/pinky"
-  # 예상 출력:
-  # /pinky1/pose
-  # /pinky1/battery/voltage
-  # /pinky1/battery/present
-  # /pinky2/pose
-  # ...
+  # 터미널 1: 로봇 하드웨어
+  ros2 launch pinky_bringup bringup_robot.launch.xml namespace:=pinky1
+
+  # 터미널 2: 네비게이션 (roscamp-repo-1의 launch 파일)
+  ros2 launch ~/roscamp-repo-1/mobile_robot/launch/bringup_launch.py namespace:=pinky1 map:=~/real.yaml
   ```
 
+- [x] **bringup_launch.py 기능**: ✅
+  - RewrittenYaml을 사용하여 namespace에 따라 파라미터 자동 설정
+  - pinky1, pinky2, pinky3 모두 동일한 params 파일로 동작
+  - 로봇 내부 코드 수정 없이 roscamp-repo-1에서 관리
+
 #### 3.2 FMS 설정 파일 확인
-- [ ] **파일**: `fms/config/fms_config.yaml`
-- [ ] **Line 4-17**: 로봇 설정이 실제 네임스페이스와 일치하는지 확인
+- [x] **파일**: `fms/config/fms_config.yaml` ✅
+- [x] **Line 4-17**: 로봇 설정이 실제 네임스페이스와 일치하는지 확인 ✅
 
 ### 4. 맵 좌표 보정 (중요!)
 
@@ -205,11 +224,13 @@ USE_MOCK=false python main.py
 ### 8. Navigation 튜닝
 
 #### 8.1 Nav2 파라미터 조정
-- [ ] **파일**: `/home/gw/pinky_pro/src/pinky_pro/pinky_navigation/params/nav2_params.yaml`
-- [ ] 좁은 공간(2m x 1m)에 맞게 파라미터 조정:
-  - `inflation_radius`: 현재 0.01m → 필요시 조정
-  - `goal_tolerance`: 목표 도달 허용 오차
-  - `lookahead_distance`: 경로 추종 거리
+- [x] **파일**: `mobile_robot/params/nav2_params.yaml` (roscamp-repo-1에서 관리) ✅
+- [x] 좁은 공간(2m x 1m)에 맞게 파라미터 조정 완료: ✅
+  - `inflation_radius`: 0.01m (좁은 통로 통과용)
+  - `xy_goal_tolerance`: 0.02m (2cm 정밀 도착)
+  - `lookahead_dist`: 0.08m (소형 로봇용)
+  - `robot_radius`: 0.055m (실제 로봇 크기)
+  - `resolution`: 0.01m (1cm 해상도)
 
 #### 8.2 Goal Reached Threshold 조정
 - [ ] **파일**: `fms/config/fms_config.yaml`
@@ -396,5 +417,4 @@ USE_MOCK=false python main.py
 
 ---
 
-**최종 업데이트**: 2026-02-23
-**작성자**: Claude (Kitchmatic FMS 구현)
+**최종 업데이트**: 2026-02-24

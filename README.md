@@ -227,11 +227,26 @@ GUI 기능:
 - Cobot Arms 탭: JetCobot 로봇팔 상태 모니터링
 - 전체 통계 탭: Fleet 통계 및 이벤트 로그
 
-#### 터미널 3: 로봇에서 클라이언트 실행 (SSH로 로봇 접속 후)
+#### 터미널 3: 로봇에서 Navigation 실행 (SSH로 로봇 접속 후)
 
 ```bash
-# PinkyPro 로봇에서 (예: pinky_b4bc)
-ssh pinky@192.168.1.7
+# PinkyPro 로봇에서 (예: pinky_b4bc - 192.168.1.7)
+ssh pinky@192.168.1.7  # 비밀번호: 1
+
+# 터미널 1: 로봇 하드웨어 (라이다, 모터 등)
+ros2 launch pinky_bringup bringup_robot.launch.xml namespace:=pinky1
+
+# 터미널 2: 네비게이션 (roscamp-repo-1의 launch 파일 사용)
+ros2 launch ~/roscamp-repo-1/mobile_robot/launch/bringup_launch.py namespace:=pinky1 map:=~/real.yaml
+```
+
+> **참고**: `bringup_launch.py`는 RewrittenYaml을 사용하여 namespace에 따라 자동으로 파라미터를 설정합니다.
+> pinky1, pinky2, pinky3 모두 동일한 방법으로 실행하면 됩니다.
+
+#### 터미널 4: 로봇 TCP 클라이언트 실행 (선택사항)
+
+```bash
+# PinkyPro 로봇에서 FMS와 TCP 통신
 cd ~/roscamp-repo-1/fms/scripts
 python3 robot_client.py --robot-id pinky1 --server 192.168.1.3
 
@@ -626,9 +641,17 @@ roscamp-repo-1/
 │       └── fms_closed_network.launch.py
 │
 ├── mobile_robot/                     # Mobile Robot 설정
-│   └── params/
-│       ├── nav2_params.yaml          # Navigation2 파라미터 (오버라이드용)
-│       └── mapper_params.yaml        # Mapper 파라미터 (오버라이드용)
+│   ├── launch/
+│   │   └── bringup_launch.py         # 다중 로봇 네비게이션 launch (RewrittenYaml)
+│   ├── params/
+│   │   └── nav2_params.yaml          # Navigation2 파라미터
+│   ├── maps/
+│   │   ├── real.yaml                 # 실제 맵 설정
+│   │   └── real.png                  # 실제 맵 이미지
+│   └── config/
+│       ├── pinky_b4bc.yaml           # 로봇별 설정 (192.168.1.7)
+│       ├── pinky_e2a8.yaml           # 로봇별 설정 (192.168.1.6)
+│       └── pinky_d29d.yaml           # 로봇별 설정 (192.168.1.11)
 │
 ├── app/
 │   ├── backend/                      # Main Server
