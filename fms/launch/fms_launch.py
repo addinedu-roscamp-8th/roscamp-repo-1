@@ -36,8 +36,16 @@ def generate_launch_description():
         description='Path to FMS configuration file'
     )
 
+    # Declare active robot argument
+    active_robot_arg = DeclareLaunchArgument(
+        'active_robot',
+        default_value='pinky1',
+        description='Active robot for cmd_vel relay'
+    )
+
     return LaunchDescription([
         config_arg,
+        active_robot_arg,
 
         # FMS Node
         Node(
@@ -46,6 +54,21 @@ def generate_launch_description():
             name='fms_node',
             output='screen',
             emulate_tty=True,
-            parameters=[LaunchConfiguration('config_file')]
+            parameters=[{
+                'config_file': LaunchConfiguration('config_file'),
+                'skip_robot_arm': True
+            }]
+        ),
+
+        # cmd_vel Relay Node
+        Node(
+            package='fms',
+            executable='cmd_vel_relay',
+            name='cmd_vel_relay',
+            output='screen',
+            parameters=[{
+                'robot_namespaces': ['pinky1', 'pinky2', 'pinky3'],
+                'active_robot': LaunchConfiguration('active_robot')
+            }]
         ),
     ])

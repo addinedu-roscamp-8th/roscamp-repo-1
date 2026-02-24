@@ -27,6 +27,7 @@ setup(
         'console_scripts': [
             'fms_node = fms.fms_node:main',
             'fms_tcp_node = fms.fms_tcp_node:main',
+            'cmd_vel_relay = fms.cmd_vel_relay:main',
         ],
     },
 )
