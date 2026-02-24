@@ -48,6 +48,7 @@
     <h2>개요</h2>
     <div class="card">
       <p><strong>Base URL</strong>: <code>http://&lt;서버IP&gt;:5001</code> (포트는 <code>config/server_config.yaml</code> 또는 환경변수 <code>YOLO_SERVER_PORT</code>, <code>YOLO_SERVER_HOST</code>로 변경 가능)</p>
+      <p><strong>영상/이미지 소스</strong>: <code>config/jetbot_config.yaml</code>의 <code>base_url</code>로 지정. JetBot 또는 로봇 팔 스트리밍 서버(동일 API) 사용 가능. <code>video.use_websocket: true</code> 시 WebSocket(<code>/ws/video</code>)으로 영상 수신. → <a href="/api_docs#config">설정 파일 요약</a> / docs/04_로봇팔_스트리밍_연동.md</p>
       <p><strong>Content-Type</strong>: <code>application/json</code> (요청/응답 공통)</p>
       <p><strong>에러 시</strong>: HTTP 4xx/5xx + JSON body에 <code>success</code>, <code>error</code>, <code>message</code> 등 포함</p>
     </div>
@@ -77,11 +78,15 @@
         <tr><td>GET</td><td><code>/health</code></td><td>서버·모델 상태 확인</td></tr>
         <tr><td>GET</td><td><code>/model_info</code></td><td>YOLO 모델 경로(best.pt)·로드 상태·클래스 목록</td></tr>
         <tr><td>GET</td><td><code>/analyze/image</code></td><td>스냅샷 이미지 분석 결과 반환</td></tr>
+        <tr><td>GET</td><td><code>/analyze/image/ws</code></td><td>WebSocket 스냅샷 분석 (동일 응답 형식, 실시간성)</td></tr>
         <tr><td>GET</td><td><code>/analyze/video</code></td><td>영상 스트림 분석 결과 반환 (일괄 JSON)</td></tr>
+        <tr><td>GET</td><td><code>/analyze/video/ws</code></td><td>WebSocket 영상 분석 (동일 응답 형식, 실시간성)</td></tr>
         <tr><td>GET</td><td><code>/analyze/video/stream</code></td><td>영상 분석 결과 실시간 스트리밍 (SSE)</td></tr>
+        <tr><td>GET</td><td><code>/analyze/video/stream/ws</code></td><td>WebSocket+SSE 스트리밍 (동일 이벤트 형식, 실시간성)</td></tr>
         <tr><td>GET</td><td><code>/stream/preview</code></td><td>MJPEG 스트리밍 + bbox·검출 상태 오버레이</td></tr>
         <tr><td>GET</td><td><code>/view</code></td><td>스트리밍 + 검출 상태 표시용 HTML 페이지</td></tr>
         <tr><td>GET</td><td><code>/analyze/arm_cmd</code></td><td>이미지 분석 후 ROS2 토픽 발행 (로봇 팔 연동)</td></tr>
+        <tr><td>GET</td><td><code>/analyze/arm_cmd/ws</code></td><td>WebSocket 스냅샷 → 분석·토픽 발행 (동일 응답 형식, 실시간성)</td></tr>
         <tr><td>POST</td><td><code>/reload_model</code></td><td>YOLO 모델 재로드</td></tr>
       </tbody>
     </table>
@@ -266,7 +271,20 @@
 {"error": "inference_failed", "message": "...", "frame_index": 3}</pre>
     </div>
 
-    <h2>8. 스트리밍 프리뷰 / 뷰 페이지</h2>
+    <h2>8. WebSocket 기반 분석 API (실시간성 확보)</h2>
+    <div class="card">
+      <p>아래 엔드포인트는 소스에서 영상/스냅샷을 <strong>WebSocket</strong>(<code>/ws/video</code>)으로 수신합니다. <strong>응답 형식은 기존 API와 동일</strong>하므로, 호출 URL만 바꾸면 됩니다.</p>
+      <table>
+        <tr><th>기존 URL</th><th>WebSocket URL</th><th>비고</th></tr>
+        <tr><td>GET /analyze/image</td><td>GET <code>/analyze/image/ws</code></td><td>스냅샷 1장(WS) → 분석, 동일 JSON</td></tr>
+        <tr><td>GET /analyze/video</td><td>GET <code>/analyze/video/ws</code></td><td>영상 프레임(WS) → 분석, 동일 JSON (num_frames 쿼리 동일)</td></tr>
+        <tr><td>GET /analyze/video/stream</td><td>GET <code>/analyze/video/stream/ws</code></td><td>WS 수신 + SSE 이벤트, 동일 이벤트 형식 (max_frames 쿼리 동일)</td></tr>
+        <tr><td>GET /analyze/arm_cmd</td><td>GET <code>/analyze/arm_cmd/ws</code></td><td>스냅샷 1장(WS) → 분석·ROS2 발행, 동일 JSON</td></tr>
+      </table>
+      <p>Request/Response·에러 형식은 각 기존 API와 동일합니다. <code>source</code> 필드만 <code>"websocket"</code> 로 올 수 있습니다.</p>
+    </div>
+
+    <h2>9. 스트리밍 프리뷰 / 뷰 페이지</h2>
     <div class="card">
       <div class="endpoint-title"><span class="method get">GET</span><span class="path">/stream/preview</span></div>
       <p>JetBot 영상을 받아 프레임마다 YOLO 분석 후, bbox와 "Detected: ..." / "No detection" 문구를 그려 MJPEG 스트리밍. <code>Content-Type: multipart/x-mixed-replace; boundary=frame</code></p>
@@ -274,7 +292,7 @@
       <p>위 스트림을 보여주는 HTML 페이지. 브라우저에서 <code>/view</code> 로 접속하면 영상과 검출 여부를 함께 볼 수 있습니다.</p>
     </div>
 
-    <h2>9. 모델 재로드</h2>
+    <h2>10. 모델 재로드</h2>
     <div class="card">
       <div class="endpoint-title"><span class="method post">POST</span><span class="path">/reload_model</span></div>
       <p><code>config/yolo_config.yaml</code> 변경 후 서버 재시작 없이 YOLO 모델만 다시 로드할 때 사용합니다.</p>
@@ -286,11 +304,11 @@
       <pre>{"success": false, "error": "모델 파일을 찾을 수 없음 ..."}</pre>
     </div>
 
-    <h2>설정 파일 요약</h2>
+    <h2 id="config">설정 파일 요약</h2>
     <table>
       <tr><th>파일</th><th>용도</th></tr>
       <tr><td>config/yolo_config.yaml</td><td>모델 경로(model_path), 클래스명(class_names), 추론 옵션</td></tr>
-      <tr><td>config/jetbot_config.yaml</td><td>JetBot base URL, /snapshot, /video_feed, 프레임 수·타임아웃</td></tr>
+      <tr><td>config/jetbot_config.yaml</td><td>영상 소스 base_url(JetBot 또는 로봇 팔), /snapshot·/video_feed, 프레임 수·타임아웃, use_websocket·ws_video_path(WebSocket 옵션)</td></tr>
       <tr><td>config/arm_ros_config.yaml</td><td>ROS_DOMAIN_ID, /verify/cmd 토픽, 클래스→명령 매핑</td></tr>
       <tr><td>config/server_config.yaml</td><td>서버 host, port (기본 5001)</td></tr>
     </table>

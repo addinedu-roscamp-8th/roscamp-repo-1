@@ -2,9 +2,10 @@
 
 ## 개요
 
-- **서비스**: JetBot(라즈베리파이)의 영상/이미지를 가져와 YOLO로 객체 검출 후 결과를 JSON으로 반환하는 Flask API.
+- **서비스**: JetBot(라즈베리파이) 또는 **로봇 팔 스트리밍 서버**의 영상/이미지를 가져와 YOLO로 객체 검출 후 결과를 JSON으로 반환하는 Flask API.
+- **영상/이미지 소스**: `config/jetbot_config.yaml`의 **base_url**로 지정. 동일 API(`/snapshot`, `/video_feed`)를 제공하는 소스면 JetBot·로봇 팔 구분 없이 사용 가능. 선택적으로 **WebSocket**(`/ws/video`)으로 영상 수신 가능(동일 config의 `video.use_websocket`, `video.ws_video_path`).
 - **기본 URL**: `http://<서버IP>:5001` (포트는 `config/server_config.yaml` 또는 환경변수로 변경 가능)
-- **데이터 형식**: 요청/응답 모두 JSON (이미지·영상 바이너리는 API가 내부적으로 JetBot에서 취득).
+- **데이터 형식**: 요청/응답 모두 JSON (이미지·영상 바이너리는 API가 내부적으로 소스에서 취득).
 
 ---
 
@@ -24,11 +25,15 @@
 | GET | `/health` | 서버·모델 상태 확인 |
 | GET | `/model_info` | 사용 중인 YOLO 모델 경로(best.pt)·로드 상태 확인 |
 | GET | `/analyze/image` | 스냅샷 이미지 분석 결과 반환 |
+| GET | `/analyze/image/ws` | **WebSocket** 스냅샷 1장 수신 후 분석. 응답 형식은 `/analyze/image` 와 동일 (실시간성 확보용) |
 | GET | `/analyze/video` | 영상 스트림 분석 결과 반환 (일괄 JSON) |
+| GET | `/analyze/video/ws` | **WebSocket** 영상 프레임 수신 후 분석. 응답 형식은 `/analyze/video` 와 동일 (실시간성 확보용) |
 | GET | `/analyze/video/stream` | 영상 분석 결과 실시간 스트리밍 (SSE) |
+| GET | `/analyze/video/stream/ws` | **WebSocket** 영상 수신 + SSE. 이벤트 형식은 `/analyze/video/stream` 와 동일 (실시간성 확보용) |
 | GET | `/stream/preview` | 영상 MJPEG 스트리밍 + bbox·검출 상태 오버레이 |
 | GET | `/view` | 스트리밍 + 검출 상태 표시용 HTML 페이지 |
 | GET | `/analyze/arm_cmd` | 이미지 분석 후 결과에 따라 ROS2 토픽 발행 (로봇 팔 연동) |
+| GET | `/analyze/arm_cmd/ws` | **WebSocket** 스냅샷 1장 수신 후 분석·토픽 발행. 응답 형식은 `/analyze/arm_cmd` 와 동일 (실시간성 확보용) |
 | POST | `/reload_model` | YOLO 모델 재로드 (설정 변경 후) |
 
 ---
@@ -414,7 +419,7 @@ es.onerror = () => es.close();
 | 파일 | 용도 |
 |------|------|
 | `config/yolo_config.yaml` | YOLO 모델 경로(`model_path`), 클래스명(`class_names`), 추론 옵션. **모델 교체 시 이 파일만 수정** |
-| `config/jetbot_config.yaml` | JetBot base URL, `/snapshot`, `/video_feed` 경로, 영상 프레임 수·타임아웃, **stream_timeout_seconds**(SSE 최대 유지 시간) 등 |
+| `config/jetbot_config.yaml` | 영상 소스 **base_url**(JetBot 또는 로봇 팔 스트리밍 서버), `/snapshot`·`/video_feed` 경로, 영상 프레임 수·타임아웃, **stream_timeout_seconds**(SSE 최대 유지 시간), **use_websocket**·**ws_video_path**(WebSocket 영상 수신 옵션) 등. 상세: **docs/04_로봇팔_스트리밍_연동.md** |
 | `config/server_config.yaml` | 서버 `host`, `port` (기본 5001). 환경변수 `YOLO_SERVER_PORT`, `YOLO_SERVER_HOST`로 오버라이드 가능 |
 
 ---

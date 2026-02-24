@@ -1,4 +1,6 @@
-# JetBot 라즈베리파이 영상/이미지 소스 설정
+# 영상/이미지 소스 설정 (JetBot 또는 로봇 팔 스트리밍 서버)
+# - JetBot: base_url을 라즈베리파이 주소로 (예: http://192.168.1.10:5000)
+# - 로봇 팔: base_url을 로봇 팔 스트리밍 서버 주소로 (동일 API /snapshot, /video_feed 제공)
 
 base_url: "http://192.168.1.10:5000"
 
@@ -12,3 +14,6 @@ video:
   num_frames: 5              # 분석할 프레임 수 (일정 간격으로 샘플링)
   frame_interval_ms: 200     # 프레임 간 간격 (대략)
   stream_timeout_seconds: 3600   # SSE 스트리밍 최대 유지 시간(초), GET /analyze/video/stream
+  # WebSocket 옵션 (로봇 팔 스트리밍 서버의 /ws/video 사용 시)
+  use_websocket: true       # true면 영상 스트림을 WebSocket으로 수신 (지연 감소)
+  ws_video_path: "/ws/video" # base_url 기준 WebSocket 경로

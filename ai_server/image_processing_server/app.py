@@ -10,7 +10,13 @@ import yaml
 from flask import Flask, Response, jsonify, render_template, request, stream_with_context
 
 import cv2
-from source_fetcher import get_snapshot_image, get_video_frames, stream_video_frames
+from source_fetcher import (
+    get_snapshot_image,
+    get_snapshot_image_ws,
+    get_video_frames,
+    stream_video_frames,
+    stream_video_frames_ws,
+)
 from yolo_analyzer import analyze_image, analyze_and_draw, get_model_info, reload_model
 from arm_ros_publisher import detection_to_command, publish_arm_cmd
 
@@ -38,12 +44,16 @@ def index():
             "health": "/health",
             "model_info": "GET /model_info",
             "analyze_image": "GET /analyze/image",
+            "analyze_image_ws": "GET /analyze/image/ws (WebSocket 스냅샷, 동일 응답 형식)",
             "analyze_video": "GET /analyze/video",
+            "analyze_video_ws": "GET /analyze/video/ws (WebSocket 영상, 동일 응답 형식)",
             "analyze_video_stream": "GET /analyze/video/stream (SSE)",
+            "analyze_video_stream_ws": "GET /analyze/video/stream/ws (WebSocket+SSE, 동일 이벤트 형식)",
             "stream_preview": "GET /stream/preview (MJPEG)",
             "view": "GET /view (스트리밍 + 검출 상태 표시)",
             "reload_model": "POST /reload_model",
             "analyze_arm_cmd": "GET /analyze/arm_cmd (이미지 분석 후 ROS2 토픽 발행)",
+            "analyze_arm_cmd_ws": "GET /analyze/arm_cmd/ws (WebSocket 스냅샷, 동일 응답 형식)",
             "api_docs": "GET /api_docs (API 문서 페이지)",
             "interface_spec": "See INTERFACE_SPEC.md",
         },
@@ -123,6 +133,37 @@ def analyze_image_endpoint():
     })
 
 
+@app.route("/analyze/image/ws", methods=["GET"])
+def analyze_image_ws_endpoint():
+    """
+    WebSocket /ws/video 에서 프레임 1장 수신 후 YOLO 분석. 응답 형식은 GET /analyze/image 와 동일.
+    실시간성 확보용 — 호출 URL만 /analyze/image/ws 로 변경하면 됨.
+    """
+    try:
+        img = get_snapshot_image_ws()
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": "source_fetch_failed",
+            "message": str(e),
+        }), 503
+    try:
+        detections = analyze_image(img)
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": "inference_failed",
+            "message": str(e),
+        }), 500
+    return jsonify({
+        "success": True,
+        "source": "websocket",
+        "image_size": {"width": img.shape[1], "height": img.shape[0]},
+        "detections": detections,
+        "count": len(detections),
+    })
+
+
 @app.route("/analyze/video", methods=["GET"])
 def analyze_video_endpoint():
     """
@@ -169,6 +210,60 @@ def analyze_video_endpoint():
         "detections": all_detections,
         "total_detections": len(all_detections),
     })
+
+
+@app.route("/analyze/video/ws", methods=["GET"])
+def analyze_video_ws_endpoint():
+    """
+    WebSocket /ws/video 에서 프레임을 읽어 YOLO 분석. 응답 형식은 GET /analyze/video 와 동일.
+    실시간성 확보용 — 호출 URL만 /analyze/video/ws 로 변경하면 됨.
+    Query: num_frames (선택)
+    """
+    num_frames = request.args.get("num_frames", type=int)
+    video_cfg = _load_jetbot_config().get("video", {}) or {}
+    n = num_frames or video_cfg.get("num_frames", 5)
+    timeout = video_cfg.get("timeout_seconds", 10)
+    try:
+        frames = list(stream_video_frames_ws(max_frames=n, timeout_sec=float(timeout)))
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": "source_fetch_failed",
+            "message": str(e),
+        }), 503
+    frame_results = []
+    all_detections = []
+    for i, img in enumerate(frames):
+        try:
+            detections = analyze_image(img)
+        except Exception as e:
+            return jsonify({
+                "success": False,
+                "error": "inference_failed",
+                "message": str(e),
+                "frame_index": i,
+            }), 500
+        frame_results.append({
+            "frame_index": i,
+            "image_size": {"width": img.shape[1], "height": img.shape[0]},
+            "detections": detections,
+            "count": len(detections),
+        })
+        all_detections.extend(detections)
+    return jsonify({
+        "success": True,
+        "source": "websocket",
+        "num_frames": len(frames),
+        "frames": frame_results,
+        "detections": all_detections,
+        "total_detections": len(all_detections),
+    })
+
+
+def _load_jetbot_config():
+    path = Path(__file__).resolve().parent / "config" / "jetbot_config.yaml"
+    with open(path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
 
 
 def _generate_preview_mjpeg():
@@ -257,6 +352,31 @@ def _generate_video_stream_sse():
         yield f"data: {json.dumps({'error': 'source_fetch_failed', 'message': str(e)})}\n\n"
 
 
+def _generate_video_stream_sse_ws():
+    """SSE: WebSocket /ws/video 에서 프레임을 읽어 YOLO 분석 후 이벤트로 전송. 형식은 /analyze/video/stream 와 동일."""
+    try:
+        max_frames = request.args.get("max_frames", type=int)
+        video_cfg = _load_jetbot_config().get("video", {}) or {}
+        timeout_sec = video_cfg.get("stream_timeout_seconds", 3600)
+        for frame_index, img in enumerate(
+            stream_video_frames_ws(max_frames=max_frames, timeout_sec=float(timeout_sec))
+        ):
+            try:
+                detections = analyze_image(img)
+            except Exception as e:
+                yield f"data: {json.dumps({'error': 'inference_failed', 'message': str(e), 'frame_index': frame_index})}\n\n"
+                continue
+            payload = {
+                "frame_index": frame_index,
+                "image_size": {"width": img.shape[1], "height": img.shape[0]},
+                "detections": detections,
+                "count": len(detections),
+            }
+            yield f"data: {json.dumps(payload)}\n\n"
+    except Exception as e:
+        yield f"data: {json.dumps({'error': 'source_fetch_failed', 'message': str(e)})}\n\n"
+
+
 @app.route("/analyze/video/stream", methods=["GET"])
 def analyze_video_stream_endpoint():
     """
@@ -268,6 +388,24 @@ def analyze_video_stream_endpoint():
     """
     return Response(
         stream_with_context(_generate_video_stream_sse()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.route("/analyze/video/stream/ws", methods=["GET"])
+def analyze_video_stream_ws_endpoint():
+    """
+    WebSocket /ws/video 에서 프레임을 실시간 수신하며 YOLO 분석 결과를 SSE로 스트리밍.
+    이벤트 형식은 GET /analyze/video/stream 와 동일. 실시간성 확보용.
+    Query: max_frames (선택)
+    """
+    return Response(
+        stream_with_context(_generate_video_stream_sse_ws()),
         mimetype="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -312,6 +450,45 @@ def analyze_arm_cmd_endpoint():
     return jsonify({
         "success": True,
         "source": "snapshot",
+        "image_size": {"width": img.shape[1], "height": img.shape[0]},
+        "detections": detections,
+        "count": len(detections),
+        "command_key": command_key,
+        "ros_published": ros_result,
+    })
+
+
+@app.route("/analyze/arm_cmd/ws", methods=["GET"])
+def analyze_arm_cmd_ws_endpoint():
+    """
+    WebSocket /ws/video 에서 프레임 1장 수신 후 분석·ROS2 토픽 발행. 응답 형식은 GET /analyze/arm_cmd 와 동일.
+    실시간성 확보용 — 호출 URL만 /analyze/arm_cmd/ws 로 변경하면 됨.
+    """
+    try:
+        img = get_snapshot_image_ws()
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": "source_fetch_failed",
+            "message": str(e),
+            "ros_published": None,
+        }), 503
+    try:
+        detections = analyze_image(img)
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": "inference_failed",
+            "message": str(e),
+            "ros_published": None,
+        }), 500
+    command_key = detection_to_command(detections)
+    ros_result = None
+    if command_key:
+        ros_result = publish_arm_cmd(command_key)
+    return jsonify({
+        "success": True,
+        "source": "websocket",
         "image_size": {"width": img.shape[1], "height": img.shape[0]},
         "detections": detections,
         "count": len(detections),

@@ -5,3 +5,5 @@ opencv-python-headless>=4.8.0
 ultralytics>=8.0.0
 PyYAML>=6.0
 numpy>=1.24.0
+# WebSocket 영상 소스 사용 시 (config jetbot_config.yaml video.use_websocket: true)
+websocket-client>=1.6.0
