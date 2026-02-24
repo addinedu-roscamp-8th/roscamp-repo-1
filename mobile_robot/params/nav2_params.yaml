@@ -113,7 +113,7 @@ controller_server:
       lookahead_time: 1.5
       transform_tolerance: 0.2
       use_velocity_scaled_lookahead_dist: true
-      use_collision_detection: true
+      use_collision_detection: false
       use_interpolation: true
 
       # ========= 회전 우선 관련 핵심 파라미터 =========
