@@ -1,0 +1,12 @@
+# Goal
+int32 target_type          # 0: coords(6)  1: angles(6)
+float64[6] target
+int32 speed
+int32 mode                 # coords에서만 사용, angles면 -1
+---
+# Result
+bool success
+string message
+---
+# Feedback
+string state
