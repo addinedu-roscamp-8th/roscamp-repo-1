@@ -5,11 +5,15 @@ Kitchmatics FMS - Closed Network Configuration
 import os
 import yaml
 from pathlib import Path
-from dotenv import load_dotenv
 from typing import Dict, List, Optional
 
-# .env 파일 로드
-load_dotenv()
+# .env 파일 로드 (optional)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # python-dotenv가 없어도 환경 변수에서 직접 읽을 수 있음
+    pass
 
 # Project root path
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent.absolute()

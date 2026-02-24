@@ -2,19 +2,49 @@
 
 이 문서는 Kitchmatic FMS의 구현 완료 후 적용/수정이 필요한 사항들을 정리한 것입니다.
 
-## 🟣 현재 진행 중 (SC-357)
+## 🟣 현재 진행 중
 
-### 다중 로봇 네비게이션 테스트
-- [x] TCP 통신 버그 수정 (`socket` → `client_socket` 속성명) ✅
-- [x] `bringup_launch.py` 생성 (RewrittenYaml 기반 다중 로봇 지원) ✅
-- [x] TF frame prefix 이슈 해결 (로봇이 prefix 없이 TF 발행) ✅
-- [ ] FMS → 로봇 네비게이션 통합 테스트 진행 중
-- [ ] AMCL 초기 위치 설정 및 localization 확인
+### 문서화 정렬 (DevOps - Documentation Priority)
+- [x] CLAUDE.md 업데이트: ROS_DOMAIN_ID 제거, 네임스페이스 기반 아키텍처로 변경 ✅
+- [x] 현재 구현과 문서 일관성 맞추기 ✅
+- [x] README.md와 CLAUDE.md 동기화 ✅
+- [x] TODO.md 완료 항목 업데이트 ✅
+- [ ] 향후 작업: 빠른 시작 가이드 작성 (개발자용)
+- [ ] 향후 작업: 배포 가이드 작성 (폐쇄 네트워크)
+- [ ] 향후 작업: 트러블슈팅 가이드 작성
 
 ### 관련 파일
-- `mobile_robot/launch/bringup_launch.py` - 다중 로봇 네비게이션 launch
-- `mobile_robot/params/nav2_params.yaml` - Nav2 파라미터 (소형 로봇용 튜닝)
-- `fms/fms/tcp_communication.py` - TCP 통신 버그 수정
+- `CLAUDE.md` - 프로젝트 가이드 (네임스페이스 아키텍처)
+- `README.md` - 사용자 설명서 (이미 최신)
+- `TODO.md` - 이 파일
+
+---
+
+---
+
+## 📊 아키텍처 결정 확정
+
+### ROS_DOMAIN_ID vs 네임스페이스 검증 결과
+
+**최종 결정: ROS 2 네임스페이스 사용**
+
+현재 구현 검증:
+- [x] `network_config.yaml`: 모든 로봇이 namespace로 설정됨 ✅
+- [x] `fms_config.yaml`: 로봇 설정이 namespace 기반 ✅
+- [x] `fms_node.py`: FMS가 namespace 기반 topic/action 사용 ✅
+- [x] `bringup_launch.py`: PushRosNamespace로 다중 로봇 지원 ✅
+- [x] `mobile_robot/params/nav2_params.yaml`: RewrittenYaml로 namespace 주입 ✅
+
+**이점:**
+- 마스터 PC에서 중앙 제어 용이
+- 같은 ROS domain에서 모든 로봇 통신
+- 간단한 namespace 관리
+- 다중 로봇 조정 및 충돌 방지 용이
+
+**주의사항:**
+- ROS_DOMAIN_ID는 모든 로봇/PC에서 동일하게 유지 필요
+- 폐쇄 네트워크(kitchmatics WiFi) 환경에서만 권장
+- 각 로봇은 namespace로 구분됨
 
 ---
 
@@ -87,7 +117,7 @@
   - `/pinky2`
   - `/pinky3`
 
-- [x] **실행 방법** (로봇에서):
+- [x] **실행 방법** (로봇에서): ✅
   ```bash
   # 터미널 1: 로봇 하드웨어
   ros2 launch pinky_bringup bringup_robot.launch.xml namespace:=pinky1
@@ -96,14 +126,14 @@
   ros2 launch ~/roscamp-repo-1/mobile_robot/launch/bringup_launch.py namespace:=pinky1 map:=~/real.yaml
   ```
 
-- [x] **bringup_launch.py 기능**: ✅
+- [x] **bringup_launch.py 기능**: ✅ (완료)
   - RewrittenYaml을 사용하여 namespace에 따라 파라미터 자동 설정
   - pinky1, pinky2, pinky3 모두 동일한 params 파일로 동작
   - 로봇 내부 코드 수정 없이 roscamp-repo-1에서 관리
 
 #### 3.2 FMS 설정 파일 확인
-- [x] **파일**: `fms/config/fms_config.yaml` ✅
-- [x] **Line 4-17**: 로봇 설정이 실제 네임스페이스와 일치하는지 확인 ✅
+- [x] **파일**: `fms/config/fms_config.yaml` ✅ (완료)
+- [x] **Line 4-17**: 로봇 설정이 실제 네임스페이스와 일치하는지 확인 ✅ (확인됨)
 
 ### 4. 맵 좌표 보정 (중요!)
 
@@ -417,4 +447,63 @@ USE_MOCK=false python main.py
 
 ---
 
-**최종 업데이트**: 2026-02-24
+## 📚 개발자 빠른 참조
+
+### 현재 상태 요약
+
+**구현됨:**
+- ✅ ROS 2 네임스페이스 아키텍처 (모든 로봇이 /pinky1, /pinky2, /pinky3)
+- ✅ 다중 로봇 네비게이션 (bringup_launch.py with RewrittenYaml)
+- ✅ FMS 기본 구조 (task_manager, fleet_controller, zone_manager)
+- ✅ Skip 모드 (로봇팔 연동 전 테스트용)
+- ✅ TCP 통신 기본 구조
+- ✅ Admin GUI 기본 (fleet_monitor)
+- ✅ 문서화 (CLAUDE.md, README.md, CLAUDE.md 동기화)
+
+**필요한 작업:**
+- [ ] YAML 파일에서 동적 설정 로드 (현재 hardcoded)
+- [ ] End-to-end 테스트 (skip 모드 포함)
+- [ ] 다중 로봇 시나리오 테스트
+- [ ] 실제 로봇 하드웨어 테스트
+- [ ] 좌표 보정 (실제 맵 측량)
+
+### 빠른 시작 명령어
+
+```bash
+# 빌드
+cd /home/gw/kitchmatics/roscamp-repo-1
+colcon build
+source install/setup.bash
+
+# FMS 실행 (skip 모드)
+ros2 run fms fms_node --ros-args -p skip_robot_arm:=true
+
+# 테스트 주문 전송
+python3 fms/scripts/send_order.py --table 1
+
+# Fleet 상태 모니터링
+ros2 topic echo /fms/fleet_status
+```
+
+### 주요 파일 위치
+
+| 파일 | 설명 |
+|------|------|
+| `CLAUDE.md` | 프로젝트 가이드 (네임스페이스 아키텍처) |
+| `README.md` | 사용자 설명서 |
+| `TODO.md` | 이 파일 (진행 상황 추적) |
+| `fms/config/network_config.yaml` | 로봇 IP & 네임스페이스 설정 |
+| `fms/config/fms_config.yaml` | FMS 파라미터 & 맵 좌표 |
+| `mobile_robot/launch/bringup_launch.py` | 다중 로봇 네비게이션 |
+| `mobile_robot/params/nav2_params.yaml` | Nav2 튜닝 파라미터 |
+
+### 문의 사항
+
+- **아키텍처 질문**: CLAUDE.md의 "Current Architecture" 섹션 참조
+- **설정 문제**: README.md의 "설정 파일" 섹션 참조
+- **테스트 방법**: README.md의 "빠른 시작" 섹션 참조
+- **로봇 연결**: README.md의 "Closed Network 구성" 섹션 참조
+
+---
+
+**최종 업데이트**: 2026-02-25 (Documentation Sync)
