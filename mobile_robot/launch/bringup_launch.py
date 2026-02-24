@@ -116,10 +116,6 @@ def generate_launch_description():
         parameters=[
             configured_params,
             {'yaml_filename': map_file}
-        ],
-        remappings=[
-            ('/tf', 'tf'),
-            ('/tf_static', 'tf_static')
         ]
     )
 
@@ -129,11 +125,7 @@ def generate_launch_description():
         executable='amcl',
         name='amcl',
         output='screen',
-        parameters=[configured_params],
-        remappings=[
-            ('/tf', 'tf'),
-            ('/tf_static', 'tf_static')
-        ]
+        parameters=[configured_params]
     )
 
     # Controller Server
@@ -144,8 +136,6 @@ def generate_launch_description():
         output='screen',
         parameters=[configured_params],
         remappings=[
-            ('/tf', 'tf'),
-            ('/tf_static', 'tf_static'),
             ('cmd_vel', 'cmd_vel_nav')
         ]
     )
@@ -156,11 +146,7 @@ def generate_launch_description():
         executable='planner_server',
         name='planner_server',
         output='screen',
-        parameters=[configured_params],
-        remappings=[
-            ('/tf', 'tf'),
-            ('/tf_static', 'tf_static')
-        ]
+        parameters=[configured_params]
     )
 
     # Behavior Server
@@ -169,11 +155,7 @@ def generate_launch_description():
         executable='behavior_server',
         name='behavior_server',
         output='screen',
-        parameters=[configured_params],
-        remappings=[
-            ('/tf', 'tf'),
-            ('/tf_static', 'tf_static')
-        ]
+        parameters=[configured_params]
     )
 
     # BT Navigator
@@ -182,11 +164,7 @@ def generate_launch_description():
         executable='bt_navigator',
         name='bt_navigator',
         output='screen',
-        parameters=[configured_params],
-        remappings=[
-            ('/tf', 'tf'),
-            ('/tf_static', 'tf_static')
-        ]
+        parameters=[configured_params]
     )
 
     # Waypoint Follower
@@ -195,11 +173,7 @@ def generate_launch_description():
         executable='waypoint_follower',
         name='waypoint_follower',
         output='screen',
-        parameters=[configured_params],
-        remappings=[
-            ('/tf', 'tf'),
-            ('/tf_static', 'tf_static')
-        ]
+        parameters=[configured_params]
     )
 
     # Velocity Smoother
@@ -210,8 +184,6 @@ def generate_launch_description():
         output='screen',
         parameters=[configured_params],
         remappings=[
-            ('/tf', 'tf'),
-            ('/tf_static', 'tf_static'),
             ('cmd_vel', 'cmd_vel_nav'),
             ('cmd_vel_smoothed', 'cmd_vel')
         ]
