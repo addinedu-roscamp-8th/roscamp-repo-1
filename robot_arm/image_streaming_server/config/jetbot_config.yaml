@@ -1,0 +1,14 @@
+# JetBot 라즈베리파이 영상/이미지 소스 설정
+
+base_url: "http://192.168.1.10:5000"
+
+endpoints:
+  snapshot: "/snapshot"      # 이미지 다운로드
+  video_feed: "/video_feed"  # 영상 스트림 (MJPEG)
+
+# 영상 분석 시 사용할 설정
+video:
+  timeout_seconds: 10        # 스트림 연결 타임아웃 (GET /analyze/video)
+  num_frames: 5              # 분석할 프레임 수 (일정 간격으로 샘플링)
+  frame_interval_ms: 200     # 프레임 간 간격 (대략)
+  stream_timeout_seconds: 3600   # SSE 스트리밍 최대 유지 시간(초), GET /analyze/video/stream

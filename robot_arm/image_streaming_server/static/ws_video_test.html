@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>WebSocket 영상 테스트</title>
+  <style>
+    body { font-family: sans-serif; padding: 1rem; }
+    video, img { max-width: 100%; border: 1px solid #ccc; }
+    .box { margin: 1rem 0; }
+    .status { color: #666; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <h1>WebSocket 영상 스트림 테스트</h1>
+  <div class="box">
+    <div class="status" id="status">연결 대기 중...</div>
+    <img id="img" alt="WebSocket 영상" />
+  </div>
+  <p>MJPEG 방식: <a href="/video_feed">/video_feed</a></p>
+
+  <script>
+    (function() {
+      const img = document.getElementById('img');
+      const status = document.getElementById('status');
+      const wsUrl = (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + '/ws/video';
+      const ws = new WebSocket(wsUrl);
+      ws.binaryType = 'arraybuffer';
+
+      ws.onopen = function() {
+        status.textContent = 'WebSocket 연결됨 - 영상 수신 중';
+      };
+      ws.onmessage = function(ev) {
+        if (ev.data instanceof ArrayBuffer) {
+          const blob = new Blob([ev.data], { type: 'image/jpeg' });
+          const url = URL.createObjectURL(blob);
+          if (img.src && img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
+          img.src = url;
+        }
+      };
+      ws.onerror = function() {
+        status.textContent = 'WebSocket 오류';
+      };
+      ws.onclose = function() {
+        status.textContent = 'WebSocket 연결 종료';
+      };
+    })();
+  </script>
+</body>
+</html>
