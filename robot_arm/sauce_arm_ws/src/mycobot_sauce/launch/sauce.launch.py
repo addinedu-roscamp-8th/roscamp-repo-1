@@ -50,47 +50,6 @@ def generate_launch_description():
         ],
     )
 
-    send_frame = Node(
-        package="mycobot_sauce",
-        executable="send_frame",         
-        name="send_frame_node",
-        output="screen",
-        parameters=[
-        ],
-    )
-
-    handle_tray = Node(
-        package="mycobot_sauce",
-        executable="handle_tray",        
-        name="handle_tray_node",
-        output="screen",
-        parameters=[
-            {"poses_yaml": poses_tray},
-            {"enable_bias": True},
-            {"z_approach_mm": 30.0},
-            {"z_offset_mm": 10.0},
-            {"release_at_verify": False},
-            {"gripper_open_value": 100},
-            {"gripper_close_value": 0},
-            {"gripper_speed": 50},
-            {"speed_move": 50},
-            {"speed_z": 30},
-            {"mode": 1},
-            {"settle_sec": 0.3},
-        ],
-    )
-
-    verify_executor = Node(
-        package="mycobot_sauce",
-        executable="verify_executor",     
-        name="verify_executor_node",
-        output="screen",
-        parameters=[
-            {"poses_yaml": poses_tray}, 
-            {"enable_bias": True},
-        ],
-    )
-
     trash_or_delivery = Node(
         package="mycobot_sauce",
         executable="trash_or_delivery",   
@@ -106,8 +65,6 @@ def generate_launch_description():
         arm_driver,
         bias_provider,
         pour_sauce,
-        send_frame,
-        handle_tray,
-        verify_executor,
         trash_or_delivery,
-    ])
+    ]
+)
