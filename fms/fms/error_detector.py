@@ -97,7 +97,7 @@ class ErrorDetector:
 
         # Configuration
         self.heartbeat_timeout = 5.0  # seconds
-        self.battery_low_threshold = 20.0  # voltage
+        self.battery_low_threshold = 0.0  # voltage
         self.pickup_timeout = 60.0  # seconds
         self.delivery_timeout = 120.0  # seconds
         self.nav_retry_timeout = 10.0  # seconds before considering nav failed

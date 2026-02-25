@@ -8,6 +8,7 @@ robots:
     type: "SERVING_BOT_1"
     parking_spot: "pinky1_spot"
     ip_address: "192.168.1.7"
+    enabled: false  # 현재 DOMAIN_ID=13에서 테스트 중
   - robot_id: "pinky2"
     domain_id: 12
     type: "SERVING_BOT_2"
@@ -221,7 +222,7 @@ parameters:
   goal_reached_threshold: 0.1
 
   # Low battery threshold (volts)
-  low_battery_threshold: 20.0
+  low_battery_threshold: 0.0
 
   # Zone reservation timeout (seconds)
   zone_reservation_timeout: 30.0

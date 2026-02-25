@@ -84,7 +84,7 @@ class FMSNode(Node):
         # Robot configurations with ROS_DOMAIN_ID (not namespace)
         # Each robot runs on separate DOMAIN_ID in closed network
         robot_configs = [
-            {'robot_id': 'pinky1', 'domain_id': 11, 'ip': '192.168.1.7'},
+            {'robot_id': 'pinky1', 'domain_id': 11, 'ip': '192.168.1.7', 'enabled': False},  # DOMAIN_ID=13 테스트 중
             {'robot_id': 'pinky2', 'domain_id': 12, 'ip': '192.168.1.6', 'enabled': False},  # 테스트 제외
             {'robot_id': 'pinky3', 'domain_id': 13, 'ip': '192.168.1.11'}
         ]
@@ -305,12 +305,8 @@ class FMSNode(Node):
         import yaml
         import os
 
-        # Load from fms_config.yaml
-        config_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            'config',
-            'fms_config.yaml'
-        )
+        # Load from fms_config.yaml (source directory)
+        config_path = '/home/gw/kitchmatics/roscamp-repo-1/fms/config/fms_config.yaml'
 
         positions = {}
         try:
@@ -390,14 +386,8 @@ class FMSNode(Node):
         }
 
         try:
-            # Try to load from fms_config.yaml
-            config_path = os.path.join(
-                os.path.dirname(__file__),
-                '..',
-                'config',
-                'fms_config.yaml'
-            )
-            config_path = os.path.abspath(config_path)
+            # Load from fms_config.yaml (source directory)
+            config_path = '/home/gw/kitchmatics/roscamp-repo-1/fms/config/fms_config.yaml'
 
             if not os.path.exists(config_path):
                 logger.warning(f"Config file not found: {config_path}, using defaults")

@@ -1,0 +1,65 @@
+# Domain Bridge Configuration for Kitchmatics FMS
+# Main PC (DOMAIN_ID=0)에서 로봇들과 통신
+#
+# 사용법:
+#   ros2 run domain_bridge domain_bridge fms/config/domain_bridge.yaml
+
+# pinky1 (DOMAIN_ID=11) topics
+- from_domain: 11
+  to_domain: 0
+  topics:
+    /amcl_pose:
+      type: geometry_msgs/msg/PoseWithCovarianceStamped
+    /odom:
+      type: nav_msgs/msg/Odometry
+    /scan:
+      type: sensor_msgs/msg/LaserScan
+    /battery/voltage:
+      type: std_msgs/msg/Float32
+    /battery/present:
+      type: std_msgs/msg/Bool
+
+- from_domain: 0
+  to_domain: 11
+  topics:
+    /initialpose:
+      type: geometry_msgs/msg/PoseWithCovarianceStamped
+    /goal_pose:
+      type: geometry_msgs/msg/PoseStamped
+  services:
+    /navigate_to_pose/_action/send_goal:
+      type: nav2_msgs/action/NavigateToPose
+    /navigate_to_pose/_action/cancel_goal:
+      type: action_msgs/srv/CancelGoal
+    /navigate_to_pose/_action/get_result:
+      type: nav2_msgs/action/NavigateToPose
+
+# pinky3 (DOMAIN_ID=13) topics
+- from_domain: 13
+  to_domain: 0
+  topics:
+    /amcl_pose:
+      type: geometry_msgs/msg/PoseWithCovarianceStamped
+    /odom:
+      type: nav_msgs/msg/Odometry
+    /scan:
+      type: sensor_msgs/msg/LaserScan
+    /battery/voltage:
+      type: std_msgs/msg/Float32
+    /battery/present:
+      type: std_msgs/msg/Bool
+
+- from_domain: 0
+  to_domain: 13
+  topics:
+    /initialpose:
+      type: geometry_msgs/msg/PoseWithCovarianceStamped
+    /goal_pose:
+      type: geometry_msgs/msg/PoseStamped
+  services:
+    /navigate_to_pose/_action/send_goal:
+      type: nav2_msgs/action/NavigateToPose
+    /navigate_to_pose/_action/cancel_goal:
+      type: action_msgs/srv/CancelGoal
+    /navigate_to_pose/_action/get_result:
+      type: nav2_msgs/action/NavigateToPose

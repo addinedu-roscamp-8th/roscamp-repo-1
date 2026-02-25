@@ -71,7 +71,7 @@ class RobotState:
         """Check if robot is available for new task"""
         return self.status == self.STATUS_IDLE and self.current_task_id is None
 
-    def is_low_battery(self, threshold: float = 20.0) -> bool:
+    def is_low_battery(self, threshold: float = 0.0) -> bool:
         """Check if battery is low"""
         return self.battery_present and self.battery_voltage < threshold
 
