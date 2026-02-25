@@ -3,12 +3,16 @@
 
 import time
 import uuid
+import threading
 from dataclasses import dataclass
 from typing import Dict, Optional, Tuple
+from queue import Queue
 
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
+from fleet_interfaces.msg import CookingOrder, LoadingComplete
+from builtin_interfaces.msg import Time
 
 
 def parse_kv(parts):
@@ -56,6 +60,20 @@ class Order:
 
 
 class CoordinatorNode(Node):
+    """
+    Sandwich Coordinator Node
+
+    Receives cooking orders from FMS and orchestrates robot arms to prepare sandwiches.
+    Publishes LoadingComplete when food is ready and loaded onto the serving robot.
+    """
+
+    # Menu ID to recipe mapping
+    MENU_RECIPES = {
+        'M001': 'ham_cheese',      # 햄치즈샌드위치
+        'M002': 'mushroom',        # 머쉬룸샌드위치
+        'M003': 'all_in_one',      # 올인원샌드위치
+    }
+
     def __init__(self):
         super().__init__("sandwich_coordinator")
 
@@ -64,17 +82,133 @@ class CoordinatorNode(Node):
         self.pub_b = self.create_publisher(String, "/arm_b/cmd", 10)
         self.pub_verify = self.create_publisher(String, "/verify/cmd", 10)
 
+        # LoadingComplete publisher - notify FMS when food is loaded
+        self.loading_complete_pub = self.create_publisher(
+            LoadingComplete,
+            '/cooking/loading_complete',
+            10
+        )
+
         # subscribers (각각 따로!)
         self.sub_a = self.create_subscription(String, "/arm_a/status", self._on_a_status, 10)
         self.sub_b = self.create_subscription(String, "/arm_b/status", self._on_b_status, 10)
         self.sub_verify = self.create_subscription(String, "/verify/status", self._on_verify_status, 10)
+
+        # CookingOrder subscriber - receive orders from FMS
+        self.cooking_order_sub = self.create_subscription(
+            CookingOrder,
+            '/cooking/order',
+            self._on_cooking_order,
+            10
+        )
 
         # job_id -> (state, kv)
         self.a_status: Dict[str, Tuple[str, Dict[str, str]]] = {}
         self.b_status: Dict[str, Tuple[str, Dict[str, str]]] = {}
         self.v_status: Dict[str, Tuple[str, Dict[str, str]]] = {}
 
-        self.get_logger().info("CoordinatorNode ready.")
+        # Order processing queue and thread
+        self.order_queue: Queue = Queue()
+        self.processing_thread = threading.Thread(target=self._order_processing_loop, daemon=True)
+        self.processing_thread.start()
+
+        self.get_logger().info("CoordinatorNode ready. Listening for orders on /cooking/order")
+
+    def _on_cooking_order(self, msg: CookingOrder):
+        """
+        Handle incoming cooking order from FMS
+
+        Args:
+            msg: CookingOrder message with order_id, menu_id, sauce_type, assigned_robot_id
+        """
+        self.get_logger().info(
+            f"Received cooking order: order_id={msg.order_id}, "
+            f"menu_id={msg.menu_id}, sauce={msg.sauce_type}, robot={msg.assigned_robot_id}"
+        )
+
+        # Map menu_id to recipe
+        recipe = self.MENU_RECIPES.get(msg.menu_id, 'ham_cheese')
+
+        # Create Order object
+        order = Order(
+            recipe=recipe,
+            sauce=msg.sauce_type if msg.sauce_type else '',
+            pause_before_last=1
+        )
+
+        # Queue for processing (with metadata)
+        self.order_queue.put({
+            'order': order,
+            'order_id': msg.order_id,
+            'robot_id': msg.assigned_robot_id,
+            'menu_id': msg.menu_id,
+            'quantity': msg.quantity
+        })
+
+    def _order_processing_loop(self):
+        """
+        Background thread to process orders sequentially
+        """
+        while rclpy.ok():
+            try:
+                order_data = self.order_queue.get(timeout=1.0)
+                self._process_order(order_data)
+            except Exception:
+                # Queue empty timeout, continue
+                pass
+
+    def _process_order(self, order_data: dict):
+        """
+        Process a single order
+
+        Args:
+            order_data: Dictionary with order, order_id, robot_id, etc.
+        """
+        order = order_data['order']
+        order_id = order_data['order_id']
+        robot_id = order_data['robot_id']
+        quantity = order_data.get('quantity', 1)
+
+        self.get_logger().info(f"Processing order {order_id} for robot {robot_id}")
+
+        # Process each quantity
+        success = True
+        for i in range(quantity):
+            if quantity > 1:
+                self.get_logger().info(f"Making sandwich {i+1}/{quantity} for order {order_id}")
+
+            ok = self.run_order(order)
+            if not ok:
+                self.get_logger().error(f"Failed to make sandwich for order {order_id}")
+                success = False
+                break
+
+        # Publish LoadingComplete
+        self._publish_loading_complete(order_id, robot_id, success)
+
+    def _publish_loading_complete(self, order_id: str, robot_id: str, success: bool):
+        """
+        Publish LoadingComplete message to notify FMS
+
+        Args:
+            order_id: Order ID
+            robot_id: Serving robot ID that will deliver the food
+            success: Whether food was successfully loaded
+        """
+        msg = LoadingComplete()
+        msg.order_id = order_id
+        msg.robot_id = robot_id
+        msg.success = success
+        msg.message = "Food loaded successfully" if success else "Failed to prepare food"
+
+        # Set timestamp
+        now = self.get_clock().now()
+        msg.completed_at = now.to_msg()
+
+        self.loading_complete_pub.publish(msg)
+        self.get_logger().info(
+            f"Published LoadingComplete: order={order_id}, robot={robot_id}, success={success}"
+        )
 
     def _on_a_status(self, msg: String):
         job_id, state, kv = parse_msg(msg.data)
@@ -199,12 +333,12 @@ class CoordinatorNode(Node):
         # 4) NEW: B가 verify로 운반 + verify 분석 + 결과 따라 분기
         # -----------------------------
         self.get_logger().info(f"A stacked DONE -> B TRANSPORT_TO_VERIFY job={job_id}")
-        self._publish(self.pub_verify, build_msg(job_id, "TRANSPORT_TO_VERIFY"))
+        self._publish(self.pub_b, build_msg(job_id, "TRANSPORT_TO_VERIFY"))
 
         ok, msg = self.wait_for(job_id, "B", "DONE", order.timeout_transport_verify_sec)
         if not ok:
             self.get_logger().error(f"B transport_to_verify failed: {msg}")
-            self._publish(self.pub_verify, build_msg(job_id, "CANCEL"))
+            self._publish(self.pub_b, build_msg(job_id, "CANCEL"))
             return False
 
         # verify 분석 트리거 (verify 노드가 이 op를 받는 형태로 맞춰라)
@@ -216,11 +350,11 @@ class CoordinatorNode(Node):
         ok_ok, _ = self.wait_for(job_id, "V", "OK", order.timeout_verify_sec)
         if ok_ok:
             self.get_logger().info(f"VERIFY OK -> HANDOFF_PINKY job={job_id}")
-            self._publish(self.pub_verify, build_msg(job_id, "HANDOFF_PINKY"))
+            self._publish(self.pub_b, build_msg(job_id, "HANDOFF_PINKY"))
             ok2, msg2 = self.wait_for(job_id, "B", "DONE", order.timeout_handoff_sec)
             if not ok2:
                 self.get_logger().error(f"B handoff failed: {msg2}")
-                self._publish(self.pub_verify, build_msg(job_id, "CANCEL"))
+                self._publish(self.pub_b, build_msg(job_id, "CANCEL"))
                 return False
         else:
             ok_ng, _ = self.wait_for(job_id, "V", "DEFECT", 0.1)  # 이미 timeout 후면 store에 있을 수도 있어서 짧게 한번 더
@@ -229,11 +363,11 @@ class CoordinatorNode(Node):
             else:
                 self.get_logger().warn(f"VERIFY not OK within timeout -> treat as DEFECT job={job_id}")
 
-            self._publish(self.pub_verify, build_msg(job_id, "DISCARD"))
+            self._publish(self.pub_b, build_msg(job_id, "DISCARD"))
             ok2, msg2 = self.wait_for(job_id, "B", "DONE", order.timeout_handoff_sec)
             if not ok2:
                 self.get_logger().error(f"B discard failed: {msg2}")
-                self._publish(self.pub_verify, build_msg(job_id, "CANCEL"))
+                self._publish(self.pub_b, build_msg(job_id, "CANCEL"))
                 return False
 
         self.get_logger().info(f"job {job_id} DONE (stack + verify + branch)")
@@ -241,14 +375,76 @@ class CoordinatorNode(Node):
 
 
 def main():
+    """
+    Entry point for Sandwich Coordinator Node
+
+    Supports two modes:
+    - test_mode=True (default): Run hardcoded test order for robot arm team debugging
+    - test_mode=False: Listen for CookingOrder messages from FMS (production mode)
+
+    Usage:
+        # Test mode (robot arm team debugging) - default behavior
+        ros2 launch sandwich_coordinator coordinator_all.launch.py
+
+        # Production mode (FMS integration)
+        ros2 launch sandwich_coordinator coordinator_all.launch.py test_mode:=false
+    """
     rclpy.init()
     node = CoordinatorNode()
 
-    ok = node.run_order(Order(recipe="ham_cheese", sauce="mustard", pause_before_last=1))
-    node.get_logger().info(f"exit ok={ok}")
+    # Declare and get test_mode parameter (default: True for backward compatibility)
+    node.declare_parameter('test_mode', True)
+    node.declare_parameter('test_recipe', 'ham_cheese')
+    node.declare_parameter('test_sauce', 'mustard')
+    node.declare_parameter('test_pause_before_last', 1)
 
-    node.destroy_node()
-    rclpy.shutdown()
+    # Get parameter values
+    test_mode_raw = node.get_parameter('test_mode').value
+    test_recipe = node.get_parameter('test_recipe').value
+    test_sauce = node.get_parameter('test_sauce').value
+    test_pause = node.get_parameter('test_pause_before_last').value
+
+    # Convert test_mode to boolean (ROS2 launch passes strings like 'true'/'false')
+    if isinstance(test_mode_raw, bool):
+        test_mode = test_mode_raw
+    elif isinstance(test_mode_raw, str):
+        test_mode = test_mode_raw.lower() in ('true', '1', 'yes')
+    else:
+        test_mode = bool(test_mode_raw)
+
+    node.get_logger().info(f"test_mode_raw={test_mode_raw} (type={type(test_mode_raw).__name__}) → test_mode={test_mode}")
+
+    if test_mode:
+        # ===== TEST MODE (기존 로봇팔 팀 테스트 방식) =====
+        node.get_logger().info("=" * 50)
+        node.get_logger().info("TEST MODE: Running hardcoded order")
+        node.get_logger().info(f"  recipe: {test_recipe}")
+        node.get_logger().info(f"  sauce: {test_sauce}")
+        node.get_logger().info(f"  pause_before_last: {test_pause}")
+        node.get_logger().info("=" * 50)
+
+        ok = node.run_order(Order(
+            recipe=str(test_recipe),
+            sauce=str(test_sauce),
+            pause_before_last=int(test_pause)
+        ))
+        node.get_logger().info(f"Test order result: ok={ok}")
+
+        node.destroy_node()
+        rclpy.shutdown()
+    else:
+        # ===== PRODUCTION MODE (FMS 연동) =====
+        try:
+            node.get_logger().info("=" * 50)
+            node.get_logger().info("PRODUCTION MODE: Waiting for FMS orders...")
+            node.get_logger().info("Listening on /cooking/order topic")
+            node.get_logger().info("=" * 50)
+            rclpy.spin(node)
+        except KeyboardInterrupt:
+            node.get_logger().info("Shutting down Sandwich Coordinator...")
+        finally:
+            node.destroy_node()
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":
