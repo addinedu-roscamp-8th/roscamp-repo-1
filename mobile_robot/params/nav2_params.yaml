@@ -37,8 +37,9 @@ amcl:
     z_rand: 0.5
     z_short: 0.05
     scan_topic: scan
-    set_initial_pose: true
-    initial_pose: [0, 0, 0]
+    # Initial pose settings (ignored when FMS sets pose via /initialpose topic)
+    set_initial_pose: false  # Changed to false - FMS will publish initial pose
+    initial_pose: [0, 0, 0]  # Placeholder - actual pose from FMS
 
 bt_navigator:
   ros__parameters:
@@ -93,7 +94,7 @@ controller_server:
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.02  # 정밀한 도착 판정을 위해 0.25 → 0.02로 변경 (2cm)
+      xy_goal_tolerance: 0.05  # Goal arrival threshold (5cm) - balances precision and reliability
       yaw_goal_tolerance: 0.1  # 회전 tolerance 0.25 → 0.1로 축소
 
     # ★ 여기부터: Regulated Pure Pursuit 컨트롤러 설정
@@ -139,48 +140,61 @@ controller_server:
 
       # ========= 안전 관련 (좁은 통로용으로 완화) =========
       # 장애물과 너무 가까워지면 속도 줄이거나 정지하는 옵션들
-      use_approach_velocity_scaling: false  # 좁은 통로 통과를 위해 비활성화
-      min_approach_linear_velocity: 0.03
-      inflation_cost_scaling_factor: 0.001  # 3.0 → 0.001로 극소화
-      regulated_linear_scaling_min_radius: 0.001  # 0.5 → 0.001로 극소화
-      regulated_linear_scaling_min_speed: 0.03
-      use_cost_regulated_linear_velocity_scaling: false  # 비활성화
-      cost_scaling_dist: 0.001  # 0.6 → 0.001로 극소화
-      cost_scaling_gain: 0.01  # 1.5 → 0.01로 축소
+      use_approach_velocity_scaling: true  # 장애물 근처에서 속도 조절 활성화
+      min_approach_linear_velocity: 0.05  # 장애물 근처 최소 속도 (5cm/s)
+      inflation_cost_scaling_factor: 1.0  # 좌표맵 비용에 따른 속도 조절 활성화
+      regulated_linear_scaling_min_radius: 0.15  # 회전 반지름 (15cm)
+      regulated_linear_scaling_min_speed: 0.05  # 최소 속도 (5cm/s)
+      use_cost_regulated_linear_velocity_scaling: true  # 비용 기반 속도 조절 활성화
+      cost_scaling_dist: 0.3  # 비용 계산 거리 (30cm)
+      cost_scaling_gain: 2.0  # 비용 스케일링 게인
 
 
 local_costmap:
   local_costmap:
     ros__parameters:
-      update_frequency: 20.0
-      publish_frequency: 10.0
+      # ========= SC-179: 센서 데이터 수집 - 업데이트 빈도 =========
+      update_frequency: 30.0  # 30Hz로 증가 (센서 데이터 처리 빈도 향상)
+      publish_frequency: 20.0  # 20Hz로 증가 (주기적 발행)
       global_frame: odom
       robot_base_frame: base_footprint
       rolling_window: true
-      width: 1  # 좁은 통로용으로 3 → 0.8로 축소 (계산 효율 향상) -> int 값을 넣어야하므로 1로 변경
-      height: 1  # 3 → 0.8로 축소-> int 값을 넣어야하므로 1로 변경
-      resolution: 0.01  # 맵 해상도와 맞춤 0.05 → 0.01로 변경 (1cm)
+      # Costmap 크기: 1m x 1m (작은 로컬 맵)
+      width: 100  # 100 * 0.01m = 1m (해상도 0.01m)
+      height: 100  # 100 * 0.01m = 1m
+      resolution: 0.01  # 맵 해상도 1cm (고해상도 장애물 감지)
       robot_radius: 0.055  # 실제 로봇 반지름 (5.5cm)
       # footprint: '[[0.06, 0.06], [0.06, -0.06], [-0.06, -0.06], [-0.06, 0.06]]'
-      plugins: ["obstacle_layer", "inflation_layer"]  # voxel_layer → obstacle_layer로 변경 (2D 단순화)
+      # ========= SC-180: 장애물 감지 알고리즘 =========
+      plugins: ["obstacle_layer", "inflation_layer"]  # obstacle_layer: 동적 장애물 감지
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 0.001  # 좁은 통로 통과를 위해 3.0 → 0.001로 극소화
-        inflation_radius: 0.01  # 원본 0.15
+        # ========= SC-180: 회피 경로 계획 - 비용 스케일링 =========
+        cost_scaling_factor: 1.0  # 1.0: 자유공간에서 0으로, 장애물에서 254로 점진적 증가
+        inflation_radius: 0.08  # 8cm (robot_radius 5.5cm + 2.5cm 안전 여유)
+        inflate_unknown: false  # 미지영역 팽창 비활성화
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
+        footprint_padding: 0.0
         observation_sources: scan
         scan:
           topic: /scan
           max_obstacle_height: 2.0
+          # Clearing: 빔 뒤의 영역을 자유공간으로 표시 (동적 장애물 감지)
           clearing: True
+          # Marking: 빔이 통과한 장애물을 표시 (새로운 장애물 감지)
           marking: True
           data_type: "LaserScan"
-          raytrace_max_range: 0.6  # 좁은 공간용 3.0 → 0.6로 축소 (먼 벽 무시)
+          # Raytracing: 레이저 범위 내에서 자유공간 계산
+          raytrace_max_range: 0.8  # 광선 추적 최대 거리 (80cm) - 좁은 공간에서 정밀 감지
           raytrace_min_range: 0.0
-          obstacle_max_range: 0.4  # 가까운 장애물만 감지 2.5 → 0.4로 축소
+          # Obstacle detection: 장애물로 표시될 최대 거리
+          obstacle_max_range: 0.5  # 장애물 최대 감지 거리 (50cm)
           obstacle_min_range: 0.0
+          # 동적 장애물 감지를 위한 타임스탬프 필터
+          expected_update_rate: 20.0  # 스캔 예상 업데이트 빈도 (20Hz)
+          observation_persistence: 0.0  # 이전 스캔 유지 안함 (최신 스캔만)
       # static_layer:
       #   plugin: "nav2_costmap_2d::StaticLayer"
       #   map_subscribe_transient_local: True
@@ -189,23 +203,26 @@ local_costmap:
 global_costmap:
   global_costmap:
     ros__parameters:
-      footprint_padding: 0.00  # 좁은 틈 통과용으로 0.03 → 0.0으로 제거
-      update_frequency: 1.0
+      # ========= SC-179: 센서 데이터 수집 - 글로벌 맵 설정 =========
+      footprint_padding: 0.00  # 좁은 틈 통과용으로 패딩 제거
+      update_frequency: 2.0  # 2Hz (정적 맵이므로 낮은 빈도)
       publish_frequency: 1.0
       global_frame: map
       robot_base_frame: base_footprint
       robot_radius: 0.055  # 실제 로봇 반지름 (5.5cm)
       # footprint: '[[0.06, 0.06], [0.06, -0.06], [-0.06, -0.06], [-0.06, 0.06]]'
-      resolution: 0.01  # 맵 해상도와 맞춤 0.05 → 0.01로 변경 (1cm)
+      resolution: 0.01  # 맵 해상도 1cm
       track_unknown_space: true
-      plugins: ["static_layer", "inflation_layer"]  # obstacle_layer 제거 (경로 계획시 정적 맵만 사용)
+      # ========= SC-181: 회피 경로 계획 =========
+      plugins: ["static_layer", "inflation_layer"]  # 정적 맵 + 팽창 레이어
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 0.001  # 3.0 → 0.001로 극소화
-        inflation_radius: 0.01  # 0.15 → 0.001로 극소화 (1mm)
+        cost_scaling_factor: 1.0  # 선형 비용 증가 (안전하게)
+        inflation_radius: 0.10  # 10cm (robot_radius 5.5cm + 4.5cm 경로 계획 여유)
+        inflate_unknown: false
       always_send_full_costmap: True
 
 # The yaml_filename does not need to be specified since it going to be set by defaults in launch.
@@ -224,13 +241,15 @@ map_saver:
 
 planner_server:
   ros__parameters:
-    expected_planner_frequency: 20.0
+    # ========= SC-181: 회피 경로 계획 - 경로 재계획 =========
+    expected_planner_frequency: 20.0  # 20Hz 경로 재계획
     planner_plugins: ["GridBased"]
-    costmap_update_timeout: 1.0
+    # Costmap 업데이트 대기 시간 (동적 장애물 감지)
+    costmap_update_timeout: 0.5  # 500ms (빠른 재계획)
     GridBased:
       plugin: "nav2_navfn_planner::NavfnPlanner"
-      tolerance: 0.02  # 정밀한 경로 계획 (5mm 맵 해상도 대비 4픽셀)
-      use_astar: true  # A* 알고리즘 (Dijkstra보다 빠름)
+      tolerance: 0.02  # 정밀한 경로 계획 (2cm, 맵 해상도 대비 2픽셀)
+      use_astar: true  # A* 알고리즘 (Dijkstra보다 빠름 - 효율적)
       allow_unknown: false  # 미지 영역 회피 (안전)
 
 smoother_server:
@@ -249,22 +268,42 @@ behavior_server:
     local_footprint_topic: local_costmap/published_footprint
     global_footprint_topic: global_costmap/published_footprint
     cycle_frequency: 10.0
-    behavior_plugins: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]
-    spin:
-      plugin: "nav2_behaviors::Spin"
-    backup:
-      plugin: "nav2_behaviors::BackUp"
-    drive_on_heading:
-      plugin: "nav2_behaviors::DriveOnHeading"
+    # Recovery behaviors를 우선순위 순으로 정렬 (안전 정지 우선)
+    behavior_plugins: ["wait", "backup", "spin", "drive_on_heading", "assisted_teleop"]
+
+    # Wait: 장애물 소멸 대기 (최우선)
     wait:
       plugin: "nav2_behaviors::Wait"
+      wait_duration: 2.0  # 2초 대기
+
+    # Backup: 후진 회피 (5cm 후진)
+    backup:
+      plugin: "nav2_behaviors::BackUp"
+      backup_dist: 0.05  # 5cm 후진
+      backup_speed: 0.1  # 10cm/s 속도
+
+    # Spin: 회전 회피 (제자리 회전)
+    spin:
+      plugin: "nav2_behaviors::Spin"
+      spin_dist: 1.57  # π/2 라디안 (90도 회전)
+      spin_speed: 0.5  # 50도/s
+
+    # Drive on heading: 특정 방향으로 전진
+    drive_on_heading:
+      plugin: "nav2_behaviors::DriveOnHeading"
+      speed: 0.1
+      distance: 0.1
+
+    # Assisted teleop: 원격 조종 지원
     assisted_teleop:
       plugin: "nav2_behaviors::AssistedTeleop"
+
     local_frame: odom
     global_frame: map
     robot_base_frame: base_footprint
     transform_tolerance: 0.1
-    simulate_ahead_time: 2.0
+    # 충돌 예측 시간 감소 (빠른 반응)
+    simulate_ahead_time: 1.0
     max_rotational_vel: 1.0
     min_rotational_vel: 0.4
     rotational_acc_lim: 3.2
