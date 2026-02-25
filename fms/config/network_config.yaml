@@ -10,10 +10,11 @@ master:
   ros_domain_id: 0        # ROS 2 Domain ID
 
 # Mobile Robots (PinkyPro)
+# IMPORTANT: Using ROS_DOMAIN_ID for closed network isolation
 mobile_robots:
   pinky_b4bc:
     robot_id: "pinky1"
-    namespace: "/pinky1"
+    domain_id: 11
     ip_address: "192.168.1.7"
     tcp_port: 9001
     ssh_user: "pinky"
@@ -23,7 +24,7 @@ mobile_robots:
 
   pinky_e2a8:
     robot_id: "pinky2"
-    namespace: "/pinky2"
+    domain_id: 12
     ip_address: "192.168.1.6"
     tcp_port: 9001
     ssh_user: "pinky"
@@ -33,7 +34,7 @@ mobile_robots:
 
   pinky_d29d:
     robot_id: "pinky3"
-    namespace: "/pinky3"
+    domain_id: 13
     ip_address: "192.168.1.11"
     tcp_port: 9001
     ssh_user: "pinky"
@@ -42,10 +43,11 @@ mobile_robots:
     enabled: true
 
 # Cobot Arms (JetCobot)
+# IMPORTANT: Using ROS_DOMAIN_ID for closed network isolation
 cobot_arms:
   jetcobot_aa1f:
     robot_id: "cobot1"
-    namespace: "/cobot1"
+    domain_id: 20
     ip_address: "192.168.1.4"
     tcp_port: 9002
     ssh_user: "jetson"
@@ -55,7 +57,7 @@ cobot_arms:
 
   jetcobot_aa85:
     robot_id: "cobot2"
-    namespace: "/cobot2"
+    domain_id: 21
     ip_address: "192.168.1.10"
     tcp_port: 9002
     ssh_user: "jetson"

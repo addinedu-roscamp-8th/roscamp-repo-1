@@ -145,21 +145,25 @@ class FMSTCPNode(Node):
         )
 
     def _setup_robot_pose_subscribers(self):
-        """Setup pose subscribers for each configured robot"""
+        """Setup pose subscribers for each configured robot (same domain_id only)"""
+        import os
+        current_domain = int(os.environ.get('ROS_DOMAIN_ID', 0))
         mobile_robots = self.network_config.get('mobile_robots', {})
 
         for robot_name, robot_cfg in mobile_robots.items():
             if robot_cfg.get('enabled', False):
-                namespace = robot_cfg.get('namespace', f'/{robot_cfg.get("robot_id", robot_name)}')
+                robot_domain = robot_cfg.get('domain_id', 0)
 
-                # Subscribe to robot pose
-                topic = f'{namespace}/pose'
-                self.pose_subscribers[robot_name] = self.create_subscription(
-                    PoseStamped, topic,
-                    lambda msg, rn=robot_name: self.robot_pose_callback(rn, msg),
-                    10
-                )
-                self.get_logger().info(f'Subscribed to {topic}')
+                # Only subscribe to robots on same domain
+                if robot_domain == current_domain:
+                    # Subscribe to robot pose (no namespace prefix)
+                    topic = '/pose'
+                    self.pose_subscribers[robot_name] = self.create_subscription(
+                        PoseStamped, topic,
+                        lambda msg, rn=robot_name: self.robot_pose_callback(rn, msg),
+                        10
+                    )
+                    self.get_logger().info(f'Subscribed to {topic} (domain_id={robot_domain})')
 
     def _log_configured_robots(self):
         """Log all configured robots"""

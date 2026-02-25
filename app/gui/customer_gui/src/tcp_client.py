@@ -192,13 +192,15 @@ class OrderServiceClient(QObject):
         return order_id
 
     def confirm_delivery(self, order_id: str) -> bool:
-        """수령 확인 전송 - SR-16: 음식 수령 확인"""
+        """수령 확인 전송 - SR-16: 음식 수령 확인 / SC-185: 수령 확인 API"""
         print(f'[OrderService] 수령 확인 전송 - 주문 {order_id}')
 
         request = {
-            'command': 'confirm_delivery',
-            'order_id': order_id,
-            'table_number': Config.TABLE_NUMBER
+            'type': 'delivery_complete',
+            'data': {
+                'order_id': order_id,
+                'table_number': str(Config.TABLE_NUMBER)
+            }
         }
 
         if not self.client.send_data(request):

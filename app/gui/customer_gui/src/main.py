@@ -199,9 +199,11 @@ class CustomerGUIApp(QStackedWidget):
         self.current_order = None
         self.go_to_main()
 
-    def on_delivery_confirmed(self, order_id: str):
-        """수령 확인"""
-        print(f'[App] 수령 확인 - 주문 {order_id}')
+    def on_delivery_confirmed(self, delivery_data: dict):
+        """수령 확인 - SC-185: 수령 확인 API"""
+        order_id = delivery_data.get('order_id', '')
+        table_number = delivery_data.get('table_number', '')
+        print(f'[App] 수령 확인 - 주문 {order_id}, 테이블 {table_number}')
 
         # 수령 확인 전송
         if self.order_client.confirm_delivery(order_id):

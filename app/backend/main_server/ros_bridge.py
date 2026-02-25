@@ -11,9 +11,13 @@ from fleet_interfaces.msg import (
     LoadingComplete,
     RobotStatus,
     FleetStatus,
-    DeliveryComplete
+    DeliveryComplete,
+    PickupArrival,
+    PrecisionParked,
+    TableArrival
 )
 from builtin_interfaces.msg import Time
+from geometry_msgs.msg import Pose, Point, Quaternion
 import logging
 from typing import Callable, Optional
 from datetime import datetime
@@ -27,8 +31,20 @@ class ROSBridge(Node):
     Handles communication with FMS and Robot Arms via ROS 2 topics
     """
 
-    def __init__(self):
+    def __init__(self, skip_mode: bool = False):
+        """
+        Initialize ROS Bridge
+
+        Args:
+            skip_mode: If True, enables skip mode for testing without external teams
+        """
         super().__init__('main_server_bridge')
+
+        self.skip_mode = skip_mode
+
+        # Skip mode configuration
+        self.precision_parking_delay = 2.0  # seconds
+        self.food_loading_delay = 3.0  # seconds
 
         # Publishers
         self.order_request_pub = self.create_publisher(
@@ -49,6 +65,12 @@ class ROSBridge(Node):
             10
         )
 
+        self.precision_parked_pub = self.create_publisher(
+            PrecisionParked,
+            '/fms/precision_parked',
+            10
+        )
+
         # Subscribers
         self.loading_complete_sub = self.create_subscription(
             LoadingComplete,
@@ -64,14 +86,30 @@ class ROSBridge(Node):
             10
         )
 
+        self.pickup_arrival_sub = self.create_subscription(
+            PickupArrival,
+            '/fms/pickup_arrival',
+            self.pickup_arrival_callback,
+            10
+        )
+
+        self.table_arrival_sub = self.create_subscription(
+            TableArrival,
+            '/fms/table_arrival',
+            self.table_arrival_callback,
+            10
+        )
+
         # Callback handlers (to be set by main_server_node)
         self.on_loading_complete = None
         self.on_fleet_status_update = None
+        self.on_pickup_arrival = None
+        self.on_table_arrival = None
 
         # Latest fleet status cache
         self.latest_fleet_status = None
 
-        logger.info("ROS Bridge initialized")
+        logger.info(f"ROS Bridge initialized (skip_mode={skip_mode})")
 
     def publish_order_request(self, order_id: str, menu_id: str, table_number: str,
                              quantity: int, sauce_type: str, voice_order: bool,
@@ -206,6 +244,107 @@ class ROSBridge(Node):
             # Call handler
             self.on_fleet_status_update(fleet_data)
 
+    def pickup_arrival_callback(self, msg: PickupArrival):
+        """
+        Handle PickupArrival message from FMS
+
+        This is called when a robot arrives at point13 (kitchen pickup area)
+        """
+        logger.info(f"Received pickup arrival: robot={msg.robot_id}, order={msg.order_id}")
+
+        if self.on_pickup_arrival:
+            # Convert ROS time to datetime
+            arrived_at = self._ros_time_to_datetime(msg.arrived_at)
+
+            # Convert pose to dict
+            current_pose = {
+                'position': {
+                    'x': msg.current_pose.position.x,
+                    'y': msg.current_pose.position.y,
+                    'z': msg.current_pose.position.z
+                },
+                'orientation': {
+                    'x': msg.current_pose.orientation.x,
+                    'y': msg.current_pose.orientation.y,
+                    'z': msg.current_pose.orientation.z,
+                    'w': msg.current_pose.orientation.w
+                }
+            }
+
+            # Call handler
+            self.on_pickup_arrival(
+                robot_id=msg.robot_id,
+                order_id=msg.order_id,
+                current_pose=current_pose,
+                arrived_at=arrived_at
+            )
+
+        # If skip mode enabled, automatically send precision_parked after delay
+        if self.skip_mode:
+            logger.info(f"Skip mode: Scheduling precision_parked for {msg.robot_id} in {self.precision_parking_delay}s")
+            self.create_timer(
+                self.precision_parking_delay,
+                lambda: self._send_mock_precision_parked(msg.robot_id, msg.order_id, msg.current_pose)
+            )
+
+    def table_arrival_callback(self, msg: TableArrival):
+        """
+        Handle TableArrival message from FMS
+
+        SC-183/321: This is called when a robot arrives at a table for delivery
+        """
+        logger.info(f"Received table arrival: robot={msg.robot_id}, order={msg.order_id}, table={msg.table_number}")
+
+        if self.on_table_arrival:
+            # Convert ROS time to datetime
+            arrived_at = self._ros_time_to_datetime(msg.arrived_at)
+
+            # Convert pose to dict
+            current_pose = {
+                'position': {
+                    'x': msg.current_pose.position.x,
+                    'y': msg.current_pose.position.y,
+                    'z': msg.current_pose.position.z
+                },
+                'orientation': {
+                    'x': msg.current_pose.orientation.x,
+                    'y': msg.current_pose.orientation.y,
+                    'z': msg.current_pose.orientation.z,
+                    'w': msg.current_pose.orientation.w
+                }
+            }
+
+            # Call handler
+            self.on_table_arrival(
+                robot_id=msg.robot_id,
+                order_id=msg.order_id,
+                table_number=msg.table_number,
+                current_pose=current_pose,
+                arrived_at=arrived_at
+            )
+
+    def _send_mock_precision_parked(self, robot_id: str, order_id: str, pose):
+        """
+        Send mock PrecisionParked message for skip mode testing
+
+        Args:
+            robot_id: Robot ID
+            order_id: Order ID
+            pose: Current pose
+        """
+        logger.info(f"Skip mode: Sending mock precision_parked for {robot_id}")
+
+        msg = PrecisionParked()
+        msg.robot_id = robot_id
+        msg.order_id = order_id
+        msg.success = True
+        msg.final_pose = pose
+        msg.message = "Mock precision parking completed (skip mode)"
+        msg.completed_at = self._datetime_to_ros_time(datetime.utcnow())
+
+        self.precision_parked_pub.publish(msg)
+        logger.info(f"Published mock precision_parked: robot={robot_id}, order={order_id}")
+
     def get_latest_fleet_status(self):
         """
         Get latest cached fleet status
@@ -250,6 +389,70 @@ class ROSBridge(Node):
         """
         self.on_fleet_status_update = handler
         logger.info("Fleet status handler registered")
+
+    def set_pickup_arrival_handler(self, handler: Callable):
+        """
+        Set callback handler for pickup arrival events
+
+        Args:
+            handler: Function with signature:
+                     handler(robot_id: str, order_id: str,
+                            current_pose: dict, arrived_at: datetime)
+        """
+        self.on_pickup_arrival = handler
+        logger.info("Pickup arrival handler registered")
+
+    def set_table_arrival_handler(self, handler: Callable):
+        """
+        Set callback handler for table arrival events
+
+        SC-183/321: Called when robot arrives at table for delivery
+
+        Args:
+            handler: Function with signature:
+                     handler(robot_id: str, order_id: str, table_number: str,
+                            current_pose: dict, arrived_at: datetime)
+        """
+        self.on_table_arrival = handler
+        logger.info("Table arrival handler registered")
+
+    def publish_precision_parked(self, robot_id: str, order_id: str, success: bool,
+                                 final_pose: dict, message: str = ""):
+        """
+        Publish PrecisionParked message to FMS
+
+        Args:
+            robot_id: Robot ID (pinky1/2/3)
+            order_id: Order UUID string
+            success: Whether precision parking succeeded
+            final_pose: Final precise pose dict with position and orientation
+            message: Optional error message if success=false
+        """
+        msg = PrecisionParked()
+        msg.robot_id = robot_id
+        msg.order_id = order_id
+        msg.success = success
+        msg.message = message
+        msg.completed_at = self._datetime_to_ros_time(datetime.utcnow())
+
+        # Convert pose dict to geometry_msgs/Pose
+        from geometry_msgs.msg import Pose, Point, Quaternion
+        pose_msg = Pose()
+        pose_msg.position = Point(
+            x=final_pose['position']['x'],
+            y=final_pose['position']['y'],
+            z=final_pose['position']['z']
+        )
+        pose_msg.orientation = Quaternion(
+            x=final_pose['orientation']['x'],
+            y=final_pose['orientation']['y'],
+            z=final_pose['orientation']['z'],
+            w=final_pose['orientation']['w']
+        )
+        msg.final_pose = pose_msg
+
+        self.precision_parked_pub.publish(msg)
+        logger.info(f"Published precision_parked: robot={robot_id}, order={order_id}, success={success}")
 
 
 def spin_ros_bridge(bridge: ROSBridge):

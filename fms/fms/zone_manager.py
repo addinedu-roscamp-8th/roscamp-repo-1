@@ -19,16 +19,19 @@ class Zone:
     Zones are used for collision avoidance:
     - Only one robot can occupy a zone at a time
     - Robots must request zone access before entering
+    - Zones can be pre-reserved to guarantee access
     """
 
-    def __init__(self, zone_id: str, center_x: float, center_y: float, radius: float):
+    def __init__(self, zone_id: str, center_x: float, center_y: float, radius: float,
+                 reservation_timeout: float = 30.0):
         self.zone_id = zone_id
         self.center_x = center_x
         self.center_y = center_y
         self.radius = radius
+        self.reservation_timeout = reservation_timeout  # Seconds before reservation expires
         self.occupied_by = None  # Robot ID currently in this zone
         self.reserved_by = None  # Robot ID that reserved this zone
-        self.reserved_at = None
+        self.reserved_at = None  # Timestamp when zone was reserved
 
     def is_available(self) -> bool:
         """Check if zone is available (not occupied or reserved)"""
@@ -37,6 +40,19 @@ class Zone:
     def is_occupied(self) -> bool:
         """Check if zone is occupied"""
         return self.occupied_by is not None
+
+    def is_reservation_expired(self) -> bool:
+        """
+        Check if reservation has expired
+
+        Returns:
+            True if reserved but timeout exceeded, False otherwise
+        """
+        if self.reserved_by is None or self.reserved_at is None:
+            return False
+
+        elapsed = (datetime.utcnow() - self.reserved_at).total_seconds()
+        return elapsed > self.reservation_timeout
 
     def reserve(self, robot_id: str) -> bool:
         """
@@ -136,10 +152,13 @@ class ZoneManager:
         - Pickup area
         - Table areas (8 tables)
         - Parking areas (3 spots)
-        - Corridors/pathways
+        - Waypoint areas
 
-        TODO: Load zone definitions from config file
+        Zones can be loaded from config or use defaults.
         """
+        # Default reservation timeout (can be overridden per zone)
+        default_timeout = 30.0
+
         if map_config:
             # Load from config
             zones_config = map_config.get('zones', [])
@@ -148,36 +167,37 @@ class ZoneManager:
                     zone_id=zone_cfg['id'],
                     center_x=zone_cfg['center_x'],
                     center_y=zone_cfg['center_y'],
-                    radius=zone_cfg['radius']
+                    radius=zone_cfg['radius'],
+                    reservation_timeout=zone_cfg.get('reservation_timeout', default_timeout)
                 )
                 self.zones[zone.zone_id] = zone
         else:
             # Use default zones (simplified for 2m x 1m map)
-            # These are placeholder values - TODO: calibrate based on actual map coordinates
             default_zones = [
                 # Pickup zone
-                {'id': 'zone_pickup', 'center_x': 1.0, 'center_y': 0.3, 'radius': 0.15},
+                {'id': 'zone_pickup', 'center_x': 0.47, 'center_y': 0.63, 'radius': 0.10},
 
-                # Table zones (left side)
-                {'id': 'zone_table1', 'center_x': 0.3, 'center_y': 0.2, 'radius': 0.12},
-                {'id': 'zone_table2', 'center_x': 0.3, 'center_y': 0.4, 'radius': 0.12},
-                {'id': 'zone_table3', 'center_x': 0.3, 'center_y': 0.6, 'radius': 0.12},
-                {'id': 'zone_table4', 'center_x': 0.3, 'center_y': 0.8, 'radius': 0.12},
-
-                # Table zones (right side)
-                {'id': 'zone_table5', 'center_x': 1.7, 'center_y': 0.2, 'radius': 0.12},
-                {'id': 'zone_table6', 'center_x': 1.7, 'center_y': 0.4, 'radius': 0.12},
-                {'id': 'zone_table7', 'center_x': 1.7, 'center_y': 0.6, 'radius': 0.12},
-                {'id': 'zone_table8', 'center_x': 1.7, 'center_y': 0.8, 'radius': 0.12},
+                # Table zones
+                {'id': 'zone_table1', 'center_x': 1.785, 'center_y': 0.35, 'radius': 0.10},
+                {'id': 'zone_table2', 'center_x': 1.415, 'center_y': 0.35, 'radius': 0.10},
+                {'id': 'zone_table3', 'center_x': 1.785, 'center_y': 0.65, 'radius': 0.10},
+                {'id': 'zone_table4', 'center_x': 1.415, 'center_y': 0.65, 'radius': 0.10},
+                {'id': 'zone_table5', 'center_x': 1.235, 'center_y': 0.35, 'radius': 0.10},
+                {'id': 'zone_table6', 'center_x': 0.865, 'center_y': 0.35, 'radius': 0.10},
+                {'id': 'zone_table7', 'center_x': 1.235, 'center_y': 0.65, 'radius': 0.10},
+                {'id': 'zone_table8', 'center_x': 0.865, 'center_y': 0.65, 'radius': 0.10},
 
                 # Parking zones
-                {'id': 'zone_parking1', 'center_x': 1.0, 'center_y': 0.1, 'radius': 0.1},
-                {'id': 'zone_parking2', 'center_x': 1.15, 'center_y': 0.1, 'radius': 0.1},
-                {'id': 'zone_parking3', 'center_x': 1.3, 'center_y': 0.1, 'radius': 0.1},
+                {'id': 'zone_parking1', 'center_x': 0.585, 'center_y': 0.085, 'radius': 0.08},
+                {'id': 'zone_parking2', 'center_x': 0.585, 'center_y': 0.255, 'radius': 0.08},
+                {'id': 'zone_parking3', 'center_x': 0.585, 'center_y': 0.915, 'radius': 0.08},
 
-                # Corridor zones (pathways between areas)
-                {'id': 'zone_corridor1', 'center_x': 0.7, 'center_y': 0.5, 'radius': 0.15},
-                {'id': 'zone_corridor2', 'center_x': 1.3, 'center_y': 0.5, 'radius': 0.15},
+                # Waypoint zones
+                {'id': 'zone_point1', 'center_x': 0.78, 'center_y': 0.15, 'radius': 0.08},
+                {'id': 'zone_point2', 'center_x': 0.78, 'center_y': 0.35, 'radius': 0.08},
+                {'id': 'zone_point3', 'center_x': 0.78, 'center_y': 0.65, 'radius': 0.08},
+                {'id': 'zone_point4', 'center_x': 0.78, 'center_y': 0.85, 'radius': 0.08},
+                {'id': 'zone_point13', 'center_x': 0.585, 'center_y': 0.63, 'radius': 0.08},
             ]
 
             for zone_cfg in default_zones:
@@ -185,7 +205,8 @@ class ZoneManager:
                     zone_id=zone_cfg['id'],
                     center_x=zone_cfg['center_x'],
                     center_y=zone_cfg['center_y'],
-                    radius=zone_cfg['radius']
+                    radius=zone_cfg['radius'],
+                    reservation_timeout=default_timeout
                 )
                 self.zones[zone.zone_id] = zone
 
@@ -226,9 +247,105 @@ class ZoneManager:
         # Update robot zones
         self.robot_zones[robot_id] = current_zones
 
+    def reserve_zone(self, robot_id: str, zone_id: str) -> bool:
+        """
+        Pre-reserve a zone for a robot
+
+        Reservation guarantees the robot can enter the zone later without
+        conflicting with other robots. Only one robot can reserve a zone
+        at a time.
+
+        Args:
+            robot_id: Robot ID
+            zone_id: Zone ID to reserve
+
+        Returns:
+            True if reservation successful, False otherwise
+        """
+        zone = self.zones.get(zone_id)
+        if zone:
+            if zone.reserve(robot_id):
+                logger.info(f"Zone {zone_id} reserved for robot {robot_id}")
+                return True
+            else:
+                logger.warning(
+                    f"Failed to reserve zone {zone_id} for robot {robot_id} - "
+                    f"occupied_by={zone.occupied_by}, reserved_by={zone.reserved_by}"
+                )
+                return False
+        else:
+            logger.warning(f"Zone {zone_id} not found")
+            return False
+
+    def release_reservation(self, robot_id: str, zone_id: str) -> bool:
+        """
+        Release a zone reservation
+
+        Args:
+            robot_id: Robot ID
+            zone_id: Zone ID to release
+
+        Returns:
+            True if reservation was released, False if no reservation found
+        """
+        zone = self.zones.get(zone_id)
+        if zone and zone.reserved_by == robot_id:
+            zone.release(robot_id)
+            logger.info(f"Zone {zone_id} reservation released by robot {robot_id}")
+            return True
+        return False
+
+    def occupy_zone(self, robot_id: str, zone_id: str) -> bool:
+        """
+        Transition zone from reserved to occupied
+
+        Can only occupy a zone if:
+        1. Zone was reserved by this robot
+        2. Zone is available (not occupied)
+
+        Args:
+            robot_id: Robot ID
+            zone_id: Zone ID to occupy
+
+        Returns:
+            True if occupation successful, False otherwise
+        """
+        zone = self.zones.get(zone_id)
+        if zone:
+            # Only allow occupation if reserved by this robot or zone is available
+            if zone.reserved_by == robot_id or zone.is_available():
+                zone.occupy(robot_id)
+                logger.info(f"Zone {zone_id} occupied by robot {robot_id}")
+                return True
+            else:
+                logger.warning(
+                    f"Robot {robot_id} cannot occupy zone {zone_id} - "
+                    f"not reserved by this robot"
+                )
+                return False
+        return False
+
+    def leave_zone(self, robot_id: str, zone_id: str) -> bool:
+        """
+        Release zone from robot
+
+        Args:
+            robot_id: Robot ID
+            zone_id: Zone ID to leave
+
+        Returns:
+            True if zone was released, False if zone not found or not owned by robot
+        """
+        zone = self.zones.get(zone_id)
+        if zone and zone.occupied_by == robot_id:
+            zone.release(robot_id)
+            logger.info(f"Zone {zone_id} released by robot {robot_id}")
+            return True
+        return False
+
     def request_zone(self, robot_id: str, zone_id: str) -> bool:
         """
-        Request zone access for robot
+        Request zone access for robot (alias for reserve_zone for backward compatibility)
 
         Args:
             robot_id: Robot ID
@@ -237,16 +354,11 @@ class ZoneManager:
         Returns:
             True if access granted, False otherwise
         """
-        zone = self.zones.get(zone_id)
-        if zone:
-            return zone.reserve(robot_id)
-        else:
-            logger.warning(f"Zone {zone_id} not found")
-            return False
+        return self.reserve_zone(robot_id, zone_id)
 
     def release_zone(self, robot_id: str, zone_id: str):
         """
-        Release zone from robot
+        Release zone from robot (backward compatibility wrapper)
 
         Args:
             robot_id: Robot ID
@@ -305,6 +417,21 @@ class ZoneManager:
                 return True
         return False
 
+    def is_zone_available(self, zone_id: str) -> bool:
+        """
+        Check if zone is available (not occupied or reserved)
+
+        Args:
+            zone_id: Zone ID
+
+        Returns:
+            True if zone is available, False otherwise
+        """
+        zone = self.zones.get(zone_id)
+        if zone:
+            return zone.is_available()
+        return False
+
     def get_zone_status(self, zone_id: str) -> Optional[Dict]:
         """
         Get zone status
@@ -317,6 +444,10 @@ class ZoneManager:
         """
         zone = self.zones.get(zone_id)
         if zone:
+            reservation_age = None
+            if zone.reserved_at:
+                reservation_age = (datetime.utcnow() - zone.reserved_at).total_seconds()
+
             return {
                 'zone_id': zone.zone_id,
                 'center_x': zone.center_x,
@@ -324,6 +455,10 @@ class ZoneManager:
                 'radius': zone.radius,
                 'occupied_by': zone.occupied_by,
                 'reserved_by': zone.reserved_by,
+                'reserved_at': zone.reserved_at.isoformat() if zone.reserved_at else None,
+                'reservation_age_sec': reservation_age,
+                'reservation_timeout': zone.reservation_timeout,
+                'is_reservation_expired': zone.is_reservation_expired(),
                 'available': zone.is_available()
             }
         return None
@@ -336,6 +471,92 @@ class ZoneManager:
             List of zone status dictionaries
         """
         return [self.get_zone_status(zone_id) for zone_id in self.zones.keys()]
+
+    def check_path_conflicts(self, robot_id: str, path_zones: List[str]) -> List[str]:
+        """
+        Check if path contains zones that would cause conflicts
+
+        Args:
+            robot_id: Robot ID
+            path_zones: List of zone IDs in the planned path
+
+        Returns:
+            List of zone IDs that have conflicts (occupied by other robots or unavailable)
+        """
+        conflicts = []
+        for zone_id in path_zones:
+            zone = self.zones.get(zone_id)
+            if zone:
+                # Conflict if zone is occupied by another robot
+                if zone.is_occupied() and zone.occupied_by != robot_id:
+                    conflicts.append(zone_id)
+                # Conflict if zone is reserved by another robot
+                elif zone.reserved_by and zone.reserved_by != robot_id:
+                    conflicts.append(zone_id)
+
+        if conflicts:
+            logger.warning(
+                f"Path conflicts detected for robot {robot_id}: {conflicts}"
+            )
+        return conflicts
+
+    def cleanup_expired_reservations(self) -> int:
+        """
+        Clean up all expired reservations
+
+        Reservations expire after reservation_timeout seconds.
+        This method should be called periodically to free up zones.
+
+        Returns:
+            Number of reservations cleaned up
+        """
+        cleaned_count = 0
+        expired_zones = []
+
+        for zone_id, zone in self.zones.items():
+            if zone.is_reservation_expired():
+                expired_zones.append((zone_id, zone.reserved_by))
+                zone.release(zone.reserved_by)
+                cleaned_count += 1
+
+        if cleaned_count > 0:
+            logger.info(
+                f"Cleaned up {cleaned_count} expired reservations: {expired_zones}"
+            )
+
+        return cleaned_count
+
+    def get_robot_reserved_zones(self, robot_id: str) -> List[str]:
+        """
+        Get all zones reserved by a robot
+
+        Args:
+            robot_id: Robot ID
+
+        Returns:
+            List of zone IDs reserved by the robot
+        """
+        reserved = []
+        for zone_id, zone in self.zones.items():
+            if zone.reserved_by == robot_id:
+                reserved.append(zone_id)
+        return reserved
+
+    def get_robot_occupied_zones(self, robot_id: str) -> List[str]:
+        """
+        Get all zones occupied by a robot
+
+        Args:
+            robot_id: Robot ID
+
+        Returns:
+            List of zone IDs occupied by the robot
+        """
+        occupied = []
+        for zone_id, zone in self.zones.items():
+            if zone.occupied_by == robot_id:
+                occupied.append(zone_id)
+        return occupied
 
     def clear_robot(self, robot_id: str):
         """

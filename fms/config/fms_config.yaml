@@ -1,19 +1,25 @@
 # Fleet Management System Configuration
 
 # Robot Fleet Configuration
+# NOTE: Using ROS_DOMAIN_ID for robot isolation, NOT namespaces
 robots:
   - robot_id: "pinky1"
-    namespace: "/pinky1"
+    domain_id: 11
     type: "SERVING_BOT_1"
     parking_spot: "pinky1_spot"
+    ip_address: "192.168.1.7"
+    enabled: false  # 현재 DOMAIN_ID=13에서 테스트 중
   - robot_id: "pinky2"
-    namespace: "/pinky2"
+    domain_id: 12
     type: "SERVING_BOT_2"
     parking_spot: "pinky2_spot"
+    ip_address: "192.168.1.6"
+    enabled: false  # 테스트에서 제외
   - robot_id: "pinky3"
-    namespace: "/pinky3"
+    domain_id: 13
     type: "SERVING_BOT_3"
     parking_spot: "pinky3_spot"
+    ip_address: "192.168.1.11"
 
 # Map Positions (in meters, based on map frame)
 # Calibrated positions based on real.png (410x210px, 0.005m/pixel, origin [-0.025, -0.025, 0.0])
@@ -22,7 +28,7 @@ positions:
   pickup_spot:
     x: 0.47
     y: 0.63
-    theta: 0.0
+    theta: 3.14159
 
   # Table positions
   table1:
@@ -216,7 +222,26 @@ parameters:
   goal_reached_threshold: 0.1
 
   # Low battery threshold (volts)
-  low_battery_threshold: 20.0
+  low_battery_threshold: 0.0
 
   # Zone reservation timeout (seconds)
   zone_reservation_timeout: 30.0
+
+  # Auto-set initial pose on startup (enables AMCL localization)
+  auto_set_initial_pose: true
+
+# Initial Poses for AMCL Localization
+# Set robot initial positions when FMS starts (parking spots)
+initial_poses:
+  pinky1:
+    x: 0.585
+    y: 0.085
+    theta: 0.0
+  pinky2:
+    x: 0.585
+    y: 0.255
+    theta: 0.0
+  pinky3:
+    x: 0.585
+    y: 0.915
+    theta: 0.0
