@@ -333,12 +333,12 @@ class CoordinatorNode(Node):
         # 4) NEW: B가 verify로 운반 + verify 분석 + 결과 따라 분기
         # -----------------------------
         self.get_logger().info(f"A stacked DONE -> B TRANSPORT_TO_VERIFY job={job_id}")
-        self._publish(self.pub_b, build_msg(job_id, "TRANSPORT_TO_VERIFY"))
+        self._publish(self.pub_verify, build_msg(job_id, "TRANSPORT_TO_VERIFY"))
 
         ok, msg = self.wait_for(job_id, "B", "DONE", order.timeout_transport_verify_sec)
         if not ok:
             self.get_logger().error(f"B transport_to_verify failed: {msg}")
-            self._publish(self.pub_b, build_msg(job_id, "CANCEL"))
+            self._publish(self.pub_verify, build_msg(job_id, "CANCEL"))
             return False
 
         # verify 분석 트리거 (verify 노드가 이 op를 받는 형태로 맞춰라)
@@ -350,11 +350,11 @@ class CoordinatorNode(Node):
         ok_ok, _ = self.wait_for(job_id, "V", "OK", order.timeout_verify_sec)
         if ok_ok:
             self.get_logger().info(f"VERIFY OK -> HANDOFF_PINKY job={job_id}")
-            self._publish(self.pub_b, build_msg(job_id, "HANDOFF_PINKY"))
+            self._publish(self.pub_verify, build_msg(job_id, "HANDOFF_PINKY"))
             ok2, msg2 = self.wait_for(job_id, "B", "DONE", order.timeout_handoff_sec)
             if not ok2:
                 self.get_logger().error(f"B handoff failed: {msg2}")
-                self._publish(self.pub_b, build_msg(job_id, "CANCEL"))
+                self._publish(self.pub_verify, build_msg(job_id, "CANCEL"))
                 return False
         else:
             ok_ng, _ = self.wait_for(job_id, "V", "DEFECT", 0.1)  # 이미 timeout 후면 store에 있을 수도 있어서 짧게 한번 더
@@ -363,11 +363,11 @@ class CoordinatorNode(Node):
             else:
                 self.get_logger().warn(f"VERIFY not OK within timeout -> treat as DEFECT job={job_id}")
 
-            self._publish(self.pub_b, build_msg(job_id, "DISCARD"))
+            self._publish(self.pub_verify, build_msg(job_id, "DISCARD"))
             ok2, msg2 = self.wait_for(job_id, "B", "DONE", order.timeout_handoff_sec)
             if not ok2:
                 self.get_logger().error(f"B discard failed: {msg2}")
-                self._publish(self.pub_b, build_msg(job_id, "CANCEL"))
+                self._publish(self.pub_verify, build_msg(job_id, "CANCEL"))
                 return False
 
         self.get_logger().info(f"job {job_id} DONE (stack + verify + branch)")
