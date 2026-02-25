@@ -394,7 +394,7 @@ def main():
 
     # Declare and get test_mode parameter (default: True for backward compatibility)
     node.declare_parameter('test_mode', True)
-    node.declare_parameter('test_recipe', 'ham_cheese')
+    node.declare_parameter('test_recipe', 'bread')
     node.declare_parameter('test_sauce', 'mustard')
     node.declare_parameter('test_pause_before_last', 1)
 
