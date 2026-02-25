@@ -1,0 +1,15 @@
+from_domain: 25
+to_domain: 21
+topics:
+  /arm_b/cmd:
+    type: std_msgs/msg/String
+  /verify/cmd:
+    type: std_msgs/msg/String
+  /arm_b/status:
+    type: std_msgs/msg/String
+    from_domain: 21
+    to_domain: 25
+  /verify/status:
+    type: std_msgs/msg/String
+    from_domain: 21
+    to_domain: 25
