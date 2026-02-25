@@ -17,7 +17,7 @@ recipes:
       - cheese
       - ham
       - bread
-  all:
+  all_in_one:
     steps:
       - bread
       - tomato
