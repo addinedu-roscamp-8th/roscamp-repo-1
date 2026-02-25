@@ -33,6 +33,9 @@ def _server_config():
 
 app = Flask(__name__)
 
+# 스트리밍 프리뷰에서 매 프레임마다 갱신되는 최신 검출 결과 (confidence 표시용)
+_latest_detections = []
+
 
 @app.route("/")
 def index():
@@ -50,7 +53,8 @@ def index():
             "analyze_video_stream": "GET /analyze/video/stream (SSE)",
             "analyze_video_stream_ws": "GET /analyze/video/stream/ws (WebSocket+SSE, 동일 이벤트 형식)",
             "stream_preview": "GET /stream/preview (MJPEG)",
-            "view": "GET /view (스트리밍 + 검출 상태 표시)",
+            "stream_latest": "GET /stream/latest (최신 검출 목록·confidence, JSON)",
+            "view": "GET /view (스트리밍 + 검출 상태 + confidence 표시)",
             "reload_model": "POST /reload_model",
             "analyze_arm_cmd": "GET /analyze/arm_cmd (이미지 분석 후 ROS2 토픽 발행)",
             "analyze_arm_cmd_ws": "GET /analyze/arm_cmd/ws (WebSocket 스냅샷, 동일 응답 형식)",
@@ -268,14 +272,17 @@ def _load_jetbot_config():
 
 def _generate_preview_mjpeg():
     """JetBot 영상을 받아 YOLO 분석 후 bbox·검출 상태를 그려 MJPEG 스트리밍."""
+    global _latest_detections
     boundary = "frame"
     try:
         for img in stream_video_frames():
             try:
                 annotated, detections = analyze_and_draw(img)
+                _latest_detections = detections
             except Exception:
                 annotated = img
                 detections = []
+                _latest_detections = []
             _, jpeg = cv2.imencode(".jpg", annotated)
             yield b"--" + boundary.encode() + b"\r\nContent-Type: image/jpeg\r\n\r\n" + jpeg.tobytes() + b"\r\n"
     except Exception as e:
@@ -296,15 +303,26 @@ def stream_preview_endpoint():
     )
 
 
+@app.route("/stream/latest")
+def stream_latest_detections():
+    """스트리밍 프리뷰에서 갱신되는 최신 검출 결과(클래스명·confidence)를 JSON으로 반환. /view에서 confidence 표시용."""
+    detections = list(_latest_detections)
+    return jsonify({
+        "detections": detections,
+        "count": len(detections),
+    })
+
+
 @app.route("/view")
 def view_page():
-    """스트리밍 영상 + 검출 여부를 보여주는 HTML 페이지."""
-    return """
+    """스트리밍 영상 + 검출 여부 및 감지된 모델별 confidence를 보여주는 HTML 페이지."""
+    res = Response("""
 <!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <title>YOLO 스트리밍 · 검출 상태</title>
   <style>
     * { box-sizing: border-box; }
@@ -317,6 +335,15 @@ def view_page():
     .status.none { background: #4d0d0d; color: #ffb8b8; }
     .meta { margin-top: 8px; font-size: 0.9rem; color: #888; }
     a { color: #6af; }
+    .confidence-section { margin-top: 16px; padding: 16px; background: #252525; border-radius: 8px; }
+    .confidence-section h2 { font-size: 1rem; margin: 0 0 8px 0; color: #ccc; }
+    .confidence-section .count { font-size: 0.85rem; color: #888; margin-bottom: 12px; }
+    .confidence-list { list-style: none; padding: 0; margin: 0; }
+    .confidence-list li { padding: 8px 12px; margin-bottom: 6px; background: #333; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
+    .confidence-list li .name { font-weight: bold; }
+    .confidence-list li .conf { color: #8f8; font-family: monospace; }
+    .confidence-list li.empty { color: #888; font-style: italic; }
+    .confidence-err { color: #f88; font-size: 0.9rem; }
   </style>
 </head>
 <body>
@@ -324,11 +351,66 @@ def view_page():
     <h1>YOLO 실시간 스트리밍 · 검출 상태</h1>
     <p class="meta">영상 위 상단에 <strong>Detected: 클래스명</strong> 또는 <strong>No detection</strong> 표시</p>
     <img class="preview" src="/stream/preview" alt="스트리밍 프리뷰">
+    <div class="confidence-section">
+      <h2>감지된 모델 (confidence)</h2>
+      <p class="count" id="confidence-count">갱신 중… (0.5초마다)</p>
+      <ul class="confidence-list" id="confidence-list">
+        <li class="empty">로딩 중… (스트리밍이 시작되면 갱신됩니다)</li>
+      </ul>
+    </div>
     <p class="meta"><a href="/model_info">/model_info</a>에서 사용 중인 모델(best.pt) 경로 확인</p>
   </div>
+  <script>
+(function() {
+  var listEl = document.getElementById('confidence-list');
+  var countEl = document.getElementById('confidence-count');
+  function escapeHtml(s) {
+    if (s == null || s === '') return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function fmtConf(c) {
+    if (c == null || typeof c !== 'number') return '—';
+    var pct = c <= 1 ? c * 100 : c;
+    return pct.toFixed(1) + '%';
+  }
+  function update() {
+    var base = window.location.pathname.replace(/\\/view$/i, '').replace(/\\/$/, '') || '';
+    var url = (base + '/stream/latest').replace(/\\/\\//g, '/');
+    fetch(url)
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function(data) {
+        var detections = data.detections || [];
+        if (countEl) countEl.textContent = '검출 수: ' + detections.length + ' (0.5초마다 갱신)';
+        if (detections.length === 0) {
+          listEl.innerHTML = '<li class="empty">No detection (스트리밍 첫 프레임 후 갱신)</li>';
+          return;
+        }
+        listEl.innerHTML = detections.map(function(d) {
+          var name = escapeHtml(d.class_name || '?');
+          var conf = fmtConf(d.confidence);
+          return '<li><span class="name">' + name + '</span><span class="conf">' + conf + '</span></li>';
+        }).join('');
+      })
+      .catch(function(err) {
+        if (countEl) countEl.textContent = '';
+        listEl.innerHTML = '<li class="confidence-err">검출 정보 오류: ' + escapeHtml(err && err.message ? err.message : '연결 실패') + '</li>';
+      });
+  }
+  if (listEl) {
+    update();
+    setInterval(update, 500);
+  }
+})();
+  </script>
 </body>
 </html>
-"""
+""")
+    res.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    res.headers["Pragma"] = "no-expires"
+    return res
 
 
 def _generate_video_stream_sse():
