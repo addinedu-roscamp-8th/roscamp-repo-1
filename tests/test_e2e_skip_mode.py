@@ -205,7 +205,7 @@ class TestSingleRobotE2E:
         # Setup
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
         fleet = FleetController(robot_configs)
         simulator = SkipModeSimulator(manager, fleet)
@@ -257,7 +257,7 @@ class TestSingleRobotE2E:
         """Test that skip mode has proper timing simulation"""
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
         fleet = FleetController(robot_configs)
         simulator = SkipModeSimulator(manager, fleet)
@@ -283,7 +283,7 @@ class TestSingleRobotE2E:
         """Test that task completion is properly tracked"""
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
         fleet = FleetController(robot_configs)
         simulator = SkipModeSimulator(manager, fleet)
@@ -312,8 +312,8 @@ class TestMultipleRobotsE2E:
         """Test 2 concurrent deliveries with skip mode"""
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12}
         ]
         fleet = FleetController(robot_configs)
         simulator = SkipModeSimulator(manager, fleet)
@@ -366,9 +366,9 @@ class TestMultipleRobotsE2E:
         """Test 3 concurrent deliveries with skip mode"""
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'},
-            {'robot_id': 'pinky3', 'namespace': '/pinky3'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12},
+            {'robot_id': 'pinky3', 'domain_id': 13}
         ]
         fleet = FleetController(robot_configs)
         simulator = SkipModeSimulator(manager, fleet)
@@ -412,7 +412,7 @@ class TestSkipModeEdgeCases:
         """Test skip mode with queued orders"""
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
         fleet = FleetController(robot_configs)
         simulator = SkipModeSimulator(manager, fleet)
@@ -460,7 +460,7 @@ class TestSkipModeEdgeCases:
         """Test delivery complete while robot is at table"""
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
         fleet = FleetController(robot_configs)
         simulator = SkipModeSimulator(manager, fleet)
@@ -484,7 +484,7 @@ class TestSkipModeEdgeCases:
         """Test behavior when skip mode is disabled"""
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
         fleet = FleetController(robot_configs)
         simulator = SkipModeSimulator(manager, fleet)
@@ -513,7 +513,7 @@ class TestStateTransitions:
         """Test IDLE -> MOVING_TO_PICKUP transition"""
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
         fleet = FleetController(robot_configs)
         simulator = SkipModeSimulator(manager, fleet)
@@ -530,7 +530,7 @@ class TestStateTransitions:
         """Test MOVING_TO_PICKUP -> LOADED transition"""
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
         fleet = FleetController(robot_configs)
         # Create simulator without skip mode to test state transitions
@@ -550,7 +550,7 @@ class TestStateTransitions:
         """Test LOADED -> MOVING_TO_TABLE transition (with skip mode)"""
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
         fleet = FleetController(robot_configs)
         simulator = SkipModeSimulator(manager, fleet)
@@ -568,7 +568,7 @@ class TestStateTransitions:
         """Test MOVING_TO_TABLE -> DELIVERING transition"""
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
         fleet = FleetController(robot_configs)
         simulator = SkipModeSimulator(manager, fleet)
@@ -585,7 +585,7 @@ class TestStateTransitions:
         """Test DELIVERING -> RETURNING transition"""
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
         fleet = FleetController(robot_configs)
         simulator = SkipModeSimulator(manager, fleet)
@@ -603,7 +603,7 @@ class TestStateTransitions:
         """Test RETURNING -> IDLE transition"""
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
         fleet = FleetController(robot_configs)
         simulator = SkipModeSimulator(manager, fleet)

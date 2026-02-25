@@ -317,10 +317,10 @@ class TestRobotState:
 
     def test_robot_state_creation(self):
         """Test creating robot state"""
-        robot = RobotState('pinky1', '/pinky1')
+        robot = RobotState('pinky1', 11)
 
         assert robot.robot_id == 'pinky1'
-        assert robot.robot_namespace == '/pinky1'
+        assert robot.domain_id == '/pinky1'
         assert robot.status == RobotState.STATUS_IDLE
         assert robot.current_pose is None
         assert robot.battery_voltage == 0.0
@@ -330,7 +330,7 @@ class TestRobotState:
 
     def test_robot_update_pose(self):
         """Test updating robot pose"""
-        robot = RobotState('pinky1', '/pinky1')
+        robot = RobotState('pinky1', 11)
         pose = Pose()
         pose.position.x = 1.0
         pose.position.y = 2.0
@@ -342,7 +342,7 @@ class TestRobotState:
 
     def test_robot_update_battery(self):
         """Test updating robot battery"""
-        robot = RobotState('pinky1', '/pinky1')
+        robot = RobotState('pinky1', 11)
 
         robot.update_battery(24.5, True)
 
@@ -351,7 +351,7 @@ class TestRobotState:
 
     def test_robot_update_status(self):
         """Test updating robot status"""
-        robot = RobotState('pinky1', '/pinky1')
+        robot = RobotState('pinky1', 11)
 
         robot.update_status(RobotState.STATUS_MOVING_TO_PICKUP)
 
@@ -359,7 +359,7 @@ class TestRobotState:
 
     def test_robot_assign_task(self):
         """Test assigning task to robot"""
-        robot = RobotState('pinky1', '/pinky1')
+        robot = RobotState('pinky1', 11)
         task_id = str(uuid.uuid4())
         order_id = 'ORD001'
 
@@ -370,7 +370,7 @@ class TestRobotState:
 
     def test_robot_clear_task(self):
         """Test clearing task from robot"""
-        robot = RobotState('pinky1', '/pinky1')
+        robot = RobotState('pinky1', 11)
 
         robot.assign_task('TASK001', 'ORD001')
         robot.target_location = 'table1'
@@ -382,7 +382,7 @@ class TestRobotState:
 
     def test_robot_is_available(self):
         """Test checking if robot is available"""
-        robot = RobotState('pinky1', '/pinky1')
+        robot = RobotState('pinky1', 11)
 
         assert robot.is_available() == True
 
@@ -396,7 +396,7 @@ class TestRobotState:
 
     def test_robot_is_low_battery(self):
         """Test checking low battery"""
-        robot = RobotState('pinky1', '/pinky1')
+        robot = RobotState('pinky1', 11)
 
         assert robot.is_low_battery() == False
 
@@ -410,7 +410,7 @@ class TestRobotState:
 
     def test_robot_status_transitions(self):
         """Test robot status state transitions"""
-        robot = RobotState('pinky1', '/pinky1')
+        robot = RobotState('pinky1', 11)
 
         # IDLE -> MOVING_TO_PICKUP
         robot.update_status(RobotState.STATUS_MOVING_TO_PICKUP)
@@ -443,9 +443,9 @@ class TestFleetController:
     def test_fleet_controller_creation(self):
         """Test creating fleet controller"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'},
-            {'robot_id': 'pinky3', 'namespace': '/pinky3'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12},
+            {'robot_id': 'pinky3', 'domain_id': 13}
         ]
 
         fleet = FleetController(robot_configs)
@@ -458,8 +458,8 @@ class TestFleetController:
     def test_get_available_robot(self):
         """Test getting available robot"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12}
         ]
 
         fleet = FleetController(robot_configs)
@@ -472,7 +472,7 @@ class TestFleetController:
     def test_get_available_robot_none_when_busy(self):
         """Test getting available robot when all are busy"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
 
         fleet = FleetController(robot_configs)
@@ -486,7 +486,7 @@ class TestFleetController:
     def test_assign_task_to_robot(self):
         """Test assigning task to robot"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
 
         fleet = FleetController(robot_configs)
@@ -501,7 +501,7 @@ class TestFleetController:
     def test_robot_reached_pickup(self):
         """Test robot reached pickup spot"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
 
         fleet = FleetController(robot_configs)
@@ -515,7 +515,7 @@ class TestFleetController:
     def test_robot_start_delivery(self):
         """Test robot starting delivery"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
 
         fleet = FleetController(robot_configs)
@@ -529,7 +529,7 @@ class TestFleetController:
     def test_robot_reached_table(self):
         """Test robot reached table"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
 
         fleet = FleetController(robot_configs)
@@ -542,7 +542,7 @@ class TestFleetController:
     def test_robot_complete_delivery(self):
         """Test robot completing delivery"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
 
         fleet = FleetController(robot_configs)
@@ -556,7 +556,7 @@ class TestFleetController:
     def test_robot_returned_home(self):
         """Test robot returning home"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
 
         fleet = FleetController(robot_configs)
@@ -571,7 +571,7 @@ class TestFleetController:
     def test_update_robot_battery(self):
         """Test updating robot battery"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
 
         fleet = FleetController(robot_configs)
@@ -585,7 +585,7 @@ class TestFleetController:
     def test_robot_error(self):
         """Test robot error handling"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
 
         fleet = FleetController(robot_configs)
@@ -598,8 +598,8 @@ class TestFleetController:
     def test_get_fleet_status_summary(self):
         """Test getting fleet status summary"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12}
         ]
 
         fleet = FleetController(robot_configs)
@@ -616,7 +616,7 @@ class TestFleetController:
     def test_calculate_distance(self):
         """Test calculating distance between poses"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
 
         fleet = FleetController(robot_configs)
@@ -642,8 +642,8 @@ class TestFMSIntegration:
         # Setup
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12}
         ]
         fleet = FleetController(robot_configs)
 
@@ -669,9 +669,9 @@ class TestFMSIntegration:
         # Setup
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'},
-            {'robot_id': 'pinky3', 'namespace': '/pinky3'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12},
+            {'robot_id': 'pinky3', 'domain_id': 13}
         ]
         fleet = FleetController(robot_configs)
 
@@ -695,7 +695,7 @@ class TestFMSIntegration:
         # Setup
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
         fleet = FleetController(robot_configs)
 

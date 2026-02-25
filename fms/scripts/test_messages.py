@@ -7,9 +7,9 @@ This script tests ROS 2 message publishing and subscribing for the FMS system.
 It validates:
 1. Publishing goal_arrived messages
 2. Publishing/subscribing to fleet status messages
-3. Testing per-robot topics (/pinky1/*, /pinky2/*, /pinky3/*)
+3. Testing per-robot topics (same ROS_DOMAIN_ID)
 4. TCP message format verification
-5. ROS 2 domain isolation
+5. ROS_DOMAIN_ID isolation (11=pinky1, 12=pinky2, 13=pinky3)
 
 Usage:
   # Test publishing goal_arrived message manually
@@ -80,29 +80,28 @@ class GoalArrivedMessage:
 
 
 class RobotTopicsMonitor(Node):
-    """Monitor robot-specific topics (/pinky1/*, /pinky2/*, /pinky3/*)"""
+    """Monitor robot topics on current ROS_DOMAIN_ID (no namespace prefix)"""
 
     def __init__(self):
         super().__init__('robot_topics_monitor')
+        import os
 
         self.logger = self.get_logger()
-        self.robot_ids = ['pinky1', 'pinky2', 'pinky3']
-        self.received_messages = {}
+        current_domain = int(os.environ.get('ROS_DOMAIN_ID', 0))
+        domain_to_robot = {11: 'pinky1', 12: 'pinky2', 13: 'pinky3'}
+        self.current_robot = domain_to_robot.get(current_domain, 'unknown')
 
-        # Subscribe to per-robot topics
-        for robot_id in self.robot_ids:
-            self.received_messages[robot_id] = {
-                'pose': None,
-                'battery_voltage': None,
-                'battery_present': None
-            }
+        self.received_messages = {
+            'pose': None,
+            'battery_voltage': None,
+            'battery_present': None
+        }
 
-        self.logger.info("Starting robot topics monitoring...")
-        self.logger.info("Subscribing to:")
-        for robot_id in self.robot_ids:
-            self.logger.info(f"  /{robot_id}/pose")
-            self.logger.info(f"  /{robot_id}/battery/voltage")
-            self.logger.info(f"  /{robot_id}/battery/present")
+        self.logger.info(f"Starting robot topics monitoring on DOMAIN_ID={current_domain} ({self.current_robot})...")
+        self.logger.info("Subscribing to (no namespace prefix):")
+        self.logger.info("  /pose")
+        self.logger.info("  /battery/voltage")
+        self.logger.info("  /battery/present")
 
 
 class FMSTestNode(Node):
@@ -369,37 +368,35 @@ def test_tcp_format():
     print()
 
 
-def test_namespace_isolation():
-    """Test namespace isolation (verify that /pinky1, /pinky2, /pinky3 are separate)"""
+def test_domain_isolation():
+    """Test ROS_DOMAIN_ID isolation (verify that domain 11, 12, 13 are separate)"""
     print("\n" + "="*60)
-    print("TEST 5: Namespace Isolation")
+    print("TEST 5: ROS_DOMAIN_ID Isolation")
     print("="*60)
-    print("  Current implementation uses namespaces: /pinky1, /pinky2, /pinky3")
-    print("  This test verifies message isolation between namespaces.")
-    print()
-
-    # Create test messages for each namespace
-    namespaces = ['/pinky1', '/pinky2', '/pinky3']
-    print("  Testing topic structure:")
-
-    for ns in namespaces:
-        topics = [
-            f"{ns}/pose",
-            f"{ns}/battery/voltage",
-            f"{ns}/battery/present",
-            f"{ns}/navigate_to_pose",
-            f"{ns}/status"
-        ]
-        print(f"  {ns}:")
-        for topic in topics:
-            print(f"    - {topic}")
-
-    print()
-    print("  Note: Once CLAUDE.md requirements are implemented, these will be")
-    print("  replaced with ROS_DOMAIN_ID-based topic structure:")
+    print("  Current implementation uses ROS_DOMAIN_ID:")
     print("    - domain 11 (pinky1)")
     print("    - domain 12 (pinky2)")
     print("    - domain 13 (pinky3)")
+    print()
+
+    # Show topic structure for each domain
+    domains = {11: 'pinky1', 12: 'pinky2', 13: 'pinky3'}
+    print("  Topic structure (same on each domain):")
+
+    topics = [
+        "/pose",
+        "/battery/voltage",
+        "/battery/present",
+        "/navigate_to_pose",
+        "/amcl_pose"
+    ]
+    for topic in topics:
+        print(f"    - {topic}")
+
+    print()
+    print("  Each robot operates on its own ROS_DOMAIN_ID.")
+    print("  FMS communicates with each robot by setting ROS_DOMAIN_ID environment variable.")
+    print("  No namespace prefixes are used - topics are isolated by domain.")
     print()
 
 
@@ -483,8 +480,8 @@ def main():
                        help='Test per-robot topics')
     parser.add_argument('--test-tcp-format', action='store_true',
                        help='Test TCP message format')
-    parser.add_argument('--test-namespace', action='store_true',
-                       help='Test namespace isolation')
+    parser.add_argument('--test-domain', action='store_true',
+                       help='Test ROS_DOMAIN_ID isolation')
     parser.add_argument('--interactive', '-i', action='store_true',
                        help='Interactive test mode')
     parser.add_argument('--all', action='store_true',
@@ -507,7 +504,7 @@ def main():
             args.test_fleet_status,
             args.test_robot_topics,
             args.test_tcp_format,
-            args.test_namespace,
+            args.test_domain,
             args.interactive
         ])
 
@@ -520,8 +517,8 @@ def main():
         if run_all or args.test_tcp_format:
             test_tcp_format()
 
-        if run_all or args.test_namespace:
-            test_namespace_isolation()
+        if run_all or args.test_domain:
+            test_domain_isolation()
 
         if run_all or args.test_robot_topics:
             print("\n[NOTE] Per-robot topic monitoring requires running robots.")

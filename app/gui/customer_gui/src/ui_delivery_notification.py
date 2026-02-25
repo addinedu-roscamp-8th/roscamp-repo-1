@@ -17,7 +17,7 @@ class DeliveryNotificationWidget(QWidget):
     """음식 도착 알림 위젯"""
 
     # 시그널 정의
-    delivery_confirmed_signal = pyqtSignal(str)  # 수령 완료 시그널 (order_id)
+    delivery_confirmed_signal = pyqtSignal(dict)  # 수령 완료 시그널 (order_id, table_number)
 
     def __init__(self):
         super().__init__()
@@ -108,7 +108,7 @@ class DeliveryNotificationWidget(QWidget):
             self.label_notification.setStyleSheet('')
 
     def on_confirm_delivery(self):
-        """수령 완료 버튼 클릭 - SR-16: 음식 수령 확인"""
+        """수령 완료 버튼 클릭 - SR-16: 음식 수령 확인 / SC-185: 수령 확인 API"""
         if not self.order:
             return
 
@@ -117,8 +117,11 @@ class DeliveryNotificationWidget(QWidget):
         # 깜빡임 중지
         self.stop_blink_animation()
 
-        # 수령 완료 시그널 발생
-        self.delivery_confirmed_signal.emit(self.order.order_id or '')
+        # 수령 완료 시그널 발생 (order_id와 table_number 포함)
+        self.delivery_confirmed_signal.emit({
+            'order_id': self.order.order_id or '',
+            'table_number': str(self.order.table_number) if hasattr(self.order, 'table_number') else ''
+        })
 
     def showEvent(self, event):
         """위젯이 표시될 때"""

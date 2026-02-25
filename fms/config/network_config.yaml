@@ -47,7 +47,7 @@ mobile_robots:
 cobot_arms:
   jetcobot_aa1f:
     robot_id: "cobot1"
-    domain_id: 14
+    domain_id: 20
     ip_address: "192.168.1.4"
     tcp_port: 9002
     ssh_user: "jetson"
@@ -57,7 +57,7 @@ cobot_arms:
 
   jetcobot_aa85:
     robot_id: "cobot2"
-    domain_id: 15
+    domain_id: 21
     ip_address: "192.168.1.10"
     tcp_port: 9002
     ssh_user: "jetson"

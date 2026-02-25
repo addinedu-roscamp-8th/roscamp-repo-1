@@ -3,7 +3,7 @@ Multi-Robot Integration Tests
 
 Tests for:
 - Multiple robots handling tasks simultaneously
-- Namespace isolation (/pinky1 vs /pinky2 vs /pinky3)
+- Domain isolation (/pinky1 vs /pinky2 vs /pinky3)
 - Task queue distribution across fleet
 - Robot availability and load balancing
 - Concurrent delivery operations
@@ -53,17 +53,17 @@ class TestMultiRobotBasics:
     def test_three_robots_initialization(self):
         """Test that all 3 robots are properly initialized"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'},
-            {'robot_id': 'pinky3', 'namespace': '/pinky3'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12},
+            {'robot_id': 'pinky3', 'domain_id': 13}
         ]
 
         fleet = FleetController(robot_configs)
 
         assert len(fleet.robots) == 3
-        assert fleet.robots['pinky1'].robot_namespace == '/pinky1'
-        assert fleet.robots['pinky2'].robot_namespace == '/pinky2'
-        assert fleet.robots['pinky3'].robot_namespace == '/pinky3'
+        assert fleet.robots['pinky1'].domain_id == 11
+        assert fleet.robots['pinky2'].domain_id == 12
+        assert fleet.robots['pinky3'].domain_id == 13
 
         for robot_id in ['pinky1', 'pinky2', 'pinky3']:
             robot = fleet.get_robot(robot_id)
@@ -73,9 +73,9 @@ class TestMultiRobotBasics:
     def test_three_robots_in_fleet_status(self):
         """Test fleet status includes all robots"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'},
-            {'robot_id': 'pinky3', 'namespace': '/pinky3'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12},
+            {'robot_id': 'pinky3', 'domain_id': 13}
         ]
 
         fleet = FleetController(robot_configs)
@@ -86,11 +86,11 @@ class TestMultiRobotBasics:
         assert summary['busy_robots'] == 0
         assert len(summary['robots']) == 3
 
-    def test_robot_namespace_isolation_pinky1(self):
-        """Test pinky1 namespace is isolated"""
+    def test_domain_id_isolation_pinky1(self):
+        """Test pinky1 domain_id is isolated"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12}
         ]
 
         fleet = FleetController(robot_configs)
@@ -98,16 +98,16 @@ class TestMultiRobotBasics:
         pinky1 = fleet.get_robot('pinky1')
         pinky2 = fleet.get_robot('pinky2')
 
-        assert pinky1.robot_namespace == '/pinky1'
-        assert pinky2.robot_namespace == '/pinky2'
-        assert pinky1.robot_namespace != pinky2.robot_namespace
+        assert pinky1.domain_id == 11
+        assert pinky2.domain_id == 12
+        assert pinky1.domain_id != pinky2.domain_id
 
-    def test_robot_namespace_isolation_pinky2(self):
-        """Test pinky2 namespace is isolated"""
+    def test_domain_id_isolation_pinky2(self):
+        """Test pinky2 domain_id is isolated"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'},
-            {'robot_id': 'pinky3', 'namespace': '/pinky3'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12},
+            {'robot_id': 'pinky3', 'domain_id': 13}
         ]
 
         fleet = FleetController(robot_configs)
@@ -115,8 +115,8 @@ class TestMultiRobotBasics:
         pinky2 = fleet.get_robot('pinky2')
         pinky3 = fleet.get_robot('pinky3')
 
-        assert pinky2.robot_namespace == '/pinky2'
-        assert pinky3.robot_namespace == '/pinky3'
+        assert pinky2.domain_id == 12
+        assert pinky3.domain_id == 13
 
 
 class TestConcurrentDeliveries:
@@ -127,9 +127,9 @@ class TestConcurrentDeliveries:
         # Setup
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'},
-            {'robot_id': 'pinky3', 'namespace': '/pinky3'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12},
+            {'robot_id': 'pinky3', 'domain_id': 13}
         ]
         fleet = FleetController(robot_configs)
 
@@ -164,9 +164,9 @@ class TestConcurrentDeliveries:
         """Test when 2 robots are busy and 1 is available"""
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'},
-            {'robot_id': 'pinky3', 'namespace': '/pinky3'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12},
+            {'robot_id': 'pinky3', 'domain_id': 13}
         ]
         fleet = FleetController(robot_configs)
 
@@ -190,7 +190,7 @@ class TestConcurrentDeliveries:
         """Test sequential delivery when robot queue exists"""
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
         fleet = FleetController(robot_configs)
 
@@ -231,9 +231,9 @@ class TestLoadBalancing:
         """Test that robots are selected in round-robin fashion"""
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'},
-            {'robot_id': 'pinky3', 'namespace': '/pinky3'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12},
+            {'robot_id': 'pinky3', 'domain_id': 13}
         ]
         fleet = FleetController(robot_configs)
 
@@ -256,9 +256,9 @@ class TestLoadBalancing:
     def test_available_robot_selection(self):
         """Test that first available robot is selected"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'},
-            {'robot_id': 'pinky3', 'namespace': '/pinky3'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12},
+            {'robot_id': 'pinky3', 'domain_id': 13}
         ]
         fleet = FleetController(robot_configs)
 
@@ -279,9 +279,9 @@ class TestLoadBalancing:
     def test_battery_aware_selection(self):
         """Test that low battery robots are not selected"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'},
-            {'robot_id': 'pinky3', 'namespace': '/pinky3'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12},
+            {'robot_id': 'pinky3', 'domain_id': 13}
         ]
         fleet = FleetController(robot_configs)
 
@@ -300,8 +300,8 @@ class TestRobotTaskTracking:
         """Test getting task for specific robot"""
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12}
         ]
         fleet = FleetController(robot_configs)
 
@@ -326,8 +326,8 @@ class TestRobotTaskTracking:
     def test_robot_independent_state(self):
         """Test that robot states are independent"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12}
         ]
         fleet = FleetController(robot_configs)
 
@@ -356,9 +356,9 @@ class TestMultiRobotDeliveryFlow:
         """Test 3 robots making concurrent deliveries"""
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'},
-            {'robot_id': 'pinky3', 'namespace': '/pinky3'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12},
+            {'robot_id': 'pinky3', 'domain_id': 13}
         ]
         fleet = FleetController(robot_configs)
 
@@ -418,8 +418,8 @@ class TestMultiRobotDeliveryFlow:
         """Test deliveries completing at different times"""
         manager = TaskManager()
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12}
         ]
         fleet = FleetController(robot_configs)
 
@@ -457,29 +457,30 @@ class TestMultiRobotDeliveryFlow:
         assert len(manager.completed_tasks) == 1
 
 
-class TestNamespaceIsolation:
-    """Test namespace isolation for multi-robot scenarios"""
+class TestDomainIsolation:
+    """Test DOMAIN_ID isolation for multi-robot scenarios"""
 
-    def test_namespace_format(self):
-        """Test that namespaces follow correct format"""
+    def test_domain_id_format(self):
+        """Test that domain_ids follow correct format (integers 11-13)"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'},
-            {'robot_id': 'pinky3', 'namespace': '/pinky3'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12},
+            {'robot_id': 'pinky3', 'domain_id': 13}
         ]
 
         fleet = FleetController(robot_configs)
 
-        for robot_id in ['pinky1', 'pinky2', 'pinky3']:
+        expected_domains = {'pinky1': 11, 'pinky2': 12, 'pinky3': 13}
+        for robot_id, expected_domain in expected_domains.items():
             robot = fleet.get_robot(robot_id)
-            assert robot.robot_namespace.startswith('/')
-            assert robot.robot_id in robot.robot_namespace
+            assert isinstance(robot.domain_id, int)
+            assert robot.domain_id == expected_domain
 
-    def test_no_namespace_cross_talk(self):
-        """Test that robot namespaces don't interfere"""
+    def test_no_domain_cross_talk(self):
+        """Test that robots on different domain_ids don't interfere"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12}
         ]
 
         fleet = FleetController(robot_configs)
@@ -503,8 +504,8 @@ class TestErrorHandling:
     def test_robot_error_does_not_affect_others(self):
         """Test that one robot error doesn't affect others"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'}
+            {'robot_id': 'pinky1', 'domain_id': 11},
+            {'robot_id': 'pinky2', 'domain_id': 12}
         ]
 
         fleet = FleetController(robot_configs)
@@ -522,7 +523,7 @@ class TestErrorHandling:
     def test_recovery_after_error(self):
         """Test robot can recover after error"""
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+            {'robot_id': 'pinky1', 'domain_id': 11}
         ]
 
         fleet = FleetController(robot_configs)

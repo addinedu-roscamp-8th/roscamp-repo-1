@@ -20,6 +20,11 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/RobotStatus.msg"
   "msg/FleetStatus.msg"
   "msg/DeliveryComplete.msg"
+  "msg/PickupArrival.msg"
+  "msg/PrecisionParked.msg"
+  "msg/TableArrival.msg"
+  "msg/ErrorAlert.msg"
+  "msg/OperatorCommand.msg"
   DEPENDENCIES builtin_interfaces geometry_msgs std_msgs
 )
 

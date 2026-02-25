@@ -48,42 +48,42 @@ def task_manager():
 
 @pytest.fixture
 def fleet_controller():
-    """Provide a fresh FleetController with 3 robots"""
+    """Provide a fresh FleetController with 3 robots (DOMAIN_ID based)"""
     robot_configs = [
-        {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-        {'robot_id': 'pinky2', 'namespace': '/pinky2'},
-        {'robot_id': 'pinky3', 'namespace': '/pinky3'}
+        {'robot_id': 'pinky1', 'domain_id': 11},
+        {'robot_id': 'pinky2', 'domain_id': 12},
+        {'robot_id': 'pinky3', 'domain_id': 13}
     ]
     return FleetController(robot_configs)
 
 
 @pytest.fixture
 def two_robot_fleet():
-    """Provide a FleetController with 2 robots"""
+    """Provide a FleetController with 2 robots (DOMAIN_ID based)"""
     robot_configs = [
-        {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-        {'robot_id': 'pinky2', 'namespace': '/pinky2'}
+        {'robot_id': 'pinky1', 'domain_id': 11},
+        {'robot_id': 'pinky2', 'domain_id': 12}
     ]
     return FleetController(robot_configs)
 
 
 @pytest.fixture
 def single_robot_fleet():
-    """Provide a FleetController with 1 robot"""
+    """Provide a FleetController with 1 robot (DOMAIN_ID based)"""
     robot_configs = [
-        {'robot_id': 'pinky1', 'namespace': '/pinky1'}
+        {'robot_id': 'pinky1', 'domain_id': 11}
     ]
     return FleetController(robot_configs)
 
 
 @pytest.fixture
 def fms_components():
-    """Provide both TaskManager and FleetController"""
+    """Provide both TaskManager and FleetController (DOMAIN_ID based)"""
     manager = TaskManager()
     robot_configs = [
-        {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-        {'robot_id': 'pinky2', 'namespace': '/pinky2'},
-        {'robot_id': 'pinky3', 'namespace': '/pinky3'}
+        {'robot_id': 'pinky1', 'domain_id': 11},
+        {'robot_id': 'pinky2', 'domain_id': 12},
+        {'robot_id': 'pinky3', 'domain_id': 13}
     ]
     fleet = FleetController(robot_configs)
     return {

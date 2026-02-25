@@ -26,9 +26,9 @@ class RobotState:
     STATUS_RETURNING = 'RETURNING'
     STATUS_ERROR = 'ERROR'
 
-    def __init__(self, robot_id: str, robot_namespace: str):
+    def __init__(self, robot_id: str, domain_id: int):
         self.robot_id = robot_id  # pinky1, pinky2, pinky3
-        self.robot_namespace = robot_namespace  # /pinky1, /pinky2, /pinky3
+        self.domain_id = domain_id  # ROS_DOMAIN_ID: 11, 12, 13
         self.status = self.STATUS_IDLE
         self.current_pose = None
         self.battery_voltage = 0.0
@@ -79,7 +79,7 @@ class RobotState:
         """Convert robot state to dictionary"""
         return {
             'robot_id': self.robot_id,
-            'robot_namespace': self.robot_namespace,
+            'domain_id': self.domain_id,
             'status': self.status,
             'current_pose': {
                 'position': {
@@ -114,7 +114,7 @@ class FleetController:
     - Handle robot errors and recovery
     """
 
-    def __init__(self, robot_configs: List[Dict[str, str]]):
+    def __init__(self, robot_configs: List[Dict]):
         """
         Initialize fleet controller
 
@@ -122,7 +122,7 @@ class FleetController:
             robot_configs: List of robot configurations
                 [{
                     'robot_id': 'pinky1',
-                    'namespace': '/pinky1'
+                    'domain_id': 11
                 }, ...]
         """
         self.robots = {}  # {robot_id: RobotState}
@@ -130,9 +130,13 @@ class FleetController:
         # Initialize robot states
         for config in robot_configs:
             robot_id = config['robot_id']
-            namespace = config['namespace']
-            self.robots[robot_id] = RobotState(robot_id, namespace)
-            logger.info(f"Initialized robot {robot_id} with namespace {namespace}")
+            domain_id = config.get('domain_id', 0)
+            # Skip disabled robots
+            if config.get('enabled', True) is False:
+                logger.info(f"Skipping disabled robot {robot_id}")
+                continue
+            self.robots[robot_id] = RobotState(robot_id, domain_id)
+            logger.info(f"Initialized robot {robot_id} with DOMAIN_ID={domain_id}")
 
         # Parking spot positions (TODO: Load from config file)
         self.parking_spots = {

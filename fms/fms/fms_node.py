@@ -16,11 +16,15 @@ from fleet_interfaces.msg import (
     PickupArrival,
     PrecisionParked,
     CookingOrder,
-    LoadingComplete
+    LoadingComplete,
+    TableArrival,
+    ErrorAlert,
+    OperatorCommand as OperatorCommandMsg
 )
 from std_msgs.msg import Float32, Bool
 from builtin_interfaces.msg import Time
 import logging
+import os
 import signal
 import sys
 from datetime import datetime
@@ -30,6 +34,8 @@ from .task_manager import TaskManager, Task
 from .fleet_controller import FleetController, RobotState
 from .zone_manager import ZoneManager
 from .task_scheduler import TaskScheduler, PickupSlotManager
+from .error_detector import ErrorDetector, ErrorType, RobotError
+from .error_recovery import ErrorRecoveryHandler, OperatorCommand, OperatorAction
 
 # Configure logging
 logging.basicConfig(
@@ -52,8 +58,11 @@ class FMSNode(Node):
     Communication:
     - Subscribes to: /fms/order_request, /fms/delivery_complete
     - Publishes to: /fms/fleet_status
-    - Controls robots via: /{namespace}/navigate_to_pose action
-    - Monitors robots via: /{namespace}/pose, /{namespace}/battery/* topics
+    - Controls robots via: /navigate_to_pose action (per DOMAIN_ID)
+    - Monitors robots via: /pose, /battery/* topics (per DOMAIN_ID)
+
+    NOTE: Each robot runs on separate ROS_DOMAIN_ID (11, 12, 13)
+    FMS communicates via TCP or domain bridge for cross-domain messaging
     """
 
     def __init__(self):
@@ -72,11 +81,12 @@ class FMSNode(Node):
         self.declare_parameter('auto_set_initial_pose', True)
         self.auto_set_initial_pose = self.get_parameter('auto_set_initial_pose').value
 
-        # TODO: Load robot configurations from config file
+        # Robot configurations with ROS_DOMAIN_ID (not namespace)
+        # Each robot runs on separate DOMAIN_ID in closed network
         robot_configs = [
-            {'robot_id': 'pinky1', 'namespace': '/pinky1'},
-            {'robot_id': 'pinky2', 'namespace': '/pinky2'},
-            {'robot_id': 'pinky3', 'namespace': '/pinky3'}
+            {'robot_id': 'pinky1', 'domain_id': 11, 'ip': '192.168.1.7'},
+            {'robot_id': 'pinky2', 'domain_id': 12, 'ip': '192.168.1.6', 'enabled': False},  # 테스트 제외
+            {'robot_id': 'pinky3', 'domain_id': 13, 'ip': '192.168.1.11'}
         ]
 
         # Initialize core components
@@ -84,28 +94,49 @@ class FMSNode(Node):
         self.fleet_controller = FleetController(robot_configs)
         self.zone_manager = ZoneManager()
         self.task_scheduler = TaskScheduler(self.zone_manager)
+        self.error_detector = ErrorDetector()
+        self.error_recovery_handler = ErrorRecoveryHandler()
 
-        # Navigation action clients for each robot
+        # Robot domain configurations
+        self.robot_domains = {}
+        for config in robot_configs:
+            if config.get('enabled', True) is False:
+                continue
+            robot_id = config['robot_id']
+            domain_id = config.get('domain_id', 0)
+            self.robot_domains[robot_id] = {
+                'domain_id': domain_id,
+                'ip': config.get('ip', ''),
+            }
+            logger.info(f"Registered robot {robot_id} on DOMAIN_ID={domain_id}")
+
+        # NOTE: Navigation and monitoring requires matching DOMAIN_ID
+        # For cross-domain communication, use TCP or domain bridge
+        # Action clients are created for current domain only
         self.nav_clients = {}
-        for config in robot_configs:
-            robot_id = config['robot_id']
-            namespace = config['namespace']
-            action_name = f"{namespace}/navigate_to_pose"
-            self.nav_clients[robot_id] = ActionClient(self, NavigateToPose, action_name)
-            logger.info(f"Created navigation client for {robot_id}: {action_name}")
+        current_domain = int(os.environ.get('ROS_DOMAIN_ID', 0))
+        logger.info(f"FMS running on DOMAIN_ID={current_domain}")
 
-        # Initial pose publishers for AMCL localization
+        # Create action client for robots on same domain
+        for robot_id, domain_info in self.robot_domains.items():
+            if domain_info['domain_id'] == current_domain:
+                action_name = '/navigate_to_pose'  # No namespace prefix
+                self.nav_clients[robot_id] = ActionClient(self, NavigateToPose, action_name)
+                logger.info(f"Created navigation client for {robot_id}: {action_name} (DOMAIN_ID={current_domain})")
+            else:
+                logger.warning(f"Robot {robot_id} on different DOMAIN_ID={domain_info['domain_id']}, needs TCP/bridge")
+
+        # Initial pose publishers (for same domain only)
         self.initialpose_pubs = {}
-        for config in robot_configs:
-            robot_id = config['robot_id']
-            namespace = config['namespace']
-            topic_name = f"{namespace}/initialpose"
-            self.initialpose_pubs[robot_id] = self.create_publisher(
-                PoseWithCovarianceStamped,
-                topic_name,
-                10
-            )
-            logger.info(f"Created initial pose publisher for {robot_id}: {topic_name}")
+        for robot_id, domain_info in self.robot_domains.items():
+            if domain_info['domain_id'] == current_domain:
+                topic_name = '/initialpose'  # No namespace prefix
+                self.initialpose_pubs[robot_id] = self.create_publisher(
+                    PoseWithCovarianceStamped,
+                    topic_name,
+                    10
+                )
+                logger.info(f"Created initial pose publisher for {robot_id}: {topic_name}")
 
         # Publishers
         self.fleet_status_pub = self.create_publisher(
@@ -120,10 +151,23 @@ class FMSNode(Node):
             10
         )
 
+        self.table_arrival_pub = self.create_publisher(
+            TableArrival,
+            '/fms/table_arrival',
+            10
+        )
+
         # CookingOrder publisher - send order to robot arm coordinator
         self.cooking_order_pub = self.create_publisher(
             CookingOrder,
             '/cooking/order',
+            10
+        )
+
+        # Error alert publisher - notify operators about robot errors
+        self.error_alert_pub = self.create_publisher(
+            ErrorAlert,
+            '/fms/error_alert',
             10
         )
 
@@ -157,6 +201,14 @@ class FMSNode(Node):
             10
         )
 
+        # Operator command subscriber - receive recovery commands from Admin GUI
+        self.operator_command_sub = self.create_subscription(
+            OperatorCommandMsg,
+            '/fms/operator_command',
+            self.operator_command_callback,
+            10
+        )
+
         # Robot monitoring subscribers
         self._setup_robot_monitoring(robot_configs)
 
@@ -171,6 +223,15 @@ class FMSNode(Node):
 
         # Reservation cleanup timer (1Hz)
         self.cleanup_timer = self.create_timer(1.0, self._cleanup_expired_reservations)
+
+        # Error monitoring timer (2Hz)
+        self.error_monitor_timer = self.create_timer(0.5, self._monitor_errors)
+
+        # Error recovery timer (1Hz)
+        self.error_recovery_timer = self.create_timer(1.0, self._process_recovery_actions)
+
+        # Register recovery action callbacks
+        self._register_recovery_callbacks()
 
         # TODO: Load map positions from config file
         self.map_positions = self._load_map_positions()
@@ -189,17 +250,29 @@ class FMSNode(Node):
         """
         Setup subscribers for monitoring robot status
 
+        NOTE: Only monitors robots on the same DOMAIN_ID as FMS.
+        Cross-domain monitoring requires TCP or domain bridge.
+
         Args:
             robot_configs: List of robot configurations
         """
-        for config in robot_configs:
-            robot_id = config['robot_id']
-            namespace = config['namespace']
+        current_domain = int(os.environ.get('ROS_DOMAIN_ID', 0))
 
-            # Subscribe to pose
+        for config in robot_configs:
+            if config.get('enabled', True) is False:
+                continue
+            robot_id = config['robot_id']
+            domain_id = config.get('domain_id', 0)
+
+            # Only subscribe to robots on same domain
+            if domain_id != current_domain:
+                logger.warning(f"Robot {robot_id} on DOMAIN_ID={domain_id}, skipping ROS monitoring")
+                continue
+
+            # Subscribe to pose (no namespace prefix)
             self.create_subscription(
                 Pose,
-                f"{namespace}/pose",
+                '/pose',
                 lambda msg, rid=robot_id: self.robot_pose_callback(rid, msg),
                 10
             )
@@ -207,7 +280,7 @@ class FMSNode(Node):
             # Subscribe to battery voltage
             self.create_subscription(
                 Float32,
-                f"{namespace}/battery/voltage",
+                '/battery/voltage',
                 lambda msg, rid=robot_id: self.robot_battery_voltage_callback(rid, msg),
                 10
             )
@@ -215,12 +288,12 @@ class FMSNode(Node):
             # Subscribe to battery present
             self.create_subscription(
                 Bool,
-                f"{namespace}/battery/present",
+                '/battery/present',
                 lambda msg, rid=robot_id: self.robot_battery_present_callback(rid, msg),
                 10
             )
 
-            logger.info(f"Setup monitoring for robot {robot_id}")
+            logger.info(f"Setup monitoring for robot {robot_id} (DOMAIN_ID={domain_id})")
 
     def _load_map_positions(self) -> Dict[str, Pose]:
         """
@@ -358,7 +431,7 @@ class FMSNode(Node):
         """
         Set initial pose for a robot's AMCL localization
 
-        Publishes to /{namespace}/initialpose topic
+        Publishes to /initialpose topic (same DOMAIN_ID only)
 
         Args:
             robot_id: Robot ID (e.g., 'pinky1')
@@ -438,6 +511,13 @@ class FMSNode(Node):
         """
         Handle delivery complete signal from Main Server
 
+        SC-186/324: 복귀 명령 로직
+        Flow:
+        1. 작업 완료 표시
+        2. 로봇 상태를 RETURNING으로 변경
+        3. 존 해제 처리 (테이블 zone)
+        4. 로봇을 주차 위치로 이동 명령
+
         Args:
             msg: DeliveryComplete message
         """
@@ -446,18 +526,25 @@ class FMSNode(Node):
         # Find task by order ID
         task = self.task_manager.get_task_by_order_id(msg.order_id)
         if task and task.assigned_robot:
+            robot_id = task.assigned_robot
+
             # Complete task in task_manager
             self.task_manager.complete_task(task.task_id)
 
             # Complete task in scheduler
-            self.task_scheduler.robot_delivered(task.assigned_robot, task.task_id)
+            self.task_scheduler.robot_delivered(robot_id, task.task_id)
 
-            # Update robot status - start returning home
-            self.fleet_controller.robot_complete_delivery(task.assigned_robot)
+            # SC-186: Update robot status - start returning home (RETURNING state)
+            self.fleet_controller.robot_complete_delivery(robot_id)
+            logger.info(f"Robot {robot_id} status changed to RETURNING")
+
+            # Release table zone (if zone was reserved for delivery)
+            # Note: Zones might not be explicitly reserved for tables, but we clean up anyway
+            logger.info(f"Releasing delivery zone for robot {robot_id}")
 
             # Send robot back to parking spot
-            self._send_robot_to_parking(task.assigned_robot)
-            logger.info(f"Robot {task.assigned_robot} returning to parking spot after delivery")
+            self._send_robot_to_parking(robot_id)
+            logger.info(f"Robot {robot_id} returning to parking spot after delivery")
 
     def precision_parked_callback(self, msg: PrecisionParked):
         """
@@ -536,6 +623,9 @@ class FMSNode(Node):
             robot_id: Robot ID
             msg: Pose message
         """
+        # Register heartbeat for error detection
+        self.error_detector.register_heartbeat(robot_id)
+
         # Update fleet controller
         self.fleet_controller.update_robot_pose(robot_id, msg)
 
@@ -793,6 +883,34 @@ class FMSNode(Node):
                 self.fleet_controller.robot_reached_table(robot_id)
                 logger.info(f"Robot {robot_id} reached table, waiting for customer")
 
+                # SC-183/321: Get current task for TableArrival message
+                scheduler_task = self.task_scheduler.get_robot_task(robot_id)
+                task = None
+
+                if scheduler_task:
+                    # Find in task_manager for compatibility
+                    for t in self.task_manager.assigned_tasks.values():
+                        if t.assigned_robot == robot_id:
+                            task = t
+                            break
+                else:
+                    # Fallback to task_manager
+                    for t in self.task_manager.assigned_tasks.values():
+                        if t.assigned_robot == robot_id:
+                            task = t
+                            break
+
+                if task:
+                    # Publish TableArrival message to Main Server
+                    arrival_msg = TableArrival()
+                    arrival_msg.robot_id = robot_id
+                    arrival_msg.order_id = task.order_id
+                    arrival_msg.table_number = task.table_number
+                    arrival_msg.current_pose = robot.current_pose if robot.current_pose else Pose()
+                    arrival_msg.arrived_at = self.get_clock().now().to_msg()
+                    self.table_arrival_pub.publish(arrival_msg)
+                    logger.info(f"Published TableArrival for {robot_id}, order {task.order_id}, table {task.table_number}")
+
             elif robot.status == RobotState.STATUS_RETURNING:
                 # Returned home
                 self.fleet_controller.robot_returned_home(robot_id)
@@ -1024,6 +1142,247 @@ class FMSNode(Node):
             if next_robot:
                 # Grant to next robot
                 self._process_pickup_queue()
+
+    # ========================================
+    # Error Detection and Recovery
+    # ========================================
+
+    def _register_recovery_callbacks(self):
+        """Register callbacks for operator commands"""
+        self.error_recovery_handler.register_action_callback(
+            OperatorCommand.RETRY,
+            self._handle_retry_command
+        )
+        self.error_recovery_handler.register_action_callback(
+            OperatorCommand.RETURN_HOME,
+            self._handle_return_home_command
+        )
+        self.error_recovery_handler.register_action_callback(
+            OperatorCommand.EMERGENCY_STOP,
+            self._handle_emergency_stop_command
+        )
+        self.error_recovery_handler.register_action_callback(
+            OperatorCommand.CLEAR_ERROR,
+            self._handle_clear_error_command
+        )
+        logger.info("Recovery action callbacks registered")
+
+    def operator_command_callback(self, msg: OperatorCommandMsg):
+        """
+        Handle operator command from Admin GUI
+
+        Args:
+            msg: OperatorCommand message
+        """
+        robot_id = msg.robot_id
+        command_str = msg.command
+
+        # Map string to OperatorCommand enum
+        command_map = {
+            'RETRY': OperatorCommand.RETRY,
+            'RETURN_HOME': OperatorCommand.RETURN_HOME,
+            'EMERGENCY_STOP': OperatorCommand.EMERGENCY_STOP,
+            'CLEAR_ERROR': OperatorCommand.CLEAR_ERROR,
+        }
+
+        command = command_map.get(command_str)
+        if not command:
+            logger.warning(f"Unknown operator command: {command_str}")
+            return
+
+        # Submit operator action
+        self.error_recovery_handler.submit_operator_command(
+            robot_id=robot_id,
+            command=command,
+            order_id=msg.order_id if msg.order_id else None,
+            reason=msg.reason if msg.reason else "Operator action"
+        )
+
+        logger.info(f"Operator command {command_str} queued for robot {robot_id}")
+
+    def _monitor_errors(self):
+        """
+        Monitor robot errors continuously
+
+        Called at 2Hz to check for:
+        - Communication loss (heartbeat timeout)
+        - Low battery
+        - Task timeouts
+        """
+        robots = self.fleet_controller.get_all_robots()
+
+        for robot in robots:
+            # Check communication loss
+            comm_error = self.error_detector.check_communication_loss(robot.robot_id)
+            if comm_error:
+                self._handle_detected_error(comm_error)
+
+            # Check low battery
+            battery_error = self.error_detector.check_low_battery(
+                robot.robot_id,
+                robot.battery_voltage,
+                robot.current_pose
+            )
+            if battery_error:
+                self._handle_detected_error(battery_error)
+
+    def _handle_detected_error(self, error: RobotError):
+        """
+        Handle a detected error
+
+        Args:
+            error: RobotError object
+        """
+        # Check if this error already exists
+        if self.error_detector.register_error(error):
+            # New error - publish alert and update fleet controller
+            self._publish_error_alert(error)
+            self.fleet_controller.robot_error(error.robot_id, error.error_message)
+            logger.error(f"Error detected for {error.robot_id}: {error.error_type.value}")
+
+    def _publish_error_alert(self, error: RobotError):
+        """
+        Publish error alert message
+
+        Args:
+            error: RobotError object
+        """
+        alert_msg = ErrorAlert()
+        alert_msg.robot_id = error.robot_id
+        alert_msg.error_type = error.error_type.value
+        alert_msg.error_message = error.error_message
+        alert_msg.current_pose = error.current_pose if error.current_pose else Pose()
+        alert_msg.battery_voltage = error.battery_voltage
+        alert_msg.timestamp = self.get_clock().now().to_msg()
+
+        self.error_alert_pub.publish(alert_msg)
+        logger.warning(f"Published error alert for {error.robot_id}: {error.error_message}")
+
+    def _process_recovery_actions(self):
+        """
+        Process pending operator recovery actions
+
+        Called at 1Hz to execute queued recovery commands
+        """
+        robots = self.fleet_controller.get_all_robots()
+
+        for robot in robots:
+            # Check if there's a pending action
+            if self.error_recovery_handler.has_pending_action(robot.robot_id):
+                # Execute the action
+                self.error_recovery_handler.execute_action(robot.robot_id)
+
+    def _handle_retry_command(self, robot_id: str, order_id: str, reason: str):
+        """
+        Handle RETRY operator command - retry failed navigation task
+
+        Args:
+            robot_id: Target robot ID
+            order_id: Associated order ID (unused for retry)
+            reason: Reason for retry
+        """
+        robot = self.fleet_controller.get_robot(robot_id)
+        if not robot:
+            logger.warning(f"Robot {robot_id} not found")
+            return
+
+        logger.info(f"Retrying navigation for robot {robot_id}: {reason}")
+
+        # Get current target location
+        if robot.target_location:
+            target_pose = self.map_positions.get(robot.target_location)
+            if target_pose:
+                # Resend navigation goal
+                self._navigate_robot(robot_id, target_pose)
+                logger.info(f"Resent navigation goal to {robot.target_location}")
+        else:
+            logger.warning(f"No target location set for robot {robot_id}")
+
+    def _handle_return_home_command(self, robot_id: str, order_id: str, reason: str):
+        """
+        Handle RETURN_HOME operator command - force robot to return to parking
+
+        Args:
+            robot_id: Target robot ID
+            order_id: Associated order ID (unused for return home)
+            reason: Reason for return
+        """
+        robot = self.fleet_controller.get_robot(robot_id)
+        if not robot:
+            logger.warning(f"Robot {robot_id} not found")
+            return
+
+        logger.info(f"Forcing robot {robot_id} to return home: {reason}")
+
+        # Mark task as failed/abandoned if in progress
+        if robot.current_task_id:
+            logger.warning(f"Abandoning task {robot.current_task_id} for robot {robot_id}")
+            self.task_manager.abandon_task(robot.current_task_id)
+
+        # Send to parking spot
+        self._send_robot_to_parking(robot_id)
+        robot.update_status(RobotState.STATUS_RETURNING)
+
+        logger.info(f"Robot {robot_id} commanded to return home")
+
+    def _handle_emergency_stop_command(self, robot_id: str, order_id: str, reason: str):
+        """
+        Handle EMERGENCY_STOP operator command - stop robot immediately
+
+        Args:
+            robot_id: Target robot ID
+            order_id: Associated order ID (unused for emergency stop)
+            reason: Reason for emergency stop
+        """
+        robot = self.fleet_controller.get_robot(robot_id)
+        if not robot:
+            logger.warning(f"Robot {robot_id} not found")
+            return
+
+        logger.critical(f"EMERGENCY STOP for robot {robot_id}: {reason}")
+
+        # Update robot status to ERROR
+        robot.update_status(RobotState.STATUS_ERROR)
+
+        # Cancel any pending navigation
+        nav_client = self.nav_clients.get(robot_id)
+        if nav_client and hasattr(nav_client, 'cancel_all_goals'):
+            try:
+                nav_client.cancel_all_goals()
+                logger.info(f"Cancelled navigation for robot {robot_id}")
+            except Exception as e:
+                logger.warning(f"Could not cancel navigation: {e}")
+
+        # Mark task as failed
+        if robot.current_task_id:
+            logger.warning(f"Aborting task {robot.current_task_id} due to emergency stop")
+            self.task_manager.abandon_task(robot.current_task_id)
+
+        logger.critical(f"Robot {robot_id} emergency stop executed")
+
+    def _handle_clear_error_command(self, robot_id: str, order_id: str, reason: str):
+        """
+        Handle CLEAR_ERROR operator command - manually clear error state
+
+        Args:
+            robot_id: Target robot ID
+            order_id: Associated order ID (unused for clear error)
+            reason: Reason for clearing error
+        """
+        robot = self.fleet_controller.get_robot(robot_id)
+        if not robot:
+            logger.warning(f"Robot {robot_id} not found")
+            return
+
+        logger.info(f"Clearing error state for robot {robot_id}: {reason}")
+
+        # Clear error in error detector
+        if self.error_detector.clear_error(robot_id):
+            # Set robot to IDLE
+            robot.update_status(RobotState.STATUS_IDLE)
+            logger.info(f"Error cleared for robot {robot_id}, status set to IDLE")
+        else:
+            logger.warning(f"No active error for robot {robot_id} to clear")
 
 
 def main():

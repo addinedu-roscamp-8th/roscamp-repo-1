@@ -41,28 +41,27 @@ class MainServer:
     4. Main Server -> TCP -> Admin GUI (status updates)
     """
 
-    def __init__(self):
-        """Initialize Main Server components"""
-        self.running = False
+    def __init__(self, skip_mode: bool = False):
+        """
+        Initialize Main Server components
 
-        # TODO: Load these configurations from config file or environment variables
-        # Database configuration
-        db_config = {
-            'db_host': 'localhost',  # TODO: Set database server IP
-            'db_port': 5432,
-            'db_name': 'kitchmatic',
-            'db_user': 'kitchmatic_user',
-            'db_password': 'your_password_here'  # TODO: Set secure password
-        }
+        Args:
+            skip_mode: If True, enables skip mode for testing without external teams
+        """
+        self.running = False
+        self.skip_mode = skip_mode
+
+        # Load database configuration from environment or config file
+        db_config = self._load_db_config()
 
         # TCP Server configuration
         tcp_config = {
             'host': '0.0.0.0',  # Listen on all interfaces
-            'port': 9999  # TODO: Configure port if needed
+            'port': 9999
         }
 
         # Initialize components
-        logger.info("Initializing Main Server components...")
+        logger.info(f"Initializing Main Server components (skip_mode={skip_mode})...")
 
         # 1. Database Manager
         self.db = DatabaseManager(**db_config)
@@ -79,7 +78,7 @@ class MainServer:
 
         # 3. ROS Bridge
         rclpy.init()
-        self.ros_bridge = ROSBridge()
+        self.ros_bridge = ROSBridge(skip_mode=skip_mode)
         self._register_ros_handlers()
 
         # Start ROS bridge in separate thread
@@ -87,6 +86,46 @@ class MainServer:
         self.ros_thread.start()
 
         logger.info("Main Server initialized successfully")
+
+    def _load_db_config(self) -> Dict[str, Any]:
+        """
+        Load database configuration from environment variables or config file
+
+        Priority:
+        1. Environment variables (DB_HOST, DB_PORT, etc.)
+        2. database.env file
+        3. Default values
+
+        Returns:
+            Database configuration dict
+        """
+        import os
+        from pathlib import Path
+
+        # Try to load from database.env file
+        config_dir = Path(__file__).parent.parent / 'config'
+        env_file = config_dir / 'database.env'
+
+        if env_file.exists():
+            logger.info(f"Loading database config from {env_file}")
+            with open(env_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        key, value = line.split('=', 1)
+                        os.environ[key] = value
+
+        # Read from environment with defaults
+        db_config = {
+            'db_host': os.getenv('DB_HOST', 'localhost'),
+            'db_port': int(os.getenv('DB_PORT', '5432')),
+            'db_name': os.getenv('DB_NAME', 'kitchmatic'),
+            'db_user': os.getenv('DB_USER', 'kitchmatic_user'),
+            'db_password': os.getenv('DB_PASSWORD', 'your_password_here')
+        }
+
+        logger.info(f"Database config: host={db_config['db_host']}, port={db_config['db_port']}, db={db_config['db_name']}")
+        return db_config
 
     def _register_tcp_handlers(self):
         """Register TCP message handlers"""
@@ -99,6 +138,8 @@ class MainServer:
         """Register ROS message handlers"""
         self.ros_bridge.set_loading_complete_handler(self.handle_loading_complete)
         self.ros_bridge.set_fleet_status_handler(self.handle_fleet_status_update)
+        self.ros_bridge.set_pickup_arrival_handler(self.handle_pickup_arrival)
+        self.ros_bridge.set_table_arrival_handler(self.handle_table_arrival)
 
     # ========================================
     # TCP Message Handlers (from Kiosk/Admin GUI)
@@ -398,6 +439,112 @@ class MainServer:
 
         except Exception as e:
             logger.error(f"Error handling fleet status update: {e}")
+
+    def handle_pickup_arrival(self, robot_id: str, order_id: str,
+                             current_pose: Dict[str, Any], arrived_at: datetime):
+        """
+        Handle pickup arrival notification from FMS
+
+        This is called when robot arrives at point13 (kitchen pickup area).
+        Flow:
+        1. Update order status to AT_POINT13
+        2. Send CookingOrder to Robot Arm team
+        3. (Skip mode) PrecisionParked will be auto-sent by ros_bridge
+
+        Args:
+            robot_id: Robot that arrived (pinky1/2/3)
+            order_id: Associated order UUID
+            current_pose: Current robot pose at point13
+            arrived_at: Arrival timestamp
+        """
+        logger.info(f"Pickup arrival: robot={robot_id}, order={order_id}")
+
+        try:
+            # Update order status to AT_POINT13
+            self.db.update_order_status(order_id, 'AT_POINT13')
+
+            # Get order details
+            order = self.db.get_order(order_id)
+            if not order:
+                logger.error(f"Order {order_id} not found in database")
+                return
+
+            # Send cooking order to Robot Arm team
+            self.ros_bridge.publish_cooking_order(
+                order_id=order_id,
+                menu_id=order.menu_id,
+                quantity=order.quantity,
+                sauce_type=getattr(order, 'sauce_type', 'mayo'),  # Default to mayo if not set
+                assigned_robot_id=robot_id
+            )
+
+            # Broadcast status update to TCP clients
+            self.tcp_server.broadcast({
+                'type': 'order_status_update',
+                'data': {
+                    'order_id': order_id,
+                    'status': 'AT_POINT13',
+                    'table_number': order.table_number,
+                    'robot_id': robot_id,
+                    'timestamp': datetime.utcnow().isoformat()
+                }
+            })
+
+            logger.info(f"Order {order_id} marked as AT_POINT13, cooking order sent to robot arm")
+
+            # Note: If skip_mode is enabled, ros_bridge will automatically send
+            # mock precision_parked message after configured delay
+
+        except Exception as e:
+            logger.error(f"Error handling pickup arrival: {e}")
+
+    def handle_table_arrival(self, robot_id: str, order_id: str, table_number: str,
+                            current_pose: Dict[str, Any], arrived_at: datetime):
+        """
+        Handle table arrival notification from FMS
+
+        SC-183/321: This is called when robot arrives at table for delivery.
+        Flow:
+        1. Update order status to AT_TABLE
+        2. Broadcast delivery notification to kiosk/GUI (with TCP)
+        3. Wait for delivery_complete signal from customer GUI
+
+        Args:
+            robot_id: Robot that arrived (pinky1/2/3)
+            order_id: Associated order UUID
+            table_number: Target table number
+            current_pose: Current robot pose at table
+            arrived_at: Arrival timestamp
+        """
+        logger.info(f"Table arrival: robot={robot_id}, order={order_id}, table={table_number}")
+
+        try:
+            # Update order status to AT_TABLE
+            self.db.update_order_status(order_id, 'AT_TABLE')
+
+            # Get order details
+            order = self.db.get_order(order_id)
+            if not order:
+                logger.error(f"Order {order_id} not found in database")
+                return
+
+            # Broadcast delivery notification to TCP clients (kiosk/GUI)
+            # This triggers the customer GUI to show delivery notification
+            self.tcp_server.broadcast({
+                'type': 'delivery_notification',
+                'data': {
+                    'order_id': order_id,
+                    'status': 'AT_TABLE',
+                    'table_number': table_number,
+                    'robot_id': robot_id,
+                    'timestamp': datetime.utcnow().isoformat()
+                }
+            })
+
+            logger.info(f"Order {order_id} marked as AT_TABLE, delivery notification sent to kiosk")
+
+        except Exception as e:
+            logger.error(f"Error handling table arrival: {e}")
 
     # ========================================
     # Server Control
