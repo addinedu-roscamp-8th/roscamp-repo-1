@@ -11,13 +11,10 @@ from sqlalchemy.orm import sessionmaker
 def app():
     """테스트용 Flask 앱"""
     # 테스트용 설정
+    # Use same DB as .env (schema.sql tables + existing tables coexist)
     class TestConfig(Config):
         TESTING = True
-        DB_NAME = 'test_sandwich_db'
-        SQLALCHEMY_DATABASE_URI = (
-            f"postgresql://{Config.DB_USER}:{Config.DB_PASSWORD}@"
-            f"{Config.DB_HOST}:{Config.DB_PORT}/{TestConfig.DB_NAME}"
-        )
+        # DB_NAME / SQLALCHEMY_DATABASE_URI inherited from Config (.env)
     
     app = create_app(TestConfig)
     
