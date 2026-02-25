@@ -556,11 +556,6 @@ class BTrayOrchestratorNode(Node):
             raise RuntimeError(f"gripper_open:{msg}")
         await asyncio.sleep(m.settle)
 
-        self._publish_status(job_id, "RUNNING", phase="move_place_verify")
-        await self._go(place_verify, m.speed_move, m.mode)
-        await asyncio.sleep(m.settle)
-
-
         # 이미지 분석 API 호출 (서버가 /arm_b/cmd 로도 발행하므로, 여기서는 응답만 사용해 다음 동작을 결정)
         data = await asyncio.to_thread(call_analyze_arm_cmd)
         if data.get("success"):
