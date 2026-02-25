@@ -19,6 +19,13 @@ from std_msgs.msg import String
 from mycobot_sauce_msgs.action import MoveToPose
 from mycobot_sauce_msgs.srv import SetGripper, GetCorrectedPose
 
+# ✅ ADD: 공통 파라미터/포즈 로더
+from dataclasses import dataclass
+from typing import Dict, List, Any
+
+import json
+import urllib.request
+import urllib.error
 
 # -----------------------------
 # utils (keep same style)
@@ -81,6 +88,44 @@ def _get_pose6(poses: dict, key: str) -> List[float]:
     return [float(x) for x in v]
 
 
+def call_analyze_arm_cmd(api_base: str = "http://192.168.0.27:5001", timeout: float = 15.0) -> dict:
+    """
+    이미지 분석 서버 GET /analyze/arm_cmd 호출.
+    서버가 스냅샷을 받아 분석하고, 결과에 따라 ROS_DOMAIN_ID=21 로
+    ros2 topic pub --once /arm_b/cmd std_msgs/msg/String "data: 'j1|HANDOFF_PINKY'" 등 실행.
+
+    Returns:
+        {
+            "success": bool,
+            "detections": [...],
+            "command_key": "handoff_pinky" | "discard" | None,
+            "ros_published": {"success": bool, "command": str, ...} | None,
+        }
+    """
+    try:
+        import requests
+    except ImportError:
+        return {
+            "success": False,
+            "error": "requests not installed",
+            "detections": [],
+            "command_key": None,
+            "ros_published": None,
+        }
+    url = f"{api_base.rstrip('/')}/analyze/arm_cmd/ws"
+    try:
+        resp = requests.get(url, timeout=timeout)
+        resp.raise_for_status()
+        return resp.json()
+    except requests.exceptions.RequestException as e:
+        return {
+            "success": False,
+            "error": "request_failed",
+            "message": str(e),
+            "detections": [],
+            "command_key": None,
+            "ros_published": None,
+        }
 # -----------------------------
 # Node
 # -----------------------------
@@ -114,7 +159,7 @@ class BTrayOrchestratorNode(Node):
 
         # down tuning
         self.declare_parameter("z_approach_mm", 40.0)  # base down amount
-        self.declare_parameter("z_offset_mm", 10.0)    # fine tweak
+        self.declare_parameter("z_offset_mm", 15.0)    # fine tweak
 
         # gripper
         self.declare_parameter("gripper_speed", 50)
@@ -129,8 +174,8 @@ class BTrayOrchestratorNode(Node):
         self.poses = load_yaml(self.get_parameter("poses_yaml").value)
 
         # topic interface
-        self.cmd_sub = self.create_subscription(String, "/arm_b/cmd", self._on_cmd, 10)
-        self.status_pub = self.create_publisher(String, "/arm_b/status", 10)
+        self.cmd_sub = self.create_subscription(String, "/verify/cmd", self._on_cmd, 10)
+        self.status_pub = self.create_publisher(String, "/verify/status", 10)
 
         # clients
         self.gripper_cli = self.create_client(SetGripper, "set_gripper")
@@ -153,6 +198,48 @@ class BTrayOrchestratorNode(Node):
 
         self._publish_status("sys", "IDLE")
         self.get_logger().info("Ready: /arm_b/cmd -> tray orchestrator")
+
+    @dataclass
+    class MotionCfg:
+        speed_move: int
+        speed_z: int
+        mode: int
+        settle: float
+        z_move: float
+        z_offset: float
+
+    @dataclass
+    class GripperCfg:
+        gspeed: int
+        gopen: int
+        gclose: int
+
+    @staticmethod
+    def _pose_down(pose6: List[float], dz: float) -> List[float]:
+        p = list(pose6)
+        p[2] = float(p[2]) - float(dz)
+        return p
+
+
+    def _get_ctx(self) -> tuple["BTrayOrchestratorNode.MotionCfg", "BTrayOrchestratorNode.GripperCfg"]:
+        m = self.MotionCfg(
+            speed_move=int(self.get_parameter("speed_move").value),
+            speed_z=int(self.get_parameter("speed_z").value),
+            mode=int(self.get_parameter("mode").value),
+            settle=float(self.get_parameter("settle_sec").value),
+            z_move=float(self.get_parameter("z_approach_mm").value),
+            z_offset=float(self.get_parameter("z_offset_mm").value),
+        )
+        g = self.GripperCfg(
+            gspeed=int(self.get_parameter("gripper_speed").value),
+            gopen=int(self.get_parameter("gripper_open_value").value),
+            gclose=int(self.get_parameter("gripper_close_value").value),
+        )
+        return m, g
+
+
+    def _get_poses(self, *keys: str) -> Dict[str, List[float]]:
+        return {k: _get_pose6(self.poses, k) for k in keys}
 
     # -----------------------------
     # infra
@@ -351,11 +438,53 @@ class BTrayOrchestratorNode(Node):
         self._active_move_goal_handle = None
         return bool(res.result.success), str(res.result.message)
 
+    async def _move_angles(self, angles6: List[float], speed: int = 70) -> Tuple[bool, str]:
+        g = MoveToPose.Goal()
+        g.target_type = 1
+        g.target = list(angles6)
+        g.speed = int(speed)
+        g.mode = -1
+
+        fut = self.move_ac.send_goal_async(g)
+        gh = await self._await_ros_future(fut)
+        if not gh.accepted:
+            return False, "move_goal_rejected"
+
+        self._active_move_goal_handle = gh
+        fut2 = gh.get_result_async()
+        res = await self._await_ros_future(fut2)
+        self._active_move_goal_handle = None
+        return bool(res.result.success), str(res.result.message)
+
     async def _go(self, pose6: List[float], speed: int, mode: int) -> None:
         p = await self._correct_pose(pose6)
         ok, msg = await self._move_coords(p, speed=speed, mode=mode)
         if not ok:
             raise RuntimeError(msg)
+
+    async def _post_analyze(self, url: str, payload: dict, timeout_sec: float = 2.0) -> Tuple[bool, str]:
+        def _do_post() -> Tuple[bool, str]:
+            data = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(
+                url=url,
+                data=data,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
+                    body = resp.read().decode("utf-8", errors="ignore")
+                    return True, f"HTTP {resp.status} {body[:200]}"
+            except urllib.error.HTTPError as e:
+                try:
+                    body = e.read().decode("utf-8", errors="ignore")
+                except Exception:
+                    body = ""
+                return False, f"HTTPError {e.code} {body[:200]}"
+            except Exception as e:
+                return False, f"{type(e).__name__}:{e}"
+
+        return await asyncio.to_thread(_do_post)
 
     # -----------------------------
     # op dispatcher
@@ -379,153 +508,202 @@ class BTrayOrchestratorNode(Node):
     # sequences
     # -----------------------------
     async def _run_transport_verify(self, job_id: str) -> None:
-        speed_move = int(self.get_parameter("speed_move").value)
-        speed_z = int(self.get_parameter("speed_z").value)
-        mode = int(self.get_parameter("mode").value)
-        settle = float(self.get_parameter("settle_sec").value)
+        m, g = self._get_ctx()
+        poses = self._get_poses("pick_tray", "base", "place_verify", "place_verify_s2")
 
-        gspeed = int(self.get_parameter("gripper_speed").value)
-        gopen = int(self.get_parameter("gripper_open_value").value)
-        gclose = int(self.get_parameter("gripper_close_value").value)
+        pick_tray = poses["pick_tray"]
+        base = poses["base"]
+        place_verify = poses["place_verify"]
+        place_verify_s2 = poses["place_verify_s2"]
 
-        z_move = float(self.get_parameter("z_approach_mm").value)
-        z_offset = float(self.get_parameter("z_offset_mm").value)
-        release_at_verify = bool(self.get_parameter("release_at_verify").value)
-
-        pick_tray = _get_pose6(self.poses, "pick_tray")
-        base = _get_pose6(self.poses, "base")
-        place_verify = _get_pose6(self.poses, "place_verify")
-
-        pick_tray_down = list(pick_tray)
-        pick_tray_down[2] = float(pick_tray_down[2]) - (z_move + z_offset)
-
-        place_verify_down = list(place_verify)
-        place_verify_down[2] = float(place_verify_down[2]) - (z_move - z_offset)
+        pick_tray_down = self._pose_down(pick_tray, dz=m.z_move)
 
         self._publish_status(job_id, "RUNNING", phase="gripper_open")
-        ok, msg = await self._gripper(gopen, gspeed)
+        ok, msg = await self._gripper(g.gopen, g.gspeed)
         if not ok:
             raise RuntimeError(f"gripper_open:{msg}")
-        await asyncio.sleep(settle)
+        await asyncio.sleep(m.settle)
 
         self._publish_status(job_id, "RUNNING", phase="move_pick_tray")
-        await self._go(pick_tray, speed_move, mode)
-        await asyncio.sleep(settle)
+        await self._go(pick_tray, m.speed_move, m.mode)
+        await asyncio.sleep(m.settle)
 
         self._publish_status(job_id, "RUNNING", phase="move_pick_tray_down")
-        await self._go(pick_tray_down, speed_z, mode)
-        await asyncio.sleep(settle)
+        await self._go(pick_tray_down, m.speed_z, m.mode)
+        await asyncio.sleep(m.settle)
 
         self._publish_status(job_id, "RUNNING", phase="gripper_close")
-        ok, msg = await self._gripper(gclose, gspeed)
+        ok, msg = await self._gripper(g.gclose, g.gspeed)
         if not ok:
             raise RuntimeError(f"gripper_close:{msg}")
-        await asyncio.sleep(settle)
+        await asyncio.sleep(m.settle)
 
         self._publish_status(job_id, "RUNNING", phase="move_base")
-        await self._go(base, speed_move, mode)
-        await asyncio.sleep(settle)
+        await self._go(base, m.speed_move, m.mode)
+        await asyncio.sleep(m.settle)
 
         self._publish_status(job_id, "RUNNING", phase="move_place_verify")
-        await self._go(place_verify, speed_move, mode)
-        await asyncio.sleep(settle)
+        await self._go(place_verify, m.speed_move, m.mode)
+        await asyncio.sleep(m.settle)
 
         self._publish_status(job_id, "RUNNING", phase="move_place_verify_down")
-        await self._go(place_verify_down, speed_z, mode)
-        await asyncio.sleep(settle)
+        await self._go(place_verify_s2, m.speed_z, m.mode)
+        await asyncio.sleep(m.settle)
 
-        if release_at_verify:
-            self._publish_status(job_id, "RUNNING", phase="gripper_open_release")
-            ok, msg = await self._gripper(gopen, gspeed)
-            if not ok:
-                raise RuntimeError(f"gripper_open_release:{msg}")
-            await asyncio.sleep(settle)
+        self._publish_status(job_id, "RUNNING", phase="gripper_open")
+        ok, msg = await self._gripper(g.gopen, g.gspeed)
+        if not ok:
+            raise RuntimeError(f"gripper_open:{msg}")
+        await asyncio.sleep(m.settle)
 
+        # 이미지 분석 API 호출 (서버가 /arm_b/cmd 로도 발행하므로, 여기서는 응답만 사용해 다음 동작을 결정)
+        data = await asyncio.to_thread(call_analyze_arm_cmd)
+        if data.get("success"):
+            command_key = data.get("command_key")  # "handoff_pinky" | "discard" | None
+            ros_published = data.get("ros_published")
+            detections = data.get("detections", [])
+            self.get_logger().info(
+                f"analyze_arm_cmd: command_key={command_key}, ros_published={ros_published}, detections={len(detections)}"
+            )
+            self.get_logger().info(f"detections raw = {detections}")
+            if command_key == "handoff_pinky":
+                await self._run_handoff_pinky(job_id)
+            elif command_key == "discard":
+                await self._run_discard(job_id)
+        else:
+            self.get_logger().warn(
+                f"analyze_arm_cmd failed: error={data.get('error')}, message={data.get('message')}"
+            )
+
+    # --------------------------------------------------------------------------------------------------------------
     async def _run_handoff_pinky(self, job_id: str) -> None:
-        speed_move = int(self.get_parameter("speed_move").value)
-        speed_z = int(self.get_parameter("speed_z").value)
-        mode = int(self.get_parameter("mode").value)
-        settle = float(self.get_parameter("settle_sec").value)
+        m, g = self._get_ctx()
+        poses = self._get_poses("base", "place_verify", "place_verify_s2", "place_pinky")
 
-        gspeed = int(self.get_parameter("gripper_speed").value)
-        gopen = int(self.get_parameter("gripper_open_value").value)
+        base = poses["base"]
+        place_verify = poses["place_verify"]
+        place_verify_s2 = poses["place_verify_s2"]
+        place_pinky = poses["place_pinky"]
 
-        z_move = float(self.get_parameter("z_approach_mm").value)
-        z_offset = float(self.get_parameter("z_offset_mm").value)
-        release_at_pinky = bool(self.get_parameter("release_at_pinky").value)
+        # 1) verify로 가서 트레이 집기
 
-        base = _get_pose6(self.poses, "base")
-        place_pinky = _get_pose6(self.poses, "place_pinky")
+        verify_down = self._pose_down(place_verify_s2, dz=(m.z_move - m.z_offset))
+        verify_down[0]-=12
 
-        place_pinky_down = list(place_pinky)
-        place_pinky_down[2] = float(place_pinky_down[2]) - (z_move - z_offset)
+        self._publish_status(job_id, "RUNNING", phase="move_place_verify_down")
+        await self._go(verify_down, m.speed_z, m.mode)
+        await asyncio.sleep(m.settle)
 
+        self._publish_status(job_id, "RUNNING", phase="gripper_close")
+        ok, msg = await self._gripper(g.gclose, g.gspeed)
+        if not ok:
+            raise RuntimeError(f"gripper_close:{msg}")
+        await asyncio.sleep(m.settle)
+
+        verify_down[2]+=30
+        verify_up=verify_down
+        self._publish_status(job_id, "RUNNING", phase="move_verify_up")
+        await self._go(verify_up, m.speed_move, m.mode)
+        await asyncio.sleep(m.settle)
+
+        self._publish_status(job_id, "RUNNING", phase="move_place_verify")
+        await self._go(place_verify, m.speed_move, m.mode)
+        await asyncio.sleep(m.settle)
+
+        # 2) base로 복귀
         self._publish_status(job_id, "RUNNING", phase="move_base")
-        await self._go(base, speed_move, mode)
-        await asyncio.sleep(settle)
+        await self._go(base, m.speed_move, m.mode)
+        await asyncio.sleep(m.settle)
 
+        # 3) pinky 위치로 이동 후 내려놓기
         self._publish_status(job_id, "RUNNING", phase="move_place_pinky")
-        await self._go(place_pinky, speed_move, mode)
-        await asyncio.sleep(settle)
+        await self._go(place_pinky, m.speed_move, m.mode)
+        await asyncio.sleep(m.settle)
+        
+        place_turn = place_pinky
+        place_turn[5]+=90
+        
+        self._publish_status(job_id, "RUNNING", phase="move_place_turn")
+        await self._go(place_turn, m.speed_move, m.mode)
+        await asyncio.sleep(m.settle)
 
-        self._publish_status(job_id, "RUNNING", phase="move_place_pinky_down")
-        await self._go(place_pinky_down, speed_z, mode)
-        await asyncio.sleep(settle)
+        self._publish_status(job_id, "RUNNING", phase="gripper_open_release")
+        ok, msg = await self._gripper(g.gopen, g.gspeed)
+        if not ok:
+            raise RuntimeError(f"gripper_open_release:{msg}")
+        await asyncio.sleep(m.settle)
 
-        if release_at_pinky:
-            self._publish_status(job_id, "RUNNING", phase="gripper_open_release")
-            ok, msg = await self._gripper(gopen, gspeed)
-            if not ok:
-                raise RuntimeError(f"gripper_open_release:{msg}")
-            await asyncio.sleep(settle)
-
-            self._publish_status(job_id, "RUNNING", phase="move_base_return")
-            await self._go(base, speed_move, mode)
-            await asyncio.sleep(settle)
-
-    async def _run_discard(self, job_id: str) -> None:
-        speed_move = int(self.get_parameter("speed_move").value)
-        speed_z = int(self.get_parameter("speed_z").value)
-        mode = int(self.get_parameter("mode").value)
-        settle = float(self.get_parameter("settle_sec").value)
-
-        gspeed = int(self.get_parameter("gripper_speed").value)
-        gopen = int(self.get_parameter("gripper_open_value").value)
-
-        z_move = float(self.get_parameter("z_approach_mm").value)
-        z_offset = float(self.get_parameter("z_offset_mm").value)
-        release_at_trash = bool(self.get_parameter("release_at_trash").value)
-
-        base = _get_pose6(self.poses, "base")
-        trash = _get_pose6(self.poses, "trash")
-
-        trash_down = list(trash)
-        trash_down[2] = float(trash_down[2]) - (z_move - z_offset)
+        self._publish_status(job_id, "RUNNING", phase="gripper_open_release")                
+        ok, msg = await self._move_angles([0,0,0,0,0,0])
+        if not ok:
+            raise RuntimeError(f"gripper_open_release:{msg}")
 
         self._publish_status(job_id, "RUNNING", phase="move_base")
-        await self._go(base, speed_move, mode)
-        await asyncio.sleep(settle)
+        await self._go(base, m.speed_move, m.mode)
+        await asyncio.sleep(m.settle)
+    # --------------------------------------------------------------------------------------------------------------
+    async def _run_discard(self, job_id: str) -> None:
+        m, g = self._get_ctx()
+        poses = self._get_poses("base","pick_tray", "place_verify", "place_verify_s2", "trash", "trash_s2")
+        
+        base = poses["base"]
+        pick_tray = poses["pick_tray"]
+        place_verify = poses["place_verify"]
+        place_verify_s2 = poses["place_verify_s2"]
+        trash = poses["trash"]
+        trash_s2 = poses["trash_s2"]
 
+        # 1) verify로 가서 트레이 집기
+
+        verify_down = self._pose_down(place_verify_s2, dz=(m.z_move - m.z_offset))
+        verify_down[0]-=12
+        self._publish_status(job_id, "RUNNING", phase="move_place_verify_down")
+        await self._go(verify_down, m.speed_z, m.mode)
+        await asyncio.sleep(m.settle)
+
+        self._publish_status(job_id, "RUNNING", phase="gripper_close")
+        ok, msg = await self._gripper(g.gclose, g.gspeed)
+        if not ok:
+            raise RuntimeError(f"gripper_close:{msg}")
+        await asyncio.sleep(m.settle)
+
+        verify_down[2]+=30
+        verify_up=verify_down
+
+        self._publish_status(job_id, "RUNNING", phase="move_verify_up")
+        await self._go(verify_up, m.speed_move, m.mode)
+        await asyncio.sleep(m.settle)
+
+        self._publish_status(job_id, "RUNNING", phase="move_place_verify")
+        await self._go(place_verify, m.speed_move, m.mode)
+        await asyncio.sleep(m.settle)
+
+        # 3) trash로 이동 후 버리기
         self._publish_status(job_id, "RUNNING", phase="move_trash")
-        await self._go(trash, speed_move, mode)
-        await asyncio.sleep(settle)
+        await self._go(trash, m.speed_move, m.mode)
+        await asyncio.sleep(m.settle)
 
-        self._publish_status(job_id, "RUNNING", phase="move_trash_down")
-        await self._go(trash_down, speed_z, mode)
-        await asyncio.sleep(settle)
+        self._publish_status(job_id, "RUNNING", phase="move_trash_s2")
+        await self._go(trash_s2, m.speed_move, m.mode)
+        await asyncio.sleep(m.settle)
 
-        if release_at_trash:
-            self._publish_status(job_id, "RUNNING", phase="gripper_open_release")
-            ok, msg = await self._gripper(gopen, gspeed)
-            if not ok:
-                raise RuntimeError(f"gripper_open_release:{msg}")
-            await asyncio.sleep(settle)
+        # 4) base 복귀
+        self._publish_status(job_id, "RUNNING", phase="move_base")
+        await self._go(base, m.speed_move, m.mode)
+        await asyncio.sleep(m.settle)
 
-            self._publish_status(job_id, "RUNNING", phase="move_base_return")
-            await self._go(base, speed_move, mode)
-            await asyncio.sleep(settle)
+        self._publish_status(job_id, "RUNNING", phase="move_pick_tray")
+        await self._go(pick_tray, m.speed_move, m.mode)
+        await asyncio.sleep(m.settle)
+
+        self._publish_status(job_id, "RUNNING", phase="gripper_open_release")
+        ok, msg = await self._gripper(g.gopen, g.gspeed)
+        if not ok:
+            raise RuntimeError(f"gripper_open_release:{msg}")
+        await asyncio.sleep(m.settle)
 
 
+        
 def main():
     rclpy.init()
     node = BTrayOrchestratorNode()
