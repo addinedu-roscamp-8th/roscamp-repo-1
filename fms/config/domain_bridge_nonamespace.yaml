@@ -1,0 +1,251 @@
+# ==============================================================================
+# Domain Bridge Configuration for Kitchmatics FMS - No Namespace Version
+# ==============================================================================
+#
+# Main PC (DOMAIN_ID=25) <-> All Robots (NO NAMESPACE)
+#
+# Robot Configuration:
+#   - pinky1 (Mobile Robot): DOMAIN_ID=11 - Topics: /amcl_pose, /odom, /cmd_vel
+#   - pinky2 (Mobile Robot): DOMAIN_ID=12 - Topics: /amcl_pose, /odom, /cmd_vel
+#   - pinky3 (Mobile Robot): DOMAIN_ID=13 - Topics: /amcl_pose, /odom, /cmd_vel
+#   - jetcobot1 (Robot Arm): DOMAIN_ID=20
+#   - jetcobot2 (Robot Arm): DOMAIN_ID=21
+#
+# NOTE: Topics on each robot domain do NOT have namespace prefixes.
+#       They use /amcl_pose not /pinky1/amcl_pose
+#
+# ==============================================================================
+
+
+# ##############################################################################
+#                           MOBILE ROBOTS (NO NAMESPACE)
+# ##############################################################################
+
+# ==============================================================================
+# PINKY1 (DOMAIN_ID=11) - No namespace
+# ==============================================================================
+
+# pinky1 -> Main PC: Sensor and Status Topics
+- from_domain: 11
+  to_domain: 25
+  topics:
+    # AMCL Pose (no namespace on robot)
+    /amcl_pose:
+      type: geometry_msgs/msg/PoseWithCovarianceStamped
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Odometry
+    /odom:
+      type: nav_msgs/msg/Odometry
+      qos:
+        reliability: "BEST_EFFORT"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    # LiDAR Scan
+    /scan:
+      type: sensor_msgs/msg/LaserScan
+      qos:
+        reliability: "BEST_EFFORT"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 2
+
+    # Battery topics
+    /battery/voltage:
+      type: std_msgs/msg/Float32
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    /battery/present:
+      type: std_msgs/msg/Bool
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    # TF
+    /tf:
+      type: tf2_msgs/msg/TFMessage
+      qos:
+        reliability: "BEST_EFFORT"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 100
+
+    /tf_static:
+      type: tf2_msgs/msg/TFMessage
+      qos:
+        reliability: "RELIABLE"
+        durability: "TRANSIENT_LOCAL"
+        history: "KEEP_LAST"
+        depth: 100
+
+    # FollowWaypoints Action: Feedback and Status
+    /follow_waypoints/_action/feedback:
+      type: nav2_msgs/action/FollowWaypoints_FeedbackMessage
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    /follow_waypoints/_action/status:
+      type: action_msgs/msg/GoalStatusArray
+      qos:
+        reliability: "RELIABLE"
+        durability: "TRANSIENT_LOCAL"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # NavigateToPose Action: Feedback and Status
+    /navigate_to_pose/_action/feedback:
+      type: nav2_msgs/action/NavigateToPose_FeedbackMessage
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    /navigate_to_pose/_action/status:
+      type: action_msgs/msg/GoalStatusArray
+      qos:
+        reliability: "RELIABLE"
+        durability: "TRANSIENT_LOCAL"
+        history: "KEEP_LAST"
+        depth: 10
+
+
+# Main PC -> pinky1: Control Commands
+- from_domain: 25
+  to_domain: 11
+  topics:
+    /initialpose:
+      type: geometry_msgs/msg/PoseWithCovarianceStamped
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    /goal_pose:
+      type: geometry_msgs/msg/PoseStamped
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    /cmd_vel:
+      type: geometry_msgs/msg/Twist
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+  services:
+    # FollowWaypoints Action Services
+    /follow_waypoints/_action/send_goal:
+      type: nav2_msgs/action/FollowWaypoints_SendGoal
+
+    /follow_waypoints/_action/cancel_goal:
+      type: action_msgs/srv/CancelGoal
+
+    /follow_waypoints/_action/get_result:
+      type: nav2_msgs/action/FollowWaypoints_GetResult
+
+    # NavigateToPose Action Services
+    /navigate_to_pose/_action/send_goal:
+      type: nav2_msgs/action/NavigateToPose_SendGoal
+
+    /navigate_to_pose/_action/cancel_goal:
+      type: action_msgs/srv/CancelGoal
+
+    /navigate_to_pose/_action/get_result:
+      type: nav2_msgs/action/NavigateToPose_GetResult
+
+
+# ##############################################################################
+#              COORDINATOR ROBOT ARM COMMUNICATION (No Namespace)
+# ##############################################################################
+#
+# Coordinator Node uses non-namespaced topics:
+#   - /arm_a/cmd, /arm_a/status  -> Domain 20 (jetcobot_aa1f)
+#   - /arm_b/cmd, /arm_b/status  -> Domain 21 (jetcobot_aa85)
+#   - /verify/cmd, /verify/status -> Domain 21 (verify node on jetcobot_aa85)
+#
+# ==============================================================================
+
+# Domain 20 -> Domain 25: Arm A Status (no namespace)
+- from_domain: 20
+  to_domain: 25
+  topics:
+    /arm_a/status:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+# Domain 25 -> Domain 20: Arm A Command (no namespace)
+- from_domain: 25
+  to_domain: 20
+  topics:
+    /arm_a/cmd:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+# Domain 21 -> Domain 25: Arm B and Verify Status (no namespace)
+- from_domain: 21
+  to_domain: 25
+  topics:
+    /arm_b/status:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    /verify/status:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+# Domain 25 -> Domain 21: Arm B and Verify Command (no namespace)
+- from_domain: 25
+  to_domain: 21
+  topics:
+    /arm_b/cmd:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    /verify/cmd:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10

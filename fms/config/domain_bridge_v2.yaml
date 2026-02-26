@@ -1,0 +1,165 @@
+# Domain Bridge Configuration for Kitchmatics FMS
+# Following official domain_bridge YAML format
+
+name: kitchmatics_bridge
+
+# Default direction (can be overridden per topic)
+from_domain: 11
+to_domain: 25
+
+topics:
+  # ============================================================================
+  # PINKY1 (Domain 11) -> FMS (Domain 25): Sensor data
+  # ============================================================================
+
+  # AMCL Pose
+  amcl_pose:
+    type: geometry_msgs/msg/PoseWithCovarianceStamped
+    from_domain: 11
+    to_domain: 25
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # Odometry
+  odom:
+    type: nav_msgs/msg/Odometry
+    from_domain: 11
+    to_domain: 25
+    qos:
+      reliability: best_effort
+      durability: volatile
+
+  # LiDAR Scan
+  scan:
+    type: sensor_msgs/msg/LaserScan
+    from_domain: 11
+    to_domain: 25
+    qos:
+      reliability: best_effort
+      durability: volatile
+
+  # Battery voltage
+  battery/voltage:
+    type: std_msgs/msg/Float32
+    from_domain: 11
+    to_domain: 25
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # Battery present
+  battery/present:
+    type: std_msgs/msg/Bool
+    from_domain: 11
+    to_domain: 25
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # TF from pinky1
+  tf:
+    type: tf2_msgs/msg/TFMessage
+    from_domain: 11
+    to_domain: 25
+    qos:
+      reliability: best_effort
+      durability: volatile
+
+  # TF static from pinky1
+  tf_static:
+    type: tf2_msgs/msg/TFMessage
+    from_domain: 11
+    to_domain: 25
+    qos:
+      reliability: reliable
+      durability: transient_local
+
+  # ============================================================================
+  # FMS (Domain 25) -> PINKY1 (Domain 11): Control commands
+  # ============================================================================
+
+  # Initial pose command
+  initialpose:
+    type: geometry_msgs/msg/PoseWithCovarianceStamped
+    from_domain: 25
+    to_domain: 11
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # Goal pose command
+  goal_pose:
+    type: geometry_msgs/msg/PoseStamped
+    from_domain: 25
+    to_domain: 11
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # Cmd vel
+  cmd_vel:
+    type: geometry_msgs/msg/Twist
+    from_domain: 25
+    to_domain: 11
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # ============================================================================
+  # ROBOT ARMS: Domain 20 (Arm A) and Domain 21 (Arm B, Verify)
+  # ============================================================================
+
+  # Arm A status: Domain 20 -> Domain 25
+  arm_a/status:
+    type: std_msgs/msg/String
+    from_domain: 20
+    to_domain: 25
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # Arm A command: Domain 25 -> Domain 20
+  arm_a/cmd:
+    type: std_msgs/msg/String
+    from_domain: 25
+    to_domain: 20
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # Arm B status: Domain 21 -> Domain 25
+  arm_b/status:
+    type: std_msgs/msg/String
+    from_domain: 21
+    to_domain: 25
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # Arm B command: Domain 25 -> Domain 21
+  arm_b/cmd:
+    type: std_msgs/msg/String
+    from_domain: 25
+    to_domain: 21
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # Verify status: Domain 21 -> Domain 25
+  verify/status:
+    type: std_msgs/msg/String
+    from_domain: 21
+    to_domain: 25
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # Verify command: Domain 25 -> Domain 21
+  verify/cmd:
+    type: std_msgs/msg/String
+    from_domain: 25
+    to_domain: 21
+    qos:
+      reliability: reliable
+      durability: volatile

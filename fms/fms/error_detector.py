@@ -96,7 +96,8 @@ class ErrorDetector:
         self.heartbeat_timestamps: Dict[str, datetime] = {}  # {robot_id: last_heartbeat}
 
         # Configuration
-        self.heartbeat_timeout = 5.0  # seconds
+        # Note: AMCL only publishes when pose changes, so use longer timeout
+        self.heartbeat_timeout = 300.0  # seconds (5 minutes)
         self.battery_low_threshold = 0.0  # voltage
         self.pickup_timeout = 60.0  # seconds
         self.delivery_timeout = 120.0  # seconds

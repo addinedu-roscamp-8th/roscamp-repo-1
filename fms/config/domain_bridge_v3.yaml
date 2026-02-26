@@ -1,0 +1,470 @@
+# Domain Bridge Configuration for Kitchmatics FMS
+# With topic remapping: Robot topics (no namespace) -> FMS topics (with namespace)
+
+name: kitchmatics_bridge
+
+# Default direction
+from_domain: 11
+to_domain: 25
+
+topics:
+  # ============================================================================
+  # PINKY1 (Domain 11) -> FMS (Domain 25): Sensor data with namespace remapping
+  # Robot publishes /amcl_pose, FMS subscribes to /pinky1/amcl_pose
+  # ============================================================================
+
+  # AMCL Pose: /amcl_pose -> /pinky1/amcl_pose
+  amcl_pose:
+    type: geometry_msgs/msg/PoseWithCovarianceStamped
+    from_domain: 11
+    to_domain: 25
+    remap: pinky1/amcl_pose
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # Odometry: /odom -> /pinky1/odom
+  odom:
+    type: nav_msgs/msg/Odometry
+    from_domain: 11
+    to_domain: 25
+    remap: pinky1/odom
+    qos:
+      reliability: best_effort
+      durability: volatile
+
+  # LiDAR Scan: /scan -> /pinky1/scan
+  scan:
+    type: sensor_msgs/msg/LaserScan
+    from_domain: 11
+    to_domain: 25
+    remap: pinky1/scan
+    qos:
+      reliability: best_effort
+      durability: volatile
+
+  # Battery voltage: /battery/voltage -> /pinky1/battery/voltage
+  battery/voltage:
+    type: std_msgs/msg/Float32
+    from_domain: 11
+    to_domain: 25
+    remap: pinky1/battery/voltage
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # Battery present: /battery/present -> /pinky1/battery/present
+  battery/present:
+    type: std_msgs/msg/Bool
+    from_domain: 11
+    to_domain: 25
+    remap: pinky1/battery/present
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # TF from pinky1
+  tf:
+    type: tf2_msgs/msg/TFMessage
+    from_domain: 11
+    to_domain: 25
+    qos:
+      reliability: best_effort
+      durability: volatile
+
+  # TF static from pinky1
+  tf_static:
+    type: tf2_msgs/msg/TFMessage
+    from_domain: 11
+    to_domain: 25
+    qos:
+      reliability: reliable
+      durability: transient_local
+
+  # FollowWaypoints Action feedback: /follow_waypoints/_action/feedback -> /pinky1/follow_waypoints/_action/feedback
+  follow_waypoints/_action/feedback:
+    type: nav2_msgs/action/FollowWaypoints_FeedbackMessage
+    from_domain: 11
+    to_domain: 25
+    remap: pinky1/follow_waypoints/_action/feedback
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # FollowWaypoints Action status
+  follow_waypoints/_action/status:
+    type: action_msgs/msg/GoalStatusArray
+    from_domain: 11
+    to_domain: 25
+    remap: pinky1/follow_waypoints/_action/status
+    qos:
+      reliability: reliable
+      durability: transient_local
+
+  # NavigateToPose Action feedback
+  navigate_to_pose/_action/feedback:
+    type: nav2_msgs/action/NavigateToPose_FeedbackMessage
+    from_domain: 11
+    to_domain: 25
+    remap: pinky1/navigate_to_pose/_action/feedback
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # NavigateToPose Action status
+  navigate_to_pose/_action/status:
+    type: action_msgs/msg/GoalStatusArray
+    from_domain: 11
+    to_domain: 25
+    remap: pinky1/navigate_to_pose/_action/status
+    qos:
+      reliability: reliable
+      durability: transient_local
+
+
+  # ============================================================================
+  # FMS (Domain 25) -> PINKY1 (Domain 11): Control commands with namespace remapping
+  # FMS publishes /pinky1/initialpose, Robot subscribes to /initialpose
+  # ============================================================================
+
+  # Initial pose command: /pinky1/initialpose -> /initialpose
+  pinky1/initialpose:
+    type: geometry_msgs/msg/PoseWithCovarianceStamped
+    from_domain: 25
+    to_domain: 11
+    remap: initialpose
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # Goal pose command: /pinky1/goal_pose -> /goal_pose
+  pinky1/goal_pose:
+    type: geometry_msgs/msg/PoseStamped
+    from_domain: 25
+    to_domain: 11
+    remap: goal_pose
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # Cmd vel
+  pinky1/cmd_vel:
+    type: geometry_msgs/msg/Twist
+    from_domain: 25
+    to_domain: 11
+    remap: cmd_vel
+    qos:
+      reliability: reliable
+      durability: volatile
+
+
+  # ============================================================================
+  # PINKY2 (Domain 12) -> FMS (Domain 25): Sensor data with namespace remapping
+  # Robot publishes /amcl_pose, FMS subscribes to /pinky2/amcl_pose
+  # ============================================================================
+
+  # AMCL Pose: /amcl_pose -> /pinky2/amcl_pose
+  pinky2_amcl_pose:
+    topic: amcl_pose
+    type: geometry_msgs/msg/PoseWithCovarianceStamped
+    from_domain: 12
+    to_domain: 25
+    remap: pinky2/amcl_pose
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # Odometry: /odom -> /pinky2/odom
+  pinky2_odom:
+    topic: odom
+    type: nav_msgs/msg/Odometry
+    from_domain: 12
+    to_domain: 25
+    remap: pinky2/odom
+    qos:
+      reliability: best_effort
+      durability: volatile
+
+  # LiDAR Scan: /scan -> /pinky2/scan
+  pinky2_scan:
+    topic: scan
+    type: sensor_msgs/msg/LaserScan
+    from_domain: 12
+    to_domain: 25
+    remap: pinky2/scan
+    qos:
+      reliability: best_effort
+      durability: volatile
+
+  # Battery voltage: /battery/voltage -> /pinky2/battery/voltage
+  pinky2_battery_voltage:
+    topic: battery/voltage
+    type: std_msgs/msg/Float32
+    from_domain: 12
+    to_domain: 25
+    remap: pinky2/battery/voltage
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # Battery present: /battery/present -> /pinky2/battery/present
+  pinky2_battery_present:
+    topic: battery/present
+    type: std_msgs/msg/Bool
+    from_domain: 12
+    to_domain: 25
+    remap: pinky2/battery/present
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # TF from pinky2
+  pinky2_tf:
+    topic: tf
+    type: tf2_msgs/msg/TFMessage
+    from_domain: 12
+    to_domain: 25
+    qos:
+      reliability: best_effort
+      durability: volatile
+
+  # TF static from pinky2
+  pinky2_tf_static:
+    topic: tf_static
+    type: tf2_msgs/msg/TFMessage
+    from_domain: 12
+    to_domain: 25
+    qos:
+      reliability: reliable
+      durability: transient_local
+
+  # FollowWaypoints Action feedback: /follow_waypoints/_action/feedback -> /pinky2/follow_waypoints/_action/feedback
+  pinky2_follow_waypoints_feedback:
+    topic: follow_waypoints/_action/feedback
+    type: nav2_msgs/action/FollowWaypoints_FeedbackMessage
+    from_domain: 12
+    to_domain: 25
+    remap: pinky2/follow_waypoints/_action/feedback
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # FollowWaypoints Action status
+  pinky2_follow_waypoints_status:
+    topic: follow_waypoints/_action/status
+    type: action_msgs/msg/GoalStatusArray
+    from_domain: 12
+    to_domain: 25
+    remap: pinky2/follow_waypoints/_action/status
+    qos:
+      reliability: reliable
+      durability: transient_local
+
+  # NavigateToPose Action feedback
+  pinky2_navigate_to_pose_feedback:
+    topic: navigate_to_pose/_action/feedback
+    type: nav2_msgs/action/NavigateToPose_FeedbackMessage
+    from_domain: 12
+    to_domain: 25
+    remap: pinky2/navigate_to_pose/_action/feedback
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # NavigateToPose Action status
+  pinky2_navigate_to_pose_status:
+    topic: navigate_to_pose/_action/status
+    type: action_msgs/msg/GoalStatusArray
+    from_domain: 12
+    to_domain: 25
+    remap: pinky2/navigate_to_pose/_action/status
+    qos:
+      reliability: reliable
+      durability: transient_local
+
+
+  # ============================================================================
+  # FMS (Domain 25) -> PINKY2 (Domain 12): Control commands with namespace remapping
+  # FMS publishes /pinky2/initialpose, Robot subscribes to /initialpose
+  # ============================================================================
+
+  # Initial pose command: /pinky2/initialpose -> /initialpose
+  pinky2/initialpose:
+    type: geometry_msgs/msg/PoseWithCovarianceStamped
+    from_domain: 25
+    to_domain: 12
+    remap: initialpose
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # Goal pose command: /pinky2/goal_pose -> /goal_pose
+  pinky2/goal_pose:
+    type: geometry_msgs/msg/PoseStamped
+    from_domain: 25
+    to_domain: 12
+    remap: goal_pose
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # Cmd vel
+  pinky2/cmd_vel:
+    type: geometry_msgs/msg/Twist
+    from_domain: 25
+    to_domain: 12
+    remap: cmd_vel
+    qos:
+      reliability: reliable
+      durability: volatile
+
+
+  # ============================================================================
+  # ROBOT ARMS: Domain 20 (Arm A) and Domain 21 (Arm B, Verify)
+  # ============================================================================
+
+  # Arm A status: Domain 20 -> Domain 25
+  arm_a/status:
+    type: std_msgs/msg/String
+    from_domain: 20
+    to_domain: 25
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # Arm A command: Domain 25 -> Domain 20
+  arm_a/cmd:
+    type: std_msgs/msg/String
+    from_domain: 25
+    to_domain: 20
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # Arm B status: Domain 21 -> Domain 25
+  arm_b/status:
+    type: std_msgs/msg/String
+    from_domain: 21
+    to_domain: 25
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # Arm B command: Domain 25 -> Domain 21
+  arm_b/cmd:
+    type: std_msgs/msg/String
+    from_domain: 25
+    to_domain: 21
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # Verify status: Domain 21 -> Domain 25
+  verify/status:
+    type: std_msgs/msg/String
+    from_domain: 21
+    to_domain: 25
+    qos:
+      reliability: reliable
+      durability: volatile
+
+  # Verify command: Domain 25 -> Domain 21
+  verify/cmd:
+    type: std_msgs/msg/String
+    from_domain: 25
+    to_domain: 21
+    qos:
+      reliability: reliable
+      durability: volatile
+
+
+services:
+  # ============================================================================
+  # FollowWaypoints Action Services: FMS -> PINKY1
+  # FMS calls /pinky1/follow_waypoints, Robot provides /follow_waypoints
+  # ============================================================================
+
+  pinky1/follow_waypoints/_action/send_goal:
+    type: nav2_msgs/action/FollowWaypoints_SendGoal
+    from_domain: 25
+    to_domain: 11
+    remap: follow_waypoints/_action/send_goal
+
+  pinky1/follow_waypoints/_action/cancel_goal:
+    type: action_msgs/srv/CancelGoal
+    from_domain: 25
+    to_domain: 11
+    remap: follow_waypoints/_action/cancel_goal
+
+  pinky1/follow_waypoints/_action/get_result:
+    type: nav2_msgs/action/FollowWaypoints_GetResult
+    from_domain: 25
+    to_domain: 11
+    remap: follow_waypoints/_action/get_result
+
+  # ============================================================================
+  # NavigateToPose Action Services: FMS -> PINKY1
+  # ============================================================================
+
+  pinky1/navigate_to_pose/_action/send_goal:
+    type: nav2_msgs/action/NavigateToPose_SendGoal
+    from_domain: 25
+    to_domain: 11
+    remap: navigate_to_pose/_action/send_goal
+
+  pinky1/navigate_to_pose/_action/cancel_goal:
+    type: action_msgs/srv/CancelGoal
+    from_domain: 25
+    to_domain: 11
+    remap: navigate_to_pose/_action/cancel_goal
+
+  pinky1/navigate_to_pose/_action/get_result:
+    type: nav2_msgs/action/NavigateToPose_GetResult
+    from_domain: 25
+    to_domain: 11
+    remap: navigate_to_pose/_action/get_result
+
+  # ============================================================================
+  # FollowWaypoints Action Services: FMS -> PINKY2
+  # FMS calls /pinky2/follow_waypoints, Robot provides /follow_waypoints
+  # ============================================================================
+
+  pinky2/follow_waypoints/_action/send_goal:
+    type: nav2_msgs/action/FollowWaypoints_SendGoal
+    from_domain: 25
+    to_domain: 12
+    remap: follow_waypoints/_action/send_goal
+
+  pinky2/follow_waypoints/_action/cancel_goal:
+    type: action_msgs/srv/CancelGoal
+    from_domain: 25
+    to_domain: 12
+    remap: follow_waypoints/_action/cancel_goal
+
+  pinky2/follow_waypoints/_action/get_result:
+    type: nav2_msgs/action/FollowWaypoints_GetResult
+    from_domain: 25
+    to_domain: 12
+    remap: follow_waypoints/_action/get_result
+
+  # ============================================================================
+  # NavigateToPose Action Services: FMS -> PINKY2
+  # ============================================================================
+
+  pinky2/navigate_to_pose/_action/send_goal:
+    type: nav2_msgs/action/NavigateToPose_SendGoal
+    from_domain: 25
+    to_domain: 12
+    remap: navigate_to_pose/_action/send_goal
+
+  pinky2/navigate_to_pose/_action/cancel_goal:
+    type: action_msgs/srv/CancelGoal
+    from_domain: 25
+    to_domain: 12
+    remap: navigate_to_pose/_action/cancel_goal
+
+  pinky2/navigate_to_pose/_action/get_result:
+    type: nav2_msgs/action/NavigateToPose_GetResult
+    from_domain: 25
+    to_domain: 12
+    remap: navigate_to_pose/_action/get_result

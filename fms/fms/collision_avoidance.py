@@ -133,7 +133,7 @@ class CollisionAvoidanceController:
     """
 
     # 상수 정의
-    PICKUP_WAITING_NODE = "point13"           # 픽업 대기 1순위 위치
+    PICKUP_WAITING_NODE = "pickup_spot"       # 픽업 대기 위치
     SECONDARY_WAITING_NODES = ["point2", "point3"]  # 보조 대기 위치
     DEFAULT_WAIT_TIMEOUT = 30.0               # 기본 대기 타임아웃 (초)
     ROBOT_SPEED_MPS = 0.3                     # 로봇 평균 속도 (m/s)
@@ -221,17 +221,25 @@ class CollisionAvoidanceController:
 
         logger.info(f"[{robot_id}] 충돌 감지: {conflict.conflict_type.value} - {conflict.message}")
 
-        # 3단계: 대체 경로 탐색
+        # 3단계: 대체 경로 탐색 (단, 기본 경로의 1.5배 이하인 경우만)
         blocked_nodes = set(conflict.conflicting_nodes)
         alternative_path = self.find_alternative_path(robot_id, start, goal, blocked_nodes)
+        base_path_length = len(base_path)
 
         if alternative_path:
-            # 대체 경로에서 다시 충돌 검사
-            alt_conflict = self.detect_collision(robot_id, alternative_path)
-            if not alt_conflict.has_conflict:
-                logger.info(f"[{robot_id}] 대체 경로 사용: {' -> '.join(alternative_path)}")
-                self.update_robot_path(robot_id, alternative_path)
-                return alternative_path, True
+            # 대체 경로가 기본 경로의 1.5배 이상이면 대기 선택
+            if len(alternative_path) > base_path_length * 1.5:
+                logger.info(f"[{robot_id}] 대체 경로가 너무 김 ({len(alternative_path)} vs {base_path_length}), 대기 선택")
+                alternative_path = None
+            else:
+                # 대체 경로에서 다시 충돌 검사
+                alt_conflict = self.detect_collision(robot_id, alternative_path)
+                if not alt_conflict.has_conflict:
+                    logger.info(f"[{robot_id}] 대체 경로 사용: {' -> '.join(alternative_path)}")
+                    self.update_robot_path(robot_id, alternative_path)
+                    return alternative_path, True
+                else:
+                    alternative_path = None
 
         # 4단계: 대기 위치 결정
         waiting_position = self.determine_waiting_position(robot_id, conflict)
@@ -293,13 +301,38 @@ class CollisionAvoidanceController:
                 conflicting_nodes.append(node)
                 blocked_end = idx
 
-        # 2. 예약된 노드 확인
+        # 2. 예약된 노드 확인 (예약한 로봇이 이미 지나간 노드는 제외)
         for idx, node in enumerate(planned_path):
             if node in self.reserved_nodes and self.reserved_nodes[node] != robot_id:
+                reserving_robot_id = self.reserved_nodes[node]
+
+                # 예약한 로봇의 현재 위치 확인
+                reserving_robot = self.fleet_controller.get_robot(reserving_robot_id)
+                if reserving_robot and reserving_robot.current_pose:
+                    # 예약한 로봇이 현재 위치한 노드 찾기
+                    rx = reserving_robot.current_pose.position.x
+                    ry = reserving_robot.current_pose.position.y
+                    reserving_current_node = self.navigation_graph.get_nearest_waypoint(rx, ry)
+
+                    # 예약한 로봇의 경로에서 현재 노드와 예약된 노드의 위치 비교
+                    reserving_path = self.robot_paths.get(reserving_robot_id, [])
+                    if reserving_path and reserving_current_node:
+                        try:
+                            current_idx_in_path = reserving_path.index(reserving_current_node)
+                            reserved_node_idx = reserving_path.index(node) if node in reserving_path else -1
+
+                            # 예약한 로봇이 이미 해당 노드를 지났으면 (현재 인덱스가 더 크면) 충돌 아님
+                            if reserved_node_idx != -1 and current_idx_in_path > reserved_node_idx:
+                                # 로봇이 이미 지나간 노드 - 예약 해제
+                                del self.reserved_nodes[node]
+                                continue
+                        except ValueError:
+                            pass
+
                 if conflict_type == ConflictType.NO_CONFLICT:
                     conflict_type = ConflictType.NODE_RESERVED
                     blocked_start = idx
-                    conflicting_robot = self.reserved_nodes[node]
+                    conflicting_robot = reserving_robot_id
                 if node not in conflicting_nodes:
                     conflicting_nodes.append(node)
                 blocked_end = max(blocked_end, idx)
@@ -552,6 +585,8 @@ class CollisionAvoidanceController:
         for node in nodes_to_remove:
             del self.reserved_nodes[node]
 
+        logger.info(f"[{robot_id}] 경로 클리어: 예약 해제 노드 {nodes_to_remove}")
+
         # 경로 정보 삭제
         if robot_id in self.robot_paths:
             del self.robot_paths[robot_id]
@@ -562,6 +597,58 @@ class CollisionAvoidanceController:
         self._clear_wait_state(robot_id)
 
         logger.info(f"[{robot_id}] 경로 및 예약 정보 클리어")
+
+    def update_robot_position(self, robot_id: str, x: float, y: float) -> List[str]:
+        """
+        로봇 위치 업데이트 시 지나간 노드의 예약을 실시간으로 해제
+
+        로봇이 특정 노드를 지나가면 해당 노드의 예약을 즉시 해제하여
+        다른 로봇이 해당 노드를 사용할 수 있도록 합니다.
+
+        Args:
+            robot_id: 로봇 ID
+            x: 현재 X 좌표
+            y: 현재 Y 좌표
+
+        Returns:
+            해제된 노드 목록
+        """
+        released_nodes = []
+
+        # 로봇의 경로가 없으면 무시
+        path = self.robot_paths.get(robot_id)
+        if not path:
+            return released_nodes
+
+        # 현재 위치에서 가장 가까운 노드 찾기
+        nearest_node = self.navigation_graph.get_nearest_waypoint(x, y)
+        if not nearest_node:
+            return released_nodes
+
+        # 현재 노드가 경로에 없으면 무시
+        if nearest_node not in path:
+            return released_nodes
+
+        # 현재 노드의 인덱스 찾기
+        try:
+            current_idx = path.index(nearest_node)
+        except ValueError:
+            return released_nodes
+
+        # 현재 노드 이전의 모든 노드 예약 해제
+        for i in range(current_idx):
+            node = path[i]
+            if node in self.reserved_nodes and self.reserved_nodes[node] == robot_id:
+                del self.reserved_nodes[node]
+                released_nodes.append(node)
+
+        # 경로 인덱스 업데이트
+        self.robot_path_indices[robot_id] = current_idx
+
+        if released_nodes:
+            logger.info(f"[{robot_id}] 실시간 노드 해제: {released_nodes} (현재 위치: {nearest_node})")
+
+        return released_nodes
 
     def get_robot_current_node(self, robot_id: str) -> Optional[str]:
         """
@@ -965,7 +1052,10 @@ class CollisionAvoidanceController:
 
     def _get_occupied_nodes(self, exclude_robot: Optional[str] = None) -> Dict[str, str]:
         """
-        다른 로봇들이 점유 중인 노드 목록 반환
+        다른 로봇들이 점유 중인 노드 목록 반환 (현재 위치 + 실제 남은 경로)
+
+        로봇의 현재 위치를 기반으로 경로상에서 이미 지나간 노드는 제외하고,
+        앞으로 지나갈 노드만 점유로 표시합니다.
 
         Args:
             exclude_robot: 제외할 로봇 ID
@@ -979,13 +1069,39 @@ class CollisionAvoidanceController:
             if robot.robot_id == exclude_robot:
                 continue
 
-            # 로봇의 현재 포즈에서 가장 가까운 노드 찾기
+            nearest_node = None
+
+            # 1. 로봇의 현재 포즈에서 가장 가까운 노드
             if robot.current_pose:
                 x = robot.current_pose.position.x
                 y = robot.current_pose.position.y
                 nearest_node = self.navigation_graph.get_nearest_waypoint(x, y)
                 if nearest_node:
                     occupied[nearest_node] = robot.robot_id
+
+            # 2. 로봇의 경로에서 현재 위치 이후 노드만 점유로 표시
+            full_path = self.robot_paths.get(robot.robot_id, [])
+            if full_path and nearest_node:
+                # 현재 가장 가까운 노드가 경로에 있으면, 그 이후 노드만 포함
+                try:
+                    current_idx = full_path.index(nearest_node)
+                    # 현재 노드 이후의 경로만 점유
+                    ahead_path = full_path[current_idx + 1:]
+                    for node in ahead_path:
+                        if node not in occupied:
+                            occupied[node] = robot.robot_id
+                except ValueError:
+                    # 현재 노드가 경로에 없으면 전체 남은 경로 사용 (fallback)
+                    remaining_path = self.get_robot_remaining_path(robot.robot_id)
+                    for node in remaining_path:
+                        if node not in occupied:
+                            occupied[node] = robot.robot_id
+            elif full_path:
+                # 현재 위치 정보 없으면 기존 방식 사용
+                remaining_path = self.get_robot_remaining_path(robot.robot_id)
+                for node in remaining_path:
+                    if node not in occupied:
+                        occupied[node] = robot.robot_id
 
         return occupied
 
