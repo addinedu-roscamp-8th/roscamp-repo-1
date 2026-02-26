@@ -31,7 +31,7 @@ cmd_vel (속도 명령)
 
 ### 설정 파일 위치
 
-**`/home/gw/kitchmatics/roscamp-repo-1/mobile_robot/params/nav2_params.yaml`**
+**`mobile_robot/params/nav2_params.yaml`** (프로젝트 루트 기준)
 
 ```yaml
 local_costmap:
@@ -324,9 +324,9 @@ ros2 action send_goal /pinky1/navigate_to_pose nav2_msgs/action/NavigateToPose '
 
 ## 관련 파일
 
-- **설정**: `/home/gw/kitchmatics/roscamp-repo-1/mobile_robot/params/nav2_params.yaml`
-- **Launch**: `/home/gw/kitchmatics/roscamp-repo-1/mobile_robot/launch/bringup_launch.py`
-- **FMS**: `/home/gw/kitchmatics/roscamp-repo-1/fms/fms/fms_node.py`
+- **설정**: `mobile_robot/params/nav2_params.yaml`
+- **Launch**: `mobile_robot/launch/bringup_launch.py`
+- **FMS** (연동): `fms/fms/fms_node.py`
 
 ## ROS2 디버깅 명령어
 

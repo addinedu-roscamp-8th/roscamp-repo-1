@@ -34,6 +34,8 @@ This directory contains comprehensive interface and testing documentation for th
    - Troubleshooting guide
    - **Best for:** Development testing, test automation
 
+4. **개발 영역별 문서**: Backend → `app/backend/docs/`, Mobile Robot → `mobile_robot/docs/`, DB 서버 → `database/db_server/docs/`. 이력은 [문서_이동_이력.md](./문서_이동_이력.md) 참고.
+
 ---
 
 ## Which Document Should I Read?
