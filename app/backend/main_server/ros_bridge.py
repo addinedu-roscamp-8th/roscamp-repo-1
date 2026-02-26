@@ -55,7 +55,7 @@ class ROSBridge(Node):
 
         self.cooking_order_pub = self.create_publisher(
             CookingOrder,
-            '/robot_arm/cooking_order',
+            '/cooking/order',
             10
         )
 
@@ -74,7 +74,7 @@ class ROSBridge(Node):
         # Subscribers
         self.loading_complete_sub = self.create_subscription(
             LoadingComplete,
-            '/robot_arm/loading_complete',
+            '/cooking/loading_complete',
             self.loading_complete_callback,
             10
         )

@@ -1,47 +1,48 @@
 """
-TCP Server for Kitchmatic Main Server
-Handles communication with Kiosks and Admin GUI
+GUI TCP Server - Infrastructure Layer
+TCP server for receiving orders from GUI and sending notifications
+Port: 9000
 """
 
 import socket
 import threading
 import json
 import logging
-from typing import Callable, Dict, Any
-from datetime import datetime
+from typing import Dict, Any, Callable, Optional, List
 
 logger = logging.getLogger(__name__)
 
 
-class TCPServer:
+class GUITCPServer:
     """
-    TCP Server for handling connections from Kiosks and Admin GUI
-    Protocol: JSON-based message exchange
+    TCP Server for GUI Communication
+
+    Handles:
+    - Order reception from Customer GUI (port 9000)
+    - Delivery notifications to Customer GUI
+    - Delivery confirmation from Customer GUI
     """
 
-    def __init__(self, host='0.0.0.0', port=9999):
-        """
-        Initialize TCP Server
-
-        TODO: Configure these values in environment variables or config file:
-        - host: Server IP address (default: 0.0.0.0 for all interfaces)
-        - port: Server port (default: 9999)
-        """
+    def __init__(self, host: str = '0.0.0.0', port: int = 9000):
         self.host = host
         self.port = port
-        self.server_socket = None
+        self.server_socket: Optional[socket.socket] = None
         self.running = False
-        self.clients = {}  # {client_id: socket}
+        self.clients: Dict[str, socket.socket] = {}  # {client_id: socket}
         self.client_lock = threading.Lock()
-        self.message_handlers = {}
+
+        # Message handlers (registered by application layer)
+        self.message_handlers: Dict[str, Callable] = {}
+
+        logger.info(f"GUITCPServer initialized on {host}:{port}")
 
     def register_handler(self, message_type: str, handler: Callable):
         """
-        Register a message handler for specific message type
+        Register message handler for specific message type
 
         Args:
-            message_type: Type of message (e.g., 'order_request', 'order_status_query')
-            handler: Callback function to handle the message
+            message_type: Message type (e.g., 'new_order', 'delivery_complete')
+            handler: Callback function
         """
         self.message_handlers[message_type] = handler
         logger.info(f"Registered handler for message type: {message_type}")
@@ -55,7 +56,7 @@ class TCPServer:
             self.server_socket.listen(10)
             self.running = True
 
-            logger.info(f"TCP Server started on {self.host}:{self.port}")
+            logger.info(f"GUI TCP Server started on {self.host}:{self.port}")
 
             # Start accept thread
             accept_thread = threading.Thread(target=self._accept_clients, daemon=True)
@@ -63,7 +64,7 @@ class TCPServer:
 
             return True
         except Exception as e:
-            logger.error(f"Failed to start TCP server: {e}")
+            logger.error(f"Failed to start GUI TCP server: {e}")
             return False
 
     def stop(self):
@@ -86,14 +87,15 @@ class TCPServer:
             except:
                 pass
 
-        logger.info("TCP Server stopped")
+        logger.info("GUI TCP Server stopped")
 
     def _accept_clients(self):
         """Accept incoming client connections"""
         while self.running:
             try:
+                self.server_socket.settimeout(1.0)
                 client_socket, client_address = self.server_socket.accept()
-                logger.info(f"New client connected from {client_address}")
+                logger.info(f"New GUI client connected from {client_address}")
 
                 # Start client handler thread
                 client_thread = threading.Thread(
@@ -102,11 +104,13 @@ class TCPServer:
                     daemon=True
                 )
                 client_thread.start()
+            except socket.timeout:
+                continue
             except Exception as e:
                 if self.running:
                     logger.error(f"Error accepting client: {e}")
 
-    def _recv_exact(self, client_socket, num_bytes: int) -> bytes:
+    def _recv_exact(self, client_socket: socket.socket, num_bytes: int) -> bytes:
         """Receive exactly num_bytes from socket"""
         data = b''
         while len(data) < num_bytes:
@@ -116,13 +120,13 @@ class TCPServer:
             data += chunk
         return data
 
-    def _send_with_header(self, client_socket, message: dict):
+    def _send_with_header(self, client_socket: socket.socket, message: dict):
         """Send message with 4-byte length header"""
         json_data = json.dumps(message, ensure_ascii=False).encode('utf-8')
         length_header = len(json_data).to_bytes(4, byteorder='big')
         client_socket.sendall(length_header + json_data)
 
-    def _handle_client(self, client_socket, client_address):
+    def _handle_client(self, client_socket: socket.socket, client_address):
         """Handle individual client connection"""
         client_id = f"{client_address[0]}:{client_address[1]}"
 
@@ -147,7 +151,7 @@ class TCPServer:
                 try:
                     # Parse JSON message
                     message = json.loads(data.decode('utf-8'))
-                    logger.debug(f"Received from {client_id}: {message}")
+                    logger.info(f"Received from GUI {client_id}: {message}")
 
                     # Handle message
                     response = self._process_message(message)
@@ -166,6 +170,11 @@ class TCPServer:
 
                 except Exception as e:
                     logger.error(f"Error processing message from {client_id}: {e}")
+                    error_response = {
+                        'status': 'error',
+                        'message': str(e)
+                    }
+                    self._send_with_header(client_socket, error_response)
 
         except Exception as e:
             logger.error(f"Error handling client {client_id}: {e}")
@@ -175,64 +184,66 @@ class TCPServer:
                 if client_id in self.clients:
                     del self.clients[client_id]
             client_socket.close()
-            logger.info(f"Client {client_id} disconnected")
+            logger.info(f"GUI client {client_id} disconnected")
 
     def _process_message(self, message: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Process incoming message and route to appropriate handler
+        Process incoming message from GUI
 
-        Message format:
+        Message format (supports both styles):
+        Style 1 (command-based):
         {
-            "type": "message_type",  # or "command" for legacy clients
-            "data": {...}
+            "command": "new_order" | "delivery_complete",
+            "table_number": 1,
+            "order": {...} | "order_id": "ORD-XXX"
+        }
+
+        Style 2 (type-based):
+        {
+            "type": "delivery_complete",
+            "data": {"order_id": "ORD-XXX", "table_number": "1"}
         }
 
         Response format:
         {
-            "status": "success" or "error",
+            "status": "success" | "error",
             "data": {...} or "message": "error message"
         }
         """
-        # Support both 'type' and 'command' fields for compatibility
-        message_type = message.get('type') or message.get('command')
-        message_data = message.get('data', {})
+        # Support both 'command' and 'type' fields
+        command = message.get('command') or message.get('type')
 
-        # For legacy 'command' style, the data might be in other fields
-        if not message_data and message.get('command'):
-            # Extract data from other fields (e.g., order, table_number)
-            message_data = {k: v for k, v in message.items() if k != 'command'}
-
-        if not message_type:
+        if not command:
             return {
                 'status': 'error',
-                'message': 'Missing message type'
+                'message': 'Missing command or type field'
             }
 
         # Route to handler
-        handler = self.message_handlers.get(message_type)
+        handler = self.message_handlers.get(command)
         if handler:
             try:
-                result = handler(message_data)
+                result = handler(message)
                 return {
                     'status': 'success',
                     'data': result
                 }
             except Exception as e:
-                logger.error(f"Handler error for {message_type}: {e}")
+                logger.error(f"Handler error for {command}: {e}")
                 return {
                     'status': 'error',
                     'message': str(e)
                 }
         else:
-            logger.warning(f"No handler registered for message type: {message_type}")
+            logger.warning(f"No handler registered for command: {command}")
             return {
                 'status': 'error',
-                'message': f'Unknown message type: {message_type}'
+                'message': f'Unknown command: {command}'
             }
 
     def broadcast(self, message: Dict[str, Any]):
         """
-        Broadcast message to all connected clients
+        Broadcast message to all connected GUI clients
 
         Args:
             message: Message dict to broadcast
@@ -246,6 +257,7 @@ class TCPServer:
             for client_id, client_socket in self.clients.items():
                 try:
                     client_socket.sendall(message_data)
+                    logger.debug(f"Sent notification to GUI client {client_id}")
                 except Exception as e:
                     logger.error(f"Failed to send to {client_id}: {e}")
                     disconnected.append(client_id)
@@ -277,117 +289,60 @@ class TCPServer:
                 logger.warning(f"Client {client_id} not found")
                 return False
 
+    def get_connected_clients(self) -> List[str]:
+        """Get list of connected client IDs"""
+        with self.client_lock:
+            return list(self.clients.keys())
 
-# ========================================
-# Message Type Definitions
-# ========================================
 
+# Message format documentation
 """
 Supported Message Types:
 
-1. order_request (from Kiosk)
+1. new_order (from GUI to FMS)
    Request:
    {
-       "type": "order_request",
-       "data": {
-           "table_number": "T01",
-           "menu_id": "M001",
-           "quantity": 1,
-           "sauce_type": "mayo",
-           "voice_order": false
+       "command": "new_order",
+       "table_number": 1,
+       "order": {
+           "items": [
+               {"menu_id": "M001", "quantity": 1}
+           ]
        }
    }
    Response:
    {
        "status": "success",
        "data": {
-           "order_id": "uuid-string",
-           "estimated_time": 120
+           "order_id": "ORD-20260225123456-0001",
+           "message": "Order accepted"
        }
    }
 
-2. order_status_query (from Kiosk or Admin GUI)
+2. delivery_complete (from GUI to FMS)
    Request:
    {
-       "type": "order_status_query",
-       "data": {
-           "order_id": "uuid-string"
-       }
+       "command": "delivery_complete",
+       "order_id": "ORD-20260225123456-0001",
+       "table_number": 1
    }
    Response:
    {
        "status": "success",
        "data": {
-           "order_id": "uuid-string",
-           "status": "COOKING",
-           "table_number": "T01",
-           "created_at": "timestamp",
-           "updated_at": "timestamp"
+           "message": "Delivery confirmed"
        }
    }
 
-3. fleet_status_query (from Admin GUI)
-   Request:
-   {
-       "type": "fleet_status_query",
-       "data": {}
-   }
-   Response:
-   {
-       "status": "success",
-       "data": {
-           "robots": [
-               {
-                   "robot_id": "pinky1",
-                   "status": "IDLE",
-                   "battery_voltage": 24.5,
-                   "current_task": null
-               },
-               ...
-           ],
-           "pending_orders": 2,
-           "active_orders": 1
-       }
-   }
-
-4. delivery_complete (from Kiosk)
-   Request:
-   {
-       "type": "delivery_complete",
-       "data": {
-           "order_id": "uuid-string",
-           "table_number": "T01"
-       }
-   }
-   Response:
-   {
-       "status": "success",
-       "data": {
-           "message": "Order completed"
-       }
-   }
-
-5. order_status_update (broadcast from Main Server to all clients)
+3. delivery_notification (from FMS to GUI) - Push notification
    Broadcast:
    {
-       "type": "order_status_update",
+       "type": "delivery_notification",
        "data": {
-           "order_id": "uuid-string",
-           "status": "DELIVERING",
-           "table_number": "T01",
-           "timestamp": "timestamp"
-       }
-   }
-
-6. robot_status_update (broadcast from Main Server to Admin GUI)
-   Broadcast:
-   {
-       "type": "robot_status_update",
-       "data": {
+           "order_id": "ORD-20260225123456-0001",
+           "table_number": 1,
            "robot_id": "pinky1",
-           "status": "BUSY",
-           "battery_voltage": 24.3,
-           "timestamp": "timestamp"
+           "status": "arrived"
        }
    }
 """

@@ -5,11 +5,44 @@ import socket
 import json
 import sys
 import os
+import threading
 from typing import Optional, List
 from PyQt5.QtCore import QObject, pyqtSignal, QThread
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from common import Config, MenuItem, Order, OrderStatus
+
+
+class MessageListenerThread(threading.Thread):
+    """비동기 메시지 리스너 스레드"""
+
+    def __init__(self, tcp_client: 'TCPClient'):
+        super().__init__(daemon=True)
+        self.tcp_client = tcp_client
+        self.running = True
+
+    def run(self):
+        """스레드 실행: 계속해서 메시지 수신"""
+        print('[MessageListener] 리스너 스레드 시작')
+        while self.running and self.tcp_client.is_connected:
+            try:
+                # 메시지 수신 (논블로킹)
+                message = self.tcp_client._receive_data_internal()
+                if message:
+                    # 메시지 타입에 따라 시그널 emit
+                    message_type = message.get('type')
+                    if message_type == 'delivery_notification':
+                        self.tcp_client.delivery_notification_signal.emit(message)
+                    else:
+                        self.tcp_client.data_received_signal.emit(message)
+            except Exception as e:
+                if self.running:
+                    print(f'[MessageListener] 오류: {e}')
+                break
+
+    def stop(self):
+        """스레드 종료"""
+        self.running = False
 
 
 class TCPClient(QObject):
@@ -20,6 +53,7 @@ class TCPClient(QObject):
     disconnected_signal = pyqtSignal()
     error_signal = pyqtSignal(str)
     data_received_signal = pyqtSignal(dict)
+    delivery_notification_signal = pyqtSignal(dict)
 
     def __init__(self, host: str, port: int):
         super().__init__()
@@ -27,6 +61,8 @@ class TCPClient(QObject):
         self.port = port
         self.socket = None
         self.is_connected = False
+        self.listener_thread = None
+        self.listener_lock = threading.Lock()
 
     def connect(self) -> bool:
         """서버에 연결"""
@@ -37,6 +73,10 @@ class TCPClient(QObject):
             self.is_connected = True
             self.connected_signal.emit()
             print(f'[TCPClient] 연결 성공: {self.host}:{self.port}')
+
+            # 메시지 리스너 스레드 시작
+            self._start_listener()
+
             return True
         except Exception as e:
             error_msg = f'연결 실패: {str(e)}'
@@ -46,6 +86,9 @@ class TCPClient(QObject):
 
     def disconnect(self):
         """연결 종료"""
+        # 리스너 스레드 종료
+        self._stop_listener()
+
         if self.socket:
             try:
                 self.socket.close()
@@ -80,8 +123,25 @@ class TCPClient(QObject):
             self.error_signal.emit(error_msg)
             return False
 
-    def receive_data(self) -> Optional[dict]:
-        """데이터 수신"""
+    def _start_listener(self):
+        """메시지 리스너 스레드 시작"""
+        with self.listener_lock:
+            if self.listener_thread is None or not self.listener_thread.is_alive():
+                self.listener_thread = MessageListenerThread(self)
+                self.listener_thread.start()
+                print('[TCPClient] 메시지 리스너 스레드 시작됨')
+
+    def _stop_listener(self):
+        """메시지 리스너 스레드 종료"""
+        with self.listener_lock:
+            if self.listener_thread and self.listener_thread.is_alive():
+                self.listener_thread.stop()
+                self.listener_thread.join(timeout=2.0)
+                self.listener_thread = None
+                print('[TCPClient] 메시지 리스너 스레드 종료됨')
+
+    def _receive_data_internal(self) -> Optional[dict]:
+        """내부용 데이터 수신 (리스너 스레드용)"""
         if not self.is_connected or not self.socket:
             return None
 
@@ -104,15 +164,22 @@ class TCPClient(QObject):
             # JSON 파싱
             json_data = message.decode('utf-8')
             data = json.loads(json_data)
-            print(f'[TCPClient] 데이터 수신: {json_data[:100]}...')
-            self.data_received_signal.emit(data)
+            print(f'[TCPClient] 메시지 수신: {json_data[:100]}...')
             return data
 
-        except Exception as e:
-            error_msg = f'수신 실패: {str(e)}'
-            print(f'[TCPClient] {error_msg}')
-            self.error_signal.emit(error_msg)
+        except socket.timeout:
+            # 타임아웃은 정상 (논블로킹 처리)
             return None
+        except Exception as e:
+            if self.is_connected:
+                error_msg = f'수신 실패: {str(e)}'
+                print(f'[TCPClient] {error_msg}')
+                self.error_signal.emit(error_msg)
+            return None
+
+    def receive_data(self) -> Optional[dict]:
+        """데이터 수신 (요청-응답용)"""
+        return self._receive_data_internal()
 
 
 class OrderServiceClient(QObject):
@@ -121,12 +188,14 @@ class OrderServiceClient(QObject):
     # 시그널 정의
     menus_received_signal = pyqtSignal(list)  # 메뉴 리스트 수신
     order_response_signal = pyqtSignal(dict)  # 주문 응답 수신
+    delivery_notification_signal = pyqtSignal(dict)  # 배달 알림 수신
     error_signal = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
         self.client = TCPClient(*Config.get_order_ms_address())
         self.client.error_signal.connect(self.error_signal)
+        self.client.delivery_notification_signal.connect(self.delivery_notification_signal)
 
     def connect(self) -> bool:
         """주문 MS에 연결"""
@@ -155,9 +224,10 @@ class OrderServiceClient(QObject):
             self.error_signal.emit('메뉴 조회 실패')
             return []
 
-        # MenuItem 객체 리스트로 변환
+        # MenuItem 객체 리스트로 변환 (data.menus 또는 menus 에서 가져옴)
         menu_items = []
-        for menu_data in response.get('menus', []):
+        data = response.get('data', response)  # data 필드가 있으면 그 안에서, 없으면 response에서
+        for menu_data in data.get('menus', []):
             menu_item = MenuItem.from_dict(menu_data)
             menu_items.append(menu_item)
 
@@ -181,12 +251,14 @@ class OrderServiceClient(QObject):
         # 응답 수신
         response = self.client.receive_data()
         if not response or response.get('status') != 'success':
-            error_msg = response.get('message', '주문 전송 실패') if response else '주문 전송 실패'
+            data = response.get('data', response) if response else {}
+            error_msg = data.get('message', '주문 전송 실패')
             self.error_signal.emit(error_msg)
             return None
 
-        # 주문 번호 반환
-        order_id = response.get('order_id')
+        # 주문 번호 반환 (data.order_id 또는 order_id에서 가져옴)
+        data = response.get('data', response)
+        order_id = data.get('order_id')
         print(f'[OrderService] 주문 성공 - 주문 번호: {order_id}')
         self.order_response_signal.emit(response)
         return order_id
@@ -215,8 +287,20 @@ class OrderServiceClient(QObject):
         return True
 
 
-class MockOrderServiceClient(OrderServiceClient):
+class MockOrderServiceClient(QObject):
     """Mock 주문 서비스 클라이언트 (테스트용)"""
+
+    # 클래스 레벨에서 시그널 정의
+    menus_received_signal = pyqtSignal(list)
+    order_response_signal = pyqtSignal(dict)
+    delivery_notification_signal = pyqtSignal(dict)
+    error_signal = pyqtSignal(str)
+
+    def __init__(self):
+        """Mock 클라이언트 초기화 (실제 TCP 클라이언트 없이)"""
+        super().__init__()
+        self.client = None
+        self.mock_timer = None
 
     def connect(self) -> bool:
         """가상 연결"""
@@ -232,9 +316,9 @@ class MockOrderServiceClient(OrderServiceClient):
         print('[MockOrderService] Mock 메뉴 리스트 반환')
 
         mock_menus = [
-            MenuItem('M001', '햄치즈샌드위치', 5000, '재료: 빵, 양상추, 토마토, 치즈, 햄', '', True, '샌드위치'),
-            MenuItem('M002', '머쉬룸샌드위치', 5500, '재료: 빵, 버섯, 토마토, 치즈, 햄', '', True, '샌드위치'),
-            MenuItem('M003', '올인원샌드위치', 6500, '재료: 빵, 토마토, 치즈, 햄, 버섯, 양상추', '', True, '샌드위치'),
+            MenuItem('M001', '햄치즈 샌드위치', 5000, '재료: 빵, 양상추, 토마토, 치즈, 햄', '', True, '샌드위치'),
+            MenuItem('M002', '버섯 샌드위치', 5500, '재료: 빵, 버섯, 토마토, 치즈', '', True, '샌드위치'),
+            MenuItem('M003', '올인원 샌드위치', 6500, '재료: 빵, 토마토, 치즈, 햄, 버섯, 양상추', '', True, '샌드위치'),
         ]
 
         self.menus_received_signal.emit(mock_menus)

@@ -68,8 +68,22 @@ class RobotState:
         self.target_location = None
 
     def is_available(self) -> bool:
-        """Check if robot is available for new task"""
-        return self.status == self.STATUS_IDLE and self.current_task_id is None
+        """Check if robot is available for new task
+
+        A robot is available when:
+        - status is IDLE (not in error or busy state)
+        - no current task assigned
+        - no current order assigned
+        """
+        if self.status == self.STATUS_ERROR:
+            return False
+        if self.status != self.STATUS_IDLE:
+            return False
+        if self.current_task_id is not None:
+            return False
+        if self.current_order_id is not None:
+            return False
+        return True
 
     def is_low_battery(self, threshold: float = 0.0) -> bool:
         """Check if battery is low"""
@@ -145,8 +159,9 @@ class FleetController:
             'pinky3': 'pinky3_spot'
         }
 
-        # Pickup spot position
-        self.pickup_spot = 'pickup_spot'
+        # Pickup spot position (point13: waiting point near kitchen)
+        # Robot first moves to point13, then food loading is handled (skip mode)
+        self.pickup_spot = 'point13'
 
         logger.info(f"FleetController initialized with {len(self.robots)} robots")
 
@@ -197,6 +212,49 @@ class FleetController:
         else:
             logger.warning(f"Robot {robot_id} not found")
 
+    def get_available_robots(self) -> List[RobotState]:
+        """
+        Get list of all available robots
+
+        Availability criteria:
+        - status == STATUS_IDLE
+        - current_task_id is None
+        - current_order_id is None
+        - not in error state
+        - battery not low (optional threshold)
+
+        Returns:
+            List of available RobotState objects
+        """
+        available = []
+        for robot in self.robots.values():
+            if self._is_robot_available(robot):
+                available.append(robot)
+
+        logger.debug(f"Available robots: {[r.robot_id for r in available]}")
+        return available
+
+    def _is_robot_available(self, robot: RobotState) -> bool:
+        """
+        Check if a specific robot is available for new task assignment
+
+        Args:
+            robot: RobotState object to check
+
+        Returns:
+            True if robot can accept new tasks, False otherwise
+        """
+        # Check basic availability (status and task assignment)
+        if not robot.is_available():
+            return False
+
+        # Check battery level
+        if robot.is_low_battery():
+            logger.debug(f"Robot {robot.robot_id} has low battery, not available")
+            return False
+
+        return True
+
     def get_available_robot(self) -> Optional[RobotState]:
         """
         Get best available robot for task assignment
@@ -209,11 +267,7 @@ class FleetController:
         Returns:
             RobotState object if available, None otherwise
         """
-        available_robots = []
-
-        for robot in self.robots.values():
-            if robot.is_available() and not robot.is_low_battery():
-                available_robots.append(robot)
+        available_robots = self.get_available_robots()
 
         if not available_robots:
             logger.debug("No available robots")
@@ -238,7 +292,7 @@ class FleetController:
             True if assignment successful, False otherwise
         """
         robot = self.robots.get(robot_id)
-        if robot and robot.is_available():
+        if robot and self._is_robot_available(robot):
             robot.assign_task(task_id, order_id)
             robot.update_status(RobotState.STATUS_MOVING_TO_PICKUP)
             robot.target_location = self.pickup_spot
@@ -246,6 +300,49 @@ class FleetController:
             return True
         else:
             logger.warning(f"Cannot assign task to robot {robot_id} (not available)")
+            return False
+
+    def mark_robot_busy(self, robot_id: str, status: str = None) -> bool:
+        """
+        Mark robot as busy (in use)
+
+        Args:
+            robot_id: Robot ID
+            status: Optional specific status to set (defaults to STATUS_MOVING_TO_PICKUP)
+
+        Returns:
+            True if successful, False if robot not found
+        """
+        robot = self.robots.get(robot_id)
+        if robot:
+            new_status = status if status else RobotState.STATUS_MOVING_TO_PICKUP
+            robot.update_status(new_status)
+            logger.info(f"Robot {robot_id} marked as busy ({new_status})")
+            return True
+        else:
+            logger.warning(f"Robot {robot_id} not found for mark_robot_busy")
+            return False
+
+    def mark_robot_available(self, robot_id: str) -> bool:
+        """
+        Mark robot as available (idle)
+
+        This clears the current task and sets status to IDLE.
+
+        Args:
+            robot_id: Robot ID
+
+        Returns:
+            True if successful, False if robot not found
+        """
+        robot = self.robots.get(robot_id)
+        if robot:
+            robot.update_status(RobotState.STATUS_IDLE)
+            robot.clear_task()
+            logger.info(f"Robot {robot_id} marked as available (IDLE)")
+            return True
+        else:
+            logger.warning(f"Robot {robot_id} not found for mark_robot_available")
             return False
 
     def robot_reached_pickup(self, robot_id: str):
@@ -289,6 +386,7 @@ class FleetController:
     def robot_complete_delivery(self, robot_id: str):
         """
         Mark that robot completed delivery
+        수령 확인 시 pinky1 home으로 복귀
 
         Args:
             robot_id: Robot ID
@@ -298,7 +396,19 @@ class FleetController:
             robot.update_status(RobotState.STATUS_RETURNING)
             parking_spot = self.parking_spots.get(robot_id)
             robot.target_location = parking_spot
-            logger.info(f"Robot {robot_id} completed delivery, returning to {parking_spot}")
+            logger.info(f"Robot {robot_id} delivery confirmed, returning to home ({parking_spot})")
+
+    def get_home_location(self, robot_id: str) -> str:
+        """
+        Get home (parking) location for robot
+
+        Args:
+            robot_id: Robot ID
+
+        Returns:
+            Home location name (e.g., 'pinky1_spot')
+        """
+        return self.parking_spots.get(robot_id, f"{robot_id}_spot")
 
     def robot_returned_home(self, robot_id: str):
         """
