@@ -43,10 +43,14 @@ class TaskState(Enum):
 
 class PickupSlotManager:
     """
-    Manages pickup_spot access control
+    Manages pickup_spot access control with enhanced multi-robot queue management.
 
     Pickup spot can only be accessed by one robot at a time.
-    Other robots wait in designated waiting zones.
+    Other robots wait in designated waiting zones based on queue priority:
+    - 1st priority (next in line): point13 - directly in front of pickup_spot
+    - 2nd+ priority: robot's parking spot or point2/point3
+
+    Provides callbacks for position updates when queue order changes.
     """
 
     def __init__(self, zone_manager: ZoneManager):
@@ -57,22 +61,95 @@ class PickupSlotManager:
         self.holding_timeout: float = 60.0      # Max time to hold pickup slot (seconds)
         self.assigned_waiting_zones: Dict[str, str] = {}  # robot_id -> waiting_zone
 
-        # Define waiting zones based on map layout
+        # Waiting positions tracking: {robot_id: waiting_waypoint}
+        self.waiting_positions: Dict[str, str] = {}
+
+        # Callback for position updates when queue changes
+        self._position_update_callback = None
+
+        # Define waiting zones based on map layout (from navigation_graph.yaml)
         # Robots wait at point13 or their parking spot
         self.waiting_zone_positions = {
             'point13': {'x': 0.585, 'y': 0.63, 'zone_id': 'zone_point13'},
+            'point2': {'x': 0.78, 'y': 0.35, 'zone_id': 'zone_point2'},
+            'point3': {'x': 0.78, 'y': 0.65, 'zone_id': 'zone_point3'},
             'pinky1_spot': {'x': 0.585, 'y': 0.085, 'zone_id': 'zone_parking1'},
             'pinky2_spot': {'x': 0.585, 'y': 0.255, 'zone_id': 'zone_parking2'},
             'pinky3_spot': {'x': 0.585, 'y': 0.915, 'zone_id': 'zone_parking3'},
         }
 
-        logger.info("PickupSlotManager initialized")
+        # Secondary waiting positions for 2nd+ priority robots
+        self.secondary_waiting_positions = {
+            'pinky1': 'point2',   # pinky1 waits at point2
+            'pinky2': 'point2',   # pinky2 waits at point2
+            'pinky3': 'point3',   # pinky3 waits at point3
+        }
+
+        logger.info("PickupSlotManager initialized with enhanced queue management")
+
+    def set_position_update_callback(self, callback):
+        """
+        Set callback for position updates when queue order changes.
+
+        The callback will be invoked with (robot_id, new_waypoint) when a robot's
+        waiting position needs to be updated due to queue changes.
+
+        Args:
+            callback: Function with signature (robot_id: str, waypoint: str) -> None
+        """
+        self._position_update_callback = callback
+        logger.info("Position update callback registered")
+
+    def _notify_position_update(self, robot_id: str, waypoint: str):
+        """
+        Notify position update via callback.
+
+        Args:
+            robot_id: Robot that needs to move
+            waypoint: New destination waypoint
+        """
+        self.waiting_positions[robot_id] = waypoint
+        if self._position_update_callback:
+            try:
+                self._position_update_callback(robot_id, waypoint)
+                logger.info(f"Position update callback invoked: {robot_id} -> {waypoint}")
+            except Exception as e:
+                logger.error(f"Position update callback failed: {e}")
+
+    def _update_queue_positions(self):
+        """
+        Update waiting positions for all robots in queue after queue changes.
+
+        - 1st in queue: moves to point13 (closest to pickup)
+        - 2nd+ in queue: moves to secondary position (point2/point3 or parking)
+        """
+        queue_list = list(self.pickup_queue)
+
+        for idx, robot_id in enumerate(queue_list):
+            queue_position = idx + 1  # 1-indexed position in queue
+
+            if queue_position == 1:
+                # First in queue: move to point13 (pickup waiting hub)
+                new_waypoint = 'point13'
+            else:
+                # 2nd+ in queue: use secondary position based on robot
+                new_waypoint = self.secondary_waiting_positions.get(robot_id, 'point2')
+
+            # Check if position changed
+            current_pos = self.waiting_positions.get(robot_id)
+            if current_pos != new_waypoint:
+                logger.info(
+                    f"Queue position update: {robot_id} position {queue_position}, "
+                    f"moving from {current_pos} to {new_waypoint}"
+                )
+                self._notify_position_update(robot_id, new_waypoint)
 
     def request_pickup_slot(self, robot_id: str) -> bool:
         """
-        Request pickup slot for robot
+        Request pickup slot for robot.
 
-        Robot is added to queue if slot is available or occupied.
+        Robot is added to queue if slot is occupied. Waiting position is
+        automatically assigned based on queue priority.
 
         Args:
             robot_id: Robot requesting pickup access
@@ -85,17 +162,37 @@ class PickupSlotManager:
         if self.current_holder is None and len(self.pickup_queue) == 0:
             self.current_holder = robot_id
             self.holder_arrival_time = datetime.utcnow()
+            # Clear any waiting position since robot now holds the slot
+            self.waiting_positions.pop(robot_id, None)
             logger.info(f"Robot {robot_id} granted immediate pickup slot access")
             return True
         else:
-            # Add to queue
-            self.pickup_queue.append(robot_id)
-            logger.info(f"Robot {robot_id} added to pickup queue (position: {len(self.pickup_queue)})")
+            # Add to queue if not already in queue
+            if robot_id not in self.pickup_queue:
+                self.pickup_queue.append(robot_id)
+                queue_position = len(self.pickup_queue)
+                logger.info(f"Robot {robot_id} added to pickup queue (position: {queue_position})")
+
+                # Assign waiting position based on queue position
+                if queue_position == 1:
+                    waiting_waypoint = 'point13'
+                else:
+                    waiting_waypoint = self.secondary_waiting_positions.get(robot_id, 'point2')
+
+                self._notify_position_update(robot_id, waiting_waypoint)
+            else:
+                logger.debug(f"Robot {robot_id} already in pickup queue")
+
             return False
 
     def release_pickup_slot(self, robot_id: str) -> Optional[str]:
         """
-        Release pickup slot from current robot and grant to next in queue
+        Release pickup slot from current robot and grant to next in queue.
+
+        When slot is released:
+        1. Next robot in queue is granted access
+        2. Remaining robots' positions are updated (1st -> point13, others stay)
+        3. Position update callbacks are invoked
 
         Args:
             robot_id: Robot releasing the slot
@@ -115,7 +212,16 @@ class PickupSlotManager:
             next_robot = self.pickup_queue.popleft()
             self.current_holder = next_robot
             self.holder_arrival_time = datetime.utcnow()
+
+            # Clear waiting position for robot that now holds the slot
+            self.waiting_positions.pop(next_robot, None)
+
             logger.info(f"Pickup slot released by {robot_id}, granted to {next_robot}")
+
+            # Update positions for remaining robots in queue
+            # The new first-in-queue robot should move to point13
+            self._update_queue_positions()
+
             return next_robot
         else:
             logger.info(f"Pickup slot released by {robot_id}, no robots waiting")
@@ -123,13 +229,15 @@ class PickupSlotManager:
 
     def get_queue_position(self, robot_id: str) -> int:
         """
-        Get queue position for robot (0-indexed)
+        Get queue position for robot (0-indexed).
 
         Args:
             robot_id: Robot ID
 
         Returns:
             Queue position if robot is in queue or holding slot, -1 otherwise
+            0 = currently holding slot
+            1+ = waiting in queue
         """
         if self.current_holder == robot_id:
             return 0  # Currently holding
@@ -138,6 +246,27 @@ class PickupSlotManager:
             return list(self.pickup_queue).index(robot_id) + 1
         except ValueError:
             return -1
+
+    def get_robot_queue_position(self, robot_id: str) -> int:
+        """
+        Get robot's queue position with detailed semantics.
+
+        Args:
+            robot_id: Robot ID to check
+
+        Returns:
+            0: Robot is currently holding the pickup slot
+            1+: Robot's position in the waiting queue (1 = next in line)
+            -1: Robot is not in queue and not holding slot
+        """
+        if self.current_holder == robot_id:
+            return 0  # Currently occupying pickup slot
+
+        try:
+            idx = list(self.pickup_queue).index(robot_id)
+            return idx + 1  # 1-indexed queue position
+        except ValueError:
+            return -1  # Not in queue
 
     def is_holding_slot(self, robot_id: str) -> bool:
         """Check if robot is currently holding pickup slot"""
@@ -169,12 +298,59 @@ class PickupSlotManager:
         return False
 
     def force_release_slot(self) -> Optional[str]:
-        """Force release slot due to timeout or error"""
+        """
+        Force release slot due to timeout or error.
+
+        This is called when a robot exceeds the holding timeout or encounters
+        an error. The slot is released and granted to the next robot in queue.
+
+        Returns:
+            Next robot to receive slot, or None if queue is empty
+        """
         if self.current_holder:
             old_holder = self.current_holder
             logger.warning(f"Forcing release of pickup slot from {old_holder}")
             return self.release_pickup_slot(old_holder)
         return None
+
+    def remove_from_queue(self, robot_id: str) -> bool:
+        """
+        Remove a robot from the waiting queue (e.g., due to error or cancellation).
+
+        Args:
+            robot_id: Robot to remove from queue
+
+        Returns:
+            True if robot was removed, False if not found in queue
+        """
+        if robot_id not in self.pickup_queue:
+            logger.debug(f"Robot {robot_id} not found in pickup queue")
+            return False
+
+        # Remove from queue
+        self.pickup_queue = deque(r for r in self.pickup_queue if r != robot_id)
+
+        # Clear waiting position
+        self.waiting_positions.pop(robot_id, None)
+
+        logger.info(f"Robot {robot_id} removed from pickup queue")
+
+        # Update positions for remaining robots
+        self._update_queue_positions()
+
+        return True
+
+    def get_waiting_position(self, robot_id: str) -> Optional[str]:
+        """
+        Get the current waiting position waypoint for a robot.
+
+        Args:
+            robot_id: Robot ID to check
+
+        Returns:
+            Waypoint name where robot should wait, or None if not waiting
+        """
+        return self.waiting_positions.get(robot_id)
 
     def get_waiting_zone(self, robot_id: str, current_position: Tuple[float, float]) -> str:
         """
@@ -215,14 +391,27 @@ class PickupSlotManager:
         return list(self.pickup_queue)
 
     def get_queue_status(self) -> Dict:
-        """Get detailed queue status"""
+        """
+        Get comprehensive queue status including waiting positions.
+
+        Returns:
+            Dict containing:
+            - current_holder: Robot currently at pickup slot
+            - queue: Ordered list of waiting robots
+            - waiting_positions: Dict mapping robot_id to assigned waypoint
+            - holder_arrival_time: When current holder arrived
+            - queue_length: Number of robots waiting
+            - queue_positions: Dict mapping robot_id to queue position
+        """
         return {
             'current_holder': self.current_holder,
+            'queue': list(self.pickup_queue),
+            'waiting_positions': dict(self.waiting_positions),
             'holder_arrival_time': self.holder_arrival_time.isoformat() if self.holder_arrival_time else None,
             'queue_length': len(self.pickup_queue),
             'waiting_robots': list(self.pickup_queue),
             'queue_positions': {
-                robot_id: self.get_queue_position(robot_id)
+                robot_id: self.get_robot_queue_position(robot_id)
                 for robot_id in list(self.pickup_queue) + ([self.current_holder] if self.current_holder else [])
             }
         }
@@ -466,7 +655,10 @@ class TaskScheduler:
 
     def handle_robot_error(self, robot_id: str, error_msg: str) -> bool:
         """
-        Handle robot error and cleanup
+        Handle robot error and cleanup.
+
+        Releases any held pickup slot, removes from queue, and fails the
+        current task (returning it to pending queue for retry).
 
         Args:
             robot_id: Robot ID
@@ -481,12 +673,9 @@ class TaskScheduler:
         if self.pickup_manager.is_holding_slot(robot_id):
             self.pickup_manager.release_pickup_slot(robot_id)
 
-        # Remove from queue if waiting
+        # Remove from queue if waiting (uses new method with position updates)
         if self.pickup_manager.is_in_queue(robot_id):
-            # Remove from queue manually
-            self.pickup_manager.pickup_queue = deque(
-                r for r in self.pickup_manager.pickup_queue if r != robot_id
-            )
+            self.pickup_manager.remove_from_queue(robot_id)
 
         # Fail current task and return to queue
         task_id = self.active_tasks.get(robot_id)

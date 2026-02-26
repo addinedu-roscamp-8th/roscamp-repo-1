@@ -6,7 +6,8 @@ Integrates TaskManager, FleetController, and ZoneManager
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
-from nav2_msgs.action import NavigateToPose
+from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
+from nav2_msgs.action import NavigateToPose, FollowWaypoints
 from geometry_msgs.msg import PoseStamped, Pose, PoseWithCovarianceStamped
 from fleet_interfaces.msg import (
     OrderRequest,
@@ -21,14 +22,14 @@ from fleet_interfaces.msg import (
     ErrorAlert,
     OperatorCommand as OperatorCommandMsg
 )
-from std_msgs.msg import Float32, Bool
+from std_msgs.msg import Float32, Bool, String
 from builtin_interfaces.msg import Time
 import logging
 import os
 import signal
 import sys
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 from .task_manager import TaskManager, Task
 from .fleet_controller import FleetController, RobotState
@@ -36,6 +37,10 @@ from .zone_manager import ZoneManager
 from .task_scheduler import TaskScheduler, PickupSlotManager
 from .error_detector import ErrorDetector, ErrorType, RobotError
 from .error_recovery import ErrorRecoveryHandler, OperatorCommand, OperatorAction
+from .order_handler import OrderHandler
+from .gui_tcp_server import GUITCPServer
+from .path_planner import PathPlanner, NavigationGraph
+from .collision_avoidance import CollisionAvoidanceController
 
 # Configure logging
 logging.basicConfig(
@@ -83,9 +88,10 @@ class FMSNode(Node):
 
         # Robot configurations with ROS_DOMAIN_ID (not namespace)
         # Each robot runs on separate DOMAIN_ID in closed network
+        # FMS runs on DOMAIN_ID=25, Domain Bridge handles cross-domain communication
         robot_configs = [
-            {'robot_id': 'pinky1', 'domain_id': 11, 'ip': '192.168.1.7', 'enabled': False},  # DOMAIN_ID=13 테스트 중
-            {'robot_id': 'pinky2', 'domain_id': 12, 'ip': '192.168.1.6', 'enabled': False},  # 테스트 제외
+            {'robot_id': 'pinky1', 'domain_id': 11, 'ip': '192.168.1.7'},
+            {'robot_id': 'pinky2', 'domain_id': 12, 'ip': '192.168.1.6'},
             {'robot_id': 'pinky3', 'domain_id': 13, 'ip': '192.168.1.11'}
         ]
 
@@ -96,6 +102,24 @@ class FMSNode(Node):
         self.task_scheduler = TaskScheduler(self.zone_manager)
         self.error_detector = ErrorDetector()
         self.error_recovery_handler = ErrorRecoveryHandler()
+
+        # Path planner for waypoint-based navigation
+        self.path_planner = PathPlanner()
+
+        # Collision avoidance controller for multi-robot coordination
+        # Pass PickupSlotManager to sync pickup queues
+        self.collision_avoidance = CollisionAvoidanceController(
+            self.path_planner.graph,
+            self.zone_manager,
+            self.fleet_controller,
+            pickup_slot_manager=self.task_scheduler.pickup_manager
+        )
+
+        # Initialize order handler (Application Layer)
+        self.order_handler = OrderHandler()
+
+        # Initialize GUI TCP server (Infrastructure Layer)
+        self.gui_tcp_server = GUITCPServer(host='0.0.0.0', port=9000)
 
         # Robot domain configurations
         self.robot_domains = {}
@@ -110,33 +134,39 @@ class FMSNode(Node):
             }
             logger.info(f"Registered robot {robot_id} on DOMAIN_ID={domain_id}")
 
-        # NOTE: Navigation and monitoring requires matching DOMAIN_ID
-        # For cross-domain communication, use TCP or domain bridge
-        # Action clients are created for current domain only
+        # NOTE: FMS runs on DOMAIN_ID=25, Domain Bridge handles cross-domain communication
+        # Action clients are created for ALL robots (bridge forwards to robot domains)
         self.nav_clients = {}
         current_domain = int(os.environ.get('ROS_DOMAIN_ID', 0))
         logger.info(f"FMS running on DOMAIN_ID={current_domain}")
 
-        # Create action client for robots on same domain
+        # Create action clients for ALL robots (Domain Bridge remaps to robot-specific names)
         for robot_id, domain_info in self.robot_domains.items():
-            if domain_info['domain_id'] == current_domain:
-                action_name = '/navigate_to_pose'  # No namespace prefix
-                self.nav_clients[robot_id] = ActionClient(self, NavigateToPose, action_name)
-                logger.info(f"Created navigation client for {robot_id}: {action_name} (DOMAIN_ID={current_domain})")
-            else:
-                logger.warning(f"Robot {robot_id} on different DOMAIN_ID={domain_info['domain_id']}, needs TCP/bridge")
+            action_name = f'/{robot_id}/navigate_to_pose'  # Robot-specific via Domain Bridge
+            self.nav_clients[robot_id] = ActionClient(self, NavigateToPose, action_name)
+            logger.info(f"Created navigation client for {robot_id}: {action_name}")
 
-        # Initial pose publishers (for same domain only)
+        # FollowWaypoints action client for strict waypoint following (Domain Bridge remaps to robot-specific)
+        self.follow_waypoints_clients = {}
+        for robot_id, domain_info in self.robot_domains.items():
+            action_name = f'/{robot_id}/follow_waypoints'  # Robot-specific via Domain Bridge
+            self.follow_waypoints_clients[robot_id] = ActionClient(self, FollowWaypoints, action_name)
+            logger.info(f"Created FollowWaypoints client for {robot_id}: {action_name}")
+
+        # NOTE: goal_pose publisher removed - using FollowWaypoints action instead
+        # The _navigate_robot() method that used this publisher is deprecated
+        # All navigation now uses _follow_waypoints() via _navigate_robot_by_name()
+
+        # Initial pose publishers (Domain Bridge remaps to robot-specific names)
         self.initialpose_pubs = {}
         for robot_id, domain_info in self.robot_domains.items():
-            if domain_info['domain_id'] == current_domain:
-                topic_name = '/initialpose'  # No namespace prefix
-                self.initialpose_pubs[robot_id] = self.create_publisher(
-                    PoseWithCovarianceStamped,
-                    topic_name,
-                    10
-                )
-                logger.info(f"Created initial pose publisher for {robot_id}: {topic_name}")
+            topic_name = f'/{robot_id}/initialpose'  # Robot-specific via Domain Bridge
+            self.initialpose_pubs[robot_id] = self.create_publisher(
+                PoseWithCovarianceStamped,
+                topic_name,
+                10
+            )
+            logger.info(f"Created initial pose publisher for {robot_id}: {topic_name}")
 
         # Publishers
         self.fleet_status_pub = self.create_publisher(
@@ -164,12 +194,29 @@ class FMSNode(Node):
             10
         )
 
+        # CookingCommand publisher - send cooking command to robot arm
+        # Topic: /cooking/command (String type for simple command interface)
+        self.cooking_command_pub = self.create_publisher(
+            String,
+            '/cooking/command',
+            10
+        )
+
         # Error alert publisher - notify operators about robot errors
         self.error_alert_pub = self.create_publisher(
             ErrorAlert,
             '/fms/error_alert',
             10
         )
+
+        # Cooking status subscriber - receive cooking status from robot arm
+        self.cooking_status_sub = self.create_subscription(
+            String,
+            '/cooking/status',
+            self.cooking_status_callback,
+            10
+        )
+        logger.info("Subscribed to /cooking/status for cooking completion")
 
         # Subscribers
         self.order_request_sub = self.create_subscription(
@@ -230,8 +277,25 @@ class FMSNode(Node):
         # Error recovery timer (1Hz)
         self.error_recovery_timer = self.create_timer(1.0, self._process_recovery_actions)
 
+        # Collision check timer (5Hz) for multi-robot coordination
+        self.collision_check_timer = self.create_timer(0.2, self._check_collisions)
+
+        # Pending order check timer (0.5Hz = every 2 seconds)
+        # Checks if there are queued orders and available robots
+        self.pending_order_timer = self.create_timer(2.0, self._check_pending_orders)
+
         # Register recovery action callbacks
         self._register_recovery_callbacks()
+
+        # Register order handler callbacks (Infrastructure -> Application layer)
+        self._register_order_handler_callbacks()
+
+        # Register GUI TCP server handlers (Application -> Infrastructure layer)
+        self._register_gui_tcp_handlers()
+
+        # Start GUI TCP server
+        self.gui_tcp_server.start()
+        logger.info("GUI TCP server started on port 9000")
 
         # TODO: Load map positions from config file
         self.map_positions = self._load_map_positions()
@@ -250,50 +314,56 @@ class FMSNode(Node):
         """
         Setup subscribers for monitoring robot status
 
-        NOTE: Only monitors robots on the same DOMAIN_ID as FMS.
-        Cross-domain monitoring requires TCP or domain bridge.
+        NOTE: FMS runs on DOMAIN_ID=25, Domain Bridge forwards topics from all robot domains.
+        Each robot's topics are remapped to robot-specific names:
+        - /amcl_pose -> /{robot_id}/amcl_pose
+        - /battery/voltage -> /{robot_id}/battery/voltage
+        - /battery/present -> /{robot_id}/battery/present
 
         Args:
             robot_configs: List of robot configurations
         """
-        current_domain = int(os.environ.get('ROS_DOMAIN_ID', 0))
-
         for config in robot_configs:
             if config.get('enabled', True) is False:
                 continue
             robot_id = config['robot_id']
             domain_id = config.get('domain_id', 0)
 
-            # Only subscribe to robots on same domain
-            if domain_id != current_domain:
-                logger.warning(f"Robot {robot_id} on DOMAIN_ID={domain_id}, skipping ROS monitoring")
-                continue
-
-            # Subscribe to pose (no namespace prefix)
+            # Subscribe to robot-specific amcl_pose for localization (via Domain Bridge remapping)
+            # Use VOLATILE durability for compatibility with Domain Bridge
+            # Domain Bridge republishes AMCL pose with VOLATILE durability
+            amcl_qos = QoSProfile(
+                depth=10,
+                reliability=ReliabilityPolicy.RELIABLE,
+                durability=DurabilityPolicy.VOLATILE
+            )
+            amcl_topic = f'/{robot_id}/amcl_pose'
             self.create_subscription(
-                Pose,
-                '/pose',
-                lambda msg, rid=robot_id: self.robot_pose_callback(rid, msg),
-                10
+                PoseWithCovarianceStamped,
+                amcl_topic,
+                lambda msg, rid=robot_id: self.robot_pose_callback(rid, msg.pose.pose),
+                amcl_qos
             )
 
-            # Subscribe to battery voltage
+            # Subscribe to robot-specific battery voltage (via Domain Bridge remapping)
+            voltage_topic = f'/{robot_id}/battery/voltage'
             self.create_subscription(
                 Float32,
-                '/battery/voltage',
+                voltage_topic,
                 lambda msg, rid=robot_id: self.robot_battery_voltage_callback(rid, msg),
                 10
             )
 
-            # Subscribe to battery present
+            # Subscribe to robot-specific battery present (via Domain Bridge remapping)
+            present_topic = f'/{robot_id}/battery/present'
             self.create_subscription(
                 Bool,
-                '/battery/present',
+                present_topic,
                 lambda msg, rid=robot_id: self.robot_battery_present_callback(rid, msg),
                 10
             )
 
-            logger.info(f"Setup monitoring for robot {robot_id} (DOMAIN_ID={domain_id})")
+            logger.info(f"Setup monitoring for {robot_id}: {amcl_topic}, {voltage_topic}, {present_topic}")
 
     def _load_map_positions(self) -> Dict[str, Pose]:
         """
@@ -602,7 +672,10 @@ class FMSNode(Node):
             # TODO: Handle loading failure - retry or abort task
             return
 
-        # Food is loaded, proceed to table delivery
+        # Notify order handler about cooking completion
+        self.order_handler.handle_cooking_complete(msg.order_id)
+
+        # Legacy: Food is loaded, proceed to table delivery
         self.notify_food_loaded(msg.robot_id, msg.order_id)
 
     def robot_pose_callback(self, robot_id: str, msg: Pose):
@@ -613,6 +686,13 @@ class FMSNode(Node):
             robot_id: Robot ID
             msg: Pose message
         """
+        # Debug: Log received pose
+        if not hasattr(self, '_pose_log_count'):
+            self._pose_log_count = {}
+        self._pose_log_count[robot_id] = self._pose_log_count.get(robot_id, 0) + 1
+        if self._pose_log_count[robot_id] <= 3 or self._pose_log_count[robot_id] % 100 == 0:
+            logger.info(f"[POSE] Received pose for {robot_id}: x={msg.position.x:.3f}, y={msg.position.y:.3f} (count: {self._pose_log_count[robot_id]})")
+
         # Register heartbeat for error detection
         self.error_detector.register_heartbeat(robot_id)
 
@@ -701,19 +781,23 @@ class FMSNode(Node):
 
     def _send_robot_to_pickup(self, robot_id: str):
         """
-        Send robot to pickup spot
+        Send robot to point13 (pickup area waiting point) using waypoint-based navigation
+
+        Flow:
+        1. Robot moves to point13 via waypoints (FollowWaypoints action)
+        2. At point13: precision control mode (skip mode auto-handles this)
+        3. After food loaded: robot moves to table
 
         Args:
             robot_id: Robot ID
         """
-        pickup_pose = self.map_positions.get('pickup_spot')
-        if pickup_pose:
-            self._navigate_robot(robot_id, pickup_pose)
-            logger.info(f"Sending robot {robot_id} to pickup spot")
+        # Use waypoint navigation to ensure robot follows defined paths
+        logger.info(f"[WAYPOINT NAV] Sending robot {robot_id} to point13 (pickup area)")
+        self._navigate_robot_by_name(robot_id, 'point13')
 
     def _send_robot_to_table(self, robot_id: str, table_number: str):
         """
-        Send robot to table
+        Send robot to table using waypoint-based navigation
 
         Args:
             robot_id: Robot ID
@@ -721,65 +805,56 @@ class FMSNode(Node):
         """
         # Convert T01 -> table1
         table_name = table_number.lower().replace('t0', 'table').replace('t', 'table')
-        table_pose = self.map_positions.get(table_name)
 
-        if table_pose:
-            self._navigate_robot(robot_id, table_pose)
-            self.fleet_controller.robot_start_delivery(robot_id, table_number)
-            logger.info(f"Sending robot {robot_id} to {table_number}")
+        # Verify table exists in map positions
+        if table_name not in self.map_positions:
+            logger.error(f"Table {table_name} not found in map positions")
+            return
+
+        # Use waypoint navigation to ensure robot follows defined paths
+        logger.info(f"[WAYPOINT NAV] Sending robot {robot_id} to {table_number} ({table_name})")
+        self._navigate_robot_by_name(robot_id, table_name)
+        self.fleet_controller.robot_start_delivery(robot_id, table_number)
 
     def _send_robot_to_parking(self, robot_id: str):
         """
-        Send robot to parking spot
+        Send robot to parking spot using waypoint-based navigation
 
         Args:
             robot_id: Robot ID
         """
         parking_name = f"{robot_id}_spot"
-        parking_pose = self.map_positions.get(parking_name)
 
-        if parking_pose:
-            self._navigate_robot(robot_id, parking_pose)
-            logger.info(f"Sending robot {robot_id} to parking spot")
+        # Verify parking spot exists in map positions
+        if parking_name not in self.map_positions:
+            logger.error(f"Parking spot {parking_name} not found in map positions")
+            return
+
+        # Use waypoint navigation to ensure robot follows defined paths
+        logger.info(f"[WAYPOINT NAV] Sending robot {robot_id} to parking spot ({parking_name})")
+        self._navigate_robot_by_name(robot_id, parking_name)
 
     def _send_robot_to_waiting_zone(self, robot_id: str, waiting_zone_name: str):
         """
-        Send robot to waiting zone while waiting for pickup slot
+        Send robot to waiting zone using waypoint-based navigation
 
         Args:
             robot_id: Robot ID
             waiting_zone_name: Waiting zone location name (e.g., 'point13', 'pinky1_spot')
         """
-        waiting_pose = self.map_positions.get(waiting_zone_name)
-        if waiting_pose:
-            self._navigate_robot(robot_id, waiting_pose)
-            logger.info(f"Sending robot {robot_id} to waiting zone: {waiting_zone_name}")
-        else:
+        # Verify waiting zone exists in map positions
+        if waiting_zone_name not in self.map_positions:
             logger.warning(f"Waiting zone {waiting_zone_name} not found in map positions")
-
-    def _navigate_robot(self, robot_id: str, goal_pose: Pose):
-        """
-        Send navigation goal to robot
-
-        Args:
-            robot_id: Robot ID
-            goal_pose: Goal pose
-        """
-        nav_client = self.nav_clients.get(robot_id)
-        if not nav_client:
-            logger.error(f"Navigation client not found for robot {robot_id}")
             return
 
-        # Create goal
-        goal_msg = NavigateToPose.Goal()
-        goal_msg.pose = PoseStamped()
-        goal_msg.pose.header.frame_id = 'map'
-        goal_msg.pose.header.stamp = self.get_clock().now().to_msg()
-        goal_msg.pose.pose = goal_pose
+        # Use waypoint navigation to ensure robot follows defined paths
+        logger.info(f"[WAYPOINT NAV] Sending robot {robot_id} to waiting zone: {waiting_zone_name}")
+        self._navigate_robot_by_name(robot_id, waiting_zone_name)
 
-        # Send goal
-        nav_client.send_goal_async(goal_msg)
-        logger.debug(f"Sent navigation goal to robot {robot_id}")
+    # NOTE: _navigate_robot() method removed - was unused
+    # This method used /goal_pose topic which bypasses waypoint constraints
+    # All navigation now uses _follow_waypoints() via _navigate_robot_by_name()
+    # for strict waypoint following with collision avoidance
 
     def _check_navigation_status(self, robot_id: str):
         """
@@ -802,6 +877,9 @@ class FMSNode(Node):
 
         # Check if reached (within 0.1m threshold)
         if distance < 0.1:
+            # Call order handler integration for order-based navigation
+            self._check_navigation_status_with_order_handler(robot_id)
+
             if robot.status == RobotState.STATUS_MOVING_TO_PICKUP:
                 # Reached pickup spot (point13)
                 self.fleet_controller.robot_reached_pickup(robot_id)
@@ -905,6 +983,567 @@ class FMSNode(Node):
                 # Returned home
                 self.fleet_controller.robot_returned_home(robot_id)
                 logger.info(f"Robot {robot_id} returned home, now IDLE")
+
+    # ========================================
+    # Order Handler Callbacks (Infrastructure Layer)
+    # ========================================
+
+    def _send_cooking_command_to_arm(self, cooking_command: Dict[str, Any]):
+        """
+        Send cooking command to robot arm via ROS2 topic
+
+        Publishes to:
+        - /cooking/command (String): Simple command format "START|order_id|menu_id|quantity"
+        - /cooking/order (CookingOrder): Full order message for compatibility
+
+        Args:
+            cooking_command: {
+                'order_id': str,
+                'operation': 'START',
+                'menu_items': [...],
+                'table_number': int
+            }
+        """
+        order_id = cooking_command['order_id']
+        menu_items = cooking_command.get('menu_items', [{}])
+        menu_id = menu_items[0].get('menu_id', 'M001') if menu_items else 'M001'
+        quantity = menu_items[0].get('quantity', 1) if menu_items else 1
+        operation = cooking_command.get('operation', 'START')
+
+        # Publish to /cooking/command (String - JSON format for cooking_interface_node)
+        import json
+        command_msg = String()
+        command_json = {
+            'job_id': order_id,
+            'order_id': order_id,
+            'operation': operation,
+            'menu_items': menu_items
+        }
+        command_msg.data = json.dumps(command_json)
+        self.cooking_command_pub.publish(command_msg)
+        logger.info(f"Published /cooking/command: {command_msg.data}")
+
+        # Also publish CookingOrder for compatibility
+        order_msg = CookingOrder()
+        order_msg.order_id = order_id
+        order_msg.menu_id = menu_id
+        order_msg.quantity = quantity
+        order_msg.sauce_type = cooking_command.get('sauce_type', '')
+        order_msg.assigned_robot_id = 'pinky1'  # Always pinky1 as per requirements
+
+        self.cooking_order_pub.publish(order_msg)
+        logger.info(f"Published /cooking/order: order={order_id}, menu={menu_id}, qty={quantity}")
+
+    def _navigate_robot_by_name(self, robot_id: str, location_name: str):
+        """
+        Navigate robot to named location using waypoint-based path planning with collision avoidance
+
+        Args:
+            robot_id: Robot ID (e.g., 'pinky1')
+            location_name: Location name (e.g., 'point13', 'table1')
+        """
+        pose = self.map_positions.get(location_name)
+        if not pose:
+            logger.error(f"Location {location_name} not found in map positions")
+            return
+
+        # Get robot's current position (use last known or parking spot)
+        robot = self.fleet_controller.get_robot(robot_id)
+        if not robot:
+            logger.error(f"Robot {robot_id} not found")
+            return
+
+        # Determine starting waypoint
+        current_waypoint = None
+        if robot.current_pose:
+            # Find nearest waypoint to current position
+            current_waypoint = self.path_planner.graph.get_nearest_waypoint(
+                robot.current_pose.position.x,
+                robot.current_pose.position.y
+            )
+        if not current_waypoint:
+            # Use parking spot as default starting point
+            current_waypoint = f"{robot_id}_spot"
+            logger.info(f"Using {current_waypoint} as starting waypoint for {robot_id}")
+
+        # Set final target location
+        robot.target_location = location_name
+        robot.final_destination = location_name  # Store final destination
+        logger.info(f"Set target_location={location_name} for {robot_id}")
+
+        # Use collision avoidance controller for path planning
+        route, success = self.collision_avoidance.plan_path_with_avoidance(
+            robot_id, current_waypoint, location_name
+        )
+
+        if success and route:
+            # No collision detected, proceed with planned route
+            robot.current_route = route
+            robot.route_index = 0
+            logger.info(f"[COLLISION_AVOIDANCE] Route planned for {robot_id}: {' -> '.join(route)}")
+
+            # Use FollowWaypoints action for strict waypoint following
+            self._follow_waypoints(robot_id, route)
+        elif route and not success:
+            # Collision detected, robot should move to waiting position
+            robot.current_route = route
+            robot.route_index = 0
+            wait_state = self.collision_avoidance.get_robot_wait_state(robot_id)
+            if wait_state:
+                logger.info(f"[COLLISION_AVOIDANCE] {robot_id} moving to waiting position: "
+                           f"{wait_state.waiting_at}, waiting for: {wait_state.waiting_for}")
+            else:
+                logger.info(f"[COLLISION_AVOIDANCE] {robot_id} moving to waiting position: {route[-1] if route else 'unknown'}")
+
+            # Navigate to waiting position
+            if route:
+                self._follow_waypoints(robot_id, route)
+        elif current_waypoint == location_name:
+            # Robot is already at or very near the destination
+            logger.info(f"[WAYPOINT] Robot {robot_id} already at destination {location_name}")
+            robot.current_route = []
+            robot.route_index = 0
+            self._start_arrival_timer(robot_id, location_name)
+        else:
+            # Fallback: No route found, try basic path planning without collision avoidance
+            logger.warning(f"[COLLISION_AVOIDANCE] No route found with collision avoidance, trying basic planning")
+            basic_route = self.path_planner.plan_route(robot_id, current_waypoint, location_name)
+
+            if basic_route:
+                robot.current_route = basic_route
+                robot.route_index = 0
+                logger.info(f"[WAYPOINT] Basic route planned for {robot_id}: {' -> '.join(basic_route)}")
+                self._follow_waypoints(robot_id, basic_route)
+            else:
+                # Last resort: single waypoint navigation
+                logger.warning(f"[WAYPOINT] No route found from {current_waypoint} to {location_name}, using single waypoint")
+                robot.current_route = [location_name]
+                robot.route_index = 0
+                self._follow_waypoints(robot_id, [location_name])
+
+    def _follow_waypoints(self, robot_id: str, waypoints: List[str]):
+        """
+        Use FollowWaypoints action to navigate through all waypoints strictly
+
+        Args:
+            robot_id: Robot ID
+            waypoints: List of waypoint names to follow in order
+        """
+        client = self.follow_waypoints_clients.get(robot_id)
+        if not client:
+            logger.error(f"No FollowWaypoints client for {robot_id}")
+            return
+
+        # Wait for action server
+        if not client.wait_for_server(timeout_sec=5.0):
+            logger.error(f"FollowWaypoints action server not available for {robot_id}")
+            return
+
+        # Build waypoint poses
+        poses = []
+        for wp_name in waypoints:
+            pose = self.map_positions.get(wp_name)
+            if not pose:
+                logger.warning(f"Waypoint {wp_name} not found, skipping")
+                continue
+
+            pose_stamped = PoseStamped()
+            pose_stamped.header.frame_id = 'map'
+            pose_stamped.header.stamp = self.get_clock().now().to_msg()
+
+            if hasattr(pose, 'position'):
+                pose_stamped.pose = pose
+            else:
+                pose_stamped.pose.position.x = pose['x']
+                pose_stamped.pose.position.y = pose['y']
+                pose_stamped.pose.position.z = 0.0
+                pose_stamped.pose.orientation.w = 1.0
+
+            poses.append(pose_stamped)
+            logger.info(f"[WAYPOINT] Added {wp_name}: x={pose_stamped.pose.position.x:.3f}, y={pose_stamped.pose.position.y:.3f}")
+
+        if not poses:
+            logger.error(f"No valid waypoints to follow for {robot_id}")
+            return
+
+        # Create goal
+        goal_msg = FollowWaypoints.Goal()
+        goal_msg.poses = poses
+
+        logger.info(f"[WAYPOINT] Sending {len(poses)} waypoints to FollowWaypoints for {robot_id}")
+
+        # Send goal with callbacks
+        send_goal_future = client.send_goal_async(
+            goal_msg,
+            feedback_callback=lambda feedback: self._follow_waypoints_feedback(robot_id, feedback)
+        )
+        send_goal_future.add_done_callback(
+            lambda future: self._follow_waypoints_goal_response(robot_id, future, waypoints)
+        )
+
+    def _follow_waypoints_feedback(self, robot_id: str, feedback_msg):
+        """Handle FollowWaypoints feedback"""
+        feedback = feedback_msg.feedback
+        current_idx = feedback.current_waypoint
+        logger.info(f"[WAYPOINT] {robot_id} navigating to waypoint {current_idx + 1}")
+
+    def _follow_waypoints_goal_response(self, robot_id: str, future, waypoints: List[str]):
+        """Handle FollowWaypoints goal response"""
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            logger.error(f"[WAYPOINT] FollowWaypoints goal rejected for {robot_id}")
+            return
+
+        logger.info(f"[WAYPOINT] FollowWaypoints goal accepted for {robot_id}")
+
+        # Get result
+        result_future = goal_handle.get_result_async()
+        result_future.add_done_callback(
+            lambda future: self._follow_waypoints_result(robot_id, future, waypoints)
+        )
+
+    def _follow_waypoints_result(self, robot_id: str, future, waypoints: List[str]):
+        """Handle FollowWaypoints result"""
+        result = future.result().result
+        missed_waypoints = result.missed_waypoints
+
+        if missed_waypoints:
+            logger.warning(f"[WAYPOINT] {robot_id} missed waypoints: {missed_waypoints}")
+        else:
+            logger.info(f"[WAYPOINT] {robot_id} completed all {len(waypoints)} waypoints successfully!")
+
+        # Trigger final destination arrival
+        robot = self.fleet_controller.get_robot(robot_id)
+        if robot:
+            final_dest = getattr(robot, 'final_destination', robot.target_location)
+            logger.info(f"[WAYPOINT] {robot_id} route complete, arrived at {final_dest}")
+            robot.current_route = None
+            robot.route_index = 0
+            self._on_final_destination_reached(robot_id, final_dest)
+
+    def _navigate_to_waypoint(self, robot_id: str, waypoint_name: str):
+        """
+        [DEPRECATED] Legacy method - DO NOT USE.
+        Use _navigate_robot_by_name() which uses FollowWaypoints action instead.
+
+        This method uses direct /goal_pose navigation which allows Nav2 to plan
+        its own path, bypassing waypoint constraints. It has been replaced by
+        _follow_waypoints() which enforces strict waypoint following.
+
+        Args:
+            robot_id: Robot ID
+            waypoint_name: Waypoint name
+        """
+        logger.warning(f"[DEPRECATED] _navigate_to_waypoint() called for {robot_id} -> {waypoint_name}. "
+                      f"This legacy method uses direct navigation. Use _navigate_robot_by_name() instead!")
+
+        # Redirect to proper waypoint navigation
+        self._navigate_robot_by_name(robot_id, waypoint_name)
+
+    def _on_waypoint_reached(self, robot_id: str, waypoint_name: str):
+        """
+        [DEPRECATED] Legacy callback for sequential waypoint navigation.
+        This is no longer used with FollowWaypoints action which handles
+        all waypoints in a single action call.
+
+        The FollowWaypoints action provides its own feedback and result callbacks:
+        - _follow_waypoints_feedback(): Reports progress through waypoints
+        - _follow_waypoints_result(): Handles completion of all waypoints
+
+        Args:
+            robot_id: Robot ID
+            waypoint_name: Waypoint name reached
+        """
+        logger.warning(f"[DEPRECATED] _on_waypoint_reached() called for {robot_id} at {waypoint_name}. "
+                      f"This legacy callback should not be called when using FollowWaypoints action.")
+
+        # Do nothing - FollowWaypoints handles waypoint progression internally
+
+    def _on_final_destination_reached(self, robot_id: str, location_name: str):
+        """
+        Called when robot reaches final destination
+
+        Args:
+            robot_id: Robot ID
+            location_name: Final destination name
+        """
+        logger.info(f"[ARRIVED] {robot_id} reached final destination: {location_name}")
+
+        # Trigger appropriate handler based on destination type
+        if location_name.startswith('table'):
+            # Table arrival - trigger delivery notification
+            active_orders = self.order_handler.get_all_active_orders()
+            order_id = None
+            for oid, order_status in active_orders.items():
+                if order_status.get('robot_id') == robot_id:
+                    order_id = oid
+                    break
+            if order_id:
+                self.order_handler.handle_robot_arrived_table(robot_id, order_id)
+
+        elif location_name == 'point13':
+            # Pickup area arrival
+            active_orders = self.order_handler.get_all_active_orders()
+            order_id = None
+            for oid, order_status in active_orders.items():
+                if order_status.get('robot_id') == robot_id:
+                    order_id = oid
+                    break
+            if order_id:
+                self.order_handler.handle_robot_arrived_point13(robot_id, order_id)
+
+        elif location_name.endswith('_spot'):
+            # Parking spot arrival
+            logger.info(f"{robot_id} returned to parking spot {location_name}")
+
+    def _start_arrival_timer(self, robot_id: str, location_name: str):
+        """
+        Start timer for simulated arrival (used for direct navigation)
+
+        Args:
+            robot_id: Robot ID
+            location_name: Target location
+        """
+        import threading
+        robot = self.fleet_controller.get_robot(robot_id)
+
+        def auto_arrival():
+            import time
+            time.sleep(5.0)  # Wait for simulated navigation
+            if robot and robot.target_location == location_name:
+                logger.info(f"[SIMULATION] Auto-triggering arrival for {robot_id} at {location_name}")
+                self._on_final_destination_reached(robot_id, location_name)
+
+        timer_thread = threading.Thread(target=auto_arrival, daemon=True)
+        timer_thread.start()
+        logger.info(f"[SIMULATION] Started auto-arrival timer for {robot_id} -> {location_name}")
+
+    def _send_gui_notification(self, notification: Dict[str, Any]):
+        """
+        Send push notification to GUI clients
+
+        Args:
+            notification: {
+                'type': 'delivery_notification',
+                'data': {...}
+            }
+        """
+        self.gui_tcp_server.broadcast(notification)
+        logger.info(f"Sent notification to GUI: {notification['type']}")
+
+    def _fleet_controller_operation(self, robot_id: str, operation: str):
+        """
+        Execute fleet controller operation
+
+        Args:
+            robot_id: Robot ID
+            operation: Operation name (e.g., 'complete_delivery')
+        """
+        if operation == 'complete_delivery':
+            self.fleet_controller.robot_complete_delivery(robot_id)
+        else:
+            logger.warning(f"Unknown fleet controller operation: {operation}")
+
+    def _get_available_robot_for_order(self) -> Optional[str]:
+        """
+        Get available robot for order processing
+
+        Returns:
+            robot_id if available, None otherwise
+        """
+        available_robot = self.fleet_controller.get_available_robot()
+        if available_robot:
+            logger.info(f"Available robot for order: {available_robot.robot_id}")
+            return available_robot.robot_id
+        logger.info("No available robot for order")
+        return None
+
+    def _assign_robot_to_order(self, robot_id: str, order_id: str) -> bool:
+        """
+        Assign robot to order in fleet controller
+
+        Args:
+            robot_id: Robot ID to assign
+            order_id: Order ID to assign to
+
+        Returns:
+            True if assignment successful, False otherwise
+        """
+        try:
+            # Find or create task for this order
+            task = self.task_manager.get_task_by_order_id(order_id)
+            if task:
+                task_id = task.task_id
+            else:
+                # Create a minimal task for order handler workflow
+                task_id = f"task_{order_id}"
+
+            # Assign task to robot in fleet controller
+            self.fleet_controller.assign_task_to_robot(robot_id, task_id, order_id)
+            logger.info(f"Assigned robot {robot_id} to order {order_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to assign robot {robot_id} to order {order_id}: {e}")
+            return False
+
+    def _navigate_robot_to_home(self, robot_id: str):
+        """
+        Navigate robot to its home (parking) position
+
+        Args:
+            robot_id: Robot ID (e.g., 'pinky1', 'pinky2', 'pinky3')
+        """
+        home_position = f"{robot_id}_spot"  # pinky1_spot, pinky2_spot, pinky3_spot
+        logger.info(f"Navigating robot {robot_id} to home: {home_position}")
+        self._navigate_robot_by_name(robot_id, home_position)
+
+    def _send_cooking_command(self, order_id: str, order_data: Dict):
+        """
+        Send cooking command to robot arm
+
+        Args:
+            order_id: Order ID
+            order_data: Order data with menu items
+        """
+        import json
+        command = {
+            'job_id': order_id,
+            'order_id': order_id,
+            'operation': 'START',
+            'menu_items': order_data.get('items', [])
+        }
+        self.cooking_command_pub.publish(String(data=json.dumps(command)))
+        logger.info(f"Sent cooking command for order {order_id}")
+
+    # ========================================
+    # GUI TCP Message Handlers (Infrastructure Layer)
+    # ========================================
+
+    def _handle_gui_new_order(self, message: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Handle new order from GUI
+
+        Args:
+            message: {
+                'command': 'new_order',
+                'table_number': 1,
+                'order': {...}
+            }
+
+        Returns:
+            Response dict with order_id and status
+        """
+        logger.info(f"Received new order from GUI: table={message.get('table_number')}")
+
+        try:
+            result = self.order_handler.handle_new_order(message)
+            logger.info(f"Order processed: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"Failed to process order: {e}")
+            return {
+                'success': False,
+                'message': str(e)
+            }
+
+    def _handle_gui_delivery_complete(self, message: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Handle delivery confirmation from GUI (customer received order)
+
+        Args:
+            message: {
+                'command': 'delivery_complete',
+                'order_id': 'ORD-XXX',
+                'table_number': 1
+            }
+            OR (nested format from GUI):
+            {
+                'type': 'delivery_complete',
+                'data': {'order_id': 'ORD-XXX', 'table_number': '1'}
+            }
+
+        Returns:
+            Response dict
+        """
+        # Support both flat and nested message formats
+        if 'data' in message:
+            data = message.get('data', {})
+            order_id = data.get('order_id')
+            table_number = data.get('table_number')
+        else:
+            order_id = message.get('order_id')
+            table_number = message.get('table_number')
+
+        logger.info(f"Received delivery confirmation from GUI: order={order_id}")
+
+        try:
+            self.order_handler.handle_delivery_confirmation(order_id, table_number)
+            return {
+                'success': True,
+                'message': 'Delivery confirmed, robot returning home'
+            }
+        except Exception as e:
+            logger.error(f"Failed to handle delivery confirmation: {e}")
+            return {
+                'success': False,
+                'message': str(e)
+            }
+
+    # ========================================
+    # Enhanced Navigation Status Checking (with Order Handler integration)
+    # ========================================
+
+    def _check_navigation_status_with_order_handler(self, robot_id: str):
+        """
+        Enhanced navigation status checking with order handler integration
+
+        This method extends the original _check_navigation_status to integrate
+        with the order handler for proper workflow management.
+        """
+        robot = self.fleet_controller.get_robot(robot_id)
+        if not robot or not robot.target_location:
+            return
+
+        # Get target pose
+        target_pose = self.map_positions.get(robot.target_location)
+        if not target_pose or not robot.current_pose:
+            return
+
+        # Calculate distance to target
+        distance = self.fleet_controller.calculate_distance(robot.current_pose, target_pose)
+
+        # Check if reached (within 0.1m threshold)
+        if distance < 0.1:
+            # point13 arrival (pickup waiting point)
+            if robot.target_location == 'point13':
+                logger.info(f"Robot {robot_id} reached point13")
+
+                # Get current order
+                # Try to find order from order_handler
+                active_orders = self.order_handler.get_all_active_orders()
+                order_id = None
+                for oid, order_status in active_orders.items():
+                    if order_status.get('robot_id') == robot_id:
+                        order_id = oid
+                        break
+
+                if order_id:
+                    self.order_handler.handle_robot_arrived_point13(robot_id, order_id)
+
+            # Table arrival
+            elif robot.target_location.startswith('table'):
+                logger.info(f"Robot {robot_id} reached {robot.target_location}")
+
+                # Get current order
+                active_orders = self.order_handler.get_all_active_orders()
+                order_id = None
+                for oid, order_status in active_orders.items():
+                    if order_status.get('robot_id') == robot_id:
+                        order_id = oid
+                        break
+
+                if order_id:
+                    self.order_handler.handle_robot_arrived_table(robot_id, order_id)
 
     # ========================================
     # Status Publishing
@@ -1133,6 +1772,33 @@ class FMSNode(Node):
                 # Grant to next robot
                 self._process_pickup_queue()
 
+    def _check_pending_orders(self):
+        """
+        Check for pending orders and dispatch to available robots
+
+        Called periodically (every 2 seconds) to check if:
+        1. There are orders waiting in the queue
+        2. There is an available robot to handle the order
+
+        If both conditions are met, dispatches the next queued order.
+        """
+        # Check if there are queued orders
+        queued_count = self.order_handler.get_queued_order_count()
+        if queued_count == 0:
+            return
+
+        # Check for available robot
+        available_robot = self._get_available_robot_for_order()
+        if not available_robot:
+            return
+
+        # Process the next queued order
+        result = self.order_handler.process_queued_order(available_robot)
+        if result:
+            logger.info(f"[PENDING ORDER] Dispatched queued order to {available_robot}: {result}")
+        else:
+            logger.debug(f"[PENDING ORDER] No order dispatched (result: {result})")
+
     # ========================================
     # Error Detection and Recovery
     # ========================================
@@ -1156,6 +1822,88 @@ class FMSNode(Node):
             self._handle_clear_error_command
         )
         logger.info("Recovery action callbacks registered")
+
+    def _register_order_handler_callbacks(self):
+        """
+        Register callbacks for order handler (Application Layer -> Infrastructure Layer)
+        Following Dependency Inversion Principle
+        """
+        # Register base callbacks
+        self.order_handler.register_callbacks(
+            send_cooking_command=self._send_cooking_command_to_arm,
+            navigate_robot=self._navigate_robot_by_name,
+            send_gui_notification=self._send_gui_notification,
+            fleet_controller=self._fleet_controller_operation
+        )
+
+        # Register additional callbacks for enhanced workflow
+        # Available robot callback
+        self.order_handler.set_get_available_robot_callback(
+            self._get_available_robot_for_order
+        )
+
+        # Robot home callback
+        self.order_handler.set_navigate_robot_home_callback(
+            self._navigate_robot_to_home
+        )
+
+        # Robot navigation callback (already registered via register_callbacks but also via setter)
+        self.order_handler.set_navigate_robot_callback(
+            self._navigate_robot_by_name
+        )
+
+        # Cooking command callback (already registered via register_callbacks but also via setter)
+        self.order_handler.set_send_cooking_command_callback(
+            self._send_cooking_command_to_arm
+        )
+
+        # Assign robot callback - for assigning robot to order in fleet controller
+        self.order_handler.set_assign_robot_callback(
+            self._assign_robot_to_order
+        )
+
+        logger.info("Order handler callbacks registered (with enhanced callbacks)")
+
+    def _register_gui_tcp_handlers(self):
+        """
+        Register message handlers for GUI TCP server (Infrastructure Layer)
+        """
+        self.gui_tcp_server.register_handler('new_order', self._handle_gui_new_order)
+        self.gui_tcp_server.register_handler('delivery_complete', self._handle_gui_delivery_complete)
+        logger.info("GUI TCP server handlers registered")
+
+    def cooking_status_callback(self, msg: String):
+        """
+        Handle cooking status from robot arm
+
+        Args:
+            msg: String message with JSON cooking status
+                {
+                    'job_id': 'order_id',
+                    'order_id': 'order_id',
+                    'status': 'cooking' | 'ready' | 'error',
+                    'progress': 0-100
+                }
+        """
+        import json
+        try:
+            status_data = json.loads(msg.data)
+            order_id = status_data.get('order_id') or status_data.get('job_id')
+            status = status_data.get('status')
+            progress = status_data.get('progress', 0)
+
+            logger.info(f"Cooking status: order={order_id}, status={status}, progress={progress}%")
+
+            if status == 'ready':
+                logger.info(f"Cooking completed for order {order_id}")
+                self.order_handler.handle_cooking_complete(order_id)
+            elif status == 'error':
+                logger.error(f"Cooking error for order {order_id}")
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid cooking status JSON: {e}")
+        except Exception as e:
+            logger.error(f"Error processing cooking status: {e}")
 
     def operator_command_callback(self, msg: OperatorCommandMsg):
         """
@@ -1189,6 +1937,103 @@ class FMSNode(Node):
         )
 
         logger.info(f"Operator command {command_str} queued for robot {robot_id}")
+
+    def _check_collisions(self):
+        """
+        Periodic collision check for multi-robot coordination (5Hz)
+
+        This method:
+        1. Checks for deadlock conditions and resolves them
+        2. Checks waiting robots for timeout and triggers replanning
+        3. Checks if waiting positions have become available
+        4. Updates collision avoidance controller with current robot positions
+        5. Triggers replanning for robots whose paths are now clear
+        """
+        from .collision_avoidance import ReplanTrigger, WaitState
+
+        # Check for deadlock (two robots waiting for each other)
+        if self.collision_avoidance.check_and_resolve_deadlock():
+            logger.info("[COLLISION] Deadlock resolved automatically")
+
+        robots = self.fleet_controller.get_all_robots()
+
+        for robot in robots:
+            robot_id = robot.robot_id
+
+            # Skip robots that are idle or not moving
+            if robot.status in [RobotState.STATUS_IDLE, RobotState.STATUS_ERROR]:
+                continue
+
+            # Check wait timeout
+            if self.collision_avoidance.check_wait_timeout(robot_id):
+                logger.warning(f"[COLLISION] {robot_id} wait timeout, attempting replan")
+                wait_state = self.collision_avoidance.get_robot_wait_state(robot_id)
+                if wait_state and wait_state.original_goal:
+                    # Attempt to replan after timeout
+                    new_path, success = self.collision_avoidance.handle_replan_trigger(
+                        robot_id, ReplanTrigger.TIMEOUT
+                    )
+                    if success and new_path:
+                        logger.info(f"[COLLISION] {robot_id} replanned successfully after timeout")
+                        robot.current_route = new_path
+                        robot.route_index = 0
+                        self._follow_waypoints(robot_id, new_path)
+
+            # Check waiting robots - see if their path is now clear
+            wait_state = self.collision_avoidance.get_robot_wait_state(robot_id)
+            if wait_state and wait_state.state != WaitState.NOT_WAITING:
+                # Check if the blocking robot has moved
+                if wait_state.waiting_for:
+                    blocking_robot = self.fleet_controller.get_robot(wait_state.waiting_for)
+                    if blocking_robot:
+                        # Get blocking robot's current node
+                        blocking_current_node = None
+                        if blocking_robot.current_pose:
+                            blocking_current_node = self.path_planner.graph.get_nearest_waypoint(
+                                blocking_robot.current_pose.position.x,
+                                blocking_robot.current_pose.position.y
+                            )
+
+                        # Check if blocking robot has moved away from blocked nodes
+                        if blocking_current_node and blocking_current_node not in wait_state.blocked_nodes:
+                            logger.info(f"[COLLISION] {robot_id}: blocking robot {wait_state.waiting_for} "
+                                       f"moved to {blocking_current_node}, attempting replan")
+
+                            # Try to replan
+                            if wait_state.original_goal:
+                                new_path, success = self.collision_avoidance.handle_replan_trigger(
+                                    robot_id, ReplanTrigger.ROBOT_MOVED
+                                )
+                                if success and new_path:
+                                    logger.info(f"[COLLISION] {robot_id} path now clear, proceeding with route")
+                                    robot.current_route = new_path
+                                    robot.route_index = 0
+                                    self._follow_waypoints(robot_id, new_path)
+
+                # Check for pickup slot availability
+                if wait_state.state == WaitState.WAITING_FOR_PICKUP:
+                    position, rank = self.collision_avoidance.manage_pickup_queue(robot_id, "check")
+                    if rank == 0:
+                        # Pickup slot is now available
+                        logger.info(f"[COLLISION] {robot_id} pickup slot available, proceeding")
+                        new_path, success = self.collision_avoidance.handle_replan_trigger(
+                            robot_id, ReplanTrigger.PICKUP_SLOT_AVAILABLE
+                        )
+                        if success and new_path:
+                            robot.current_route = new_path
+                            robot.route_index = 0
+                            self._follow_waypoints(robot_id, new_path)
+
+        # Log collision avoidance status periodically (every 25 checks = 5 seconds)
+        if not hasattr(self, '_collision_check_count'):
+            self._collision_check_count = 0
+        self._collision_check_count += 1
+
+        if self._collision_check_count % 25 == 0:
+            status = self.collision_avoidance.get_collision_status_summary()
+            if status['waiting_robots']:
+                logger.info(f"[COLLISION] Status: {len(status['waiting_robots'])} robots waiting, "
+                           f"{status['reserved_nodes_count']} nodes reserved")
 
     def _monitor_errors(self):
         """
@@ -1264,7 +2109,7 @@ class FMSNode(Node):
 
     def _handle_retry_command(self, robot_id: str, order_id: str, reason: str):
         """
-        Handle RETRY operator command - retry failed navigation task
+        Handle RETRY operator command - retry failed navigation task using waypoint navigation
 
         Args:
             robot_id: Target robot ID
@@ -1276,15 +2121,16 @@ class FMSNode(Node):
             logger.warning(f"Robot {robot_id} not found")
             return
 
-        logger.info(f"Retrying navigation for robot {robot_id}: {reason}")
+        logger.info(f"[WAYPOINT NAV] Retrying navigation for robot {robot_id}: {reason}")
 
-        # Get current target location
+        # Get current target location and use waypoint navigation
         if robot.target_location:
-            target_pose = self.map_positions.get(robot.target_location)
-            if target_pose:
-                # Resend navigation goal
-                self._navigate_robot(robot_id, target_pose)
-                logger.info(f"Resent navigation goal to {robot.target_location}")
+            if robot.target_location in self.map_positions:
+                # Use waypoint navigation to ensure robot follows defined paths
+                self._navigate_robot_by_name(robot_id, robot.target_location)
+                logger.info(f"[WAYPOINT NAV] Resent waypoint navigation to {robot.target_location}")
+            else:
+                logger.error(f"Target location {robot.target_location} not found in map positions")
         else:
             logger.warning(f"No target location set for robot {robot_id}")
 

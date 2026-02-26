@@ -133,6 +133,9 @@ class MainServer:
         self.tcp_server.register_handler('order_status_query', self.handle_order_status_query)
         self.tcp_server.register_handler('fleet_status_query', self.handle_fleet_status_query)
         self.tcp_server.register_handler('delivery_complete', self.handle_delivery_complete)
+        # Customer GUI compatibility handlers
+        self.tcp_server.register_handler('get_menus', self.handle_get_menus)
+        self.tcp_server.register_handler('submit_order', self.handle_submit_order)
 
     def _register_ros_handlers(self):
         """Register ROS message handlers"""
@@ -359,6 +362,142 @@ class MainServer:
             logger.error(f"Error handling delivery complete: {e}")
             raise
 
+    def handle_get_menus(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Handle get menus request from Customer GUI
+
+        Returns:
+            {
+                'menus': [
+                    {
+                        'id': str,
+                        'name': str,
+                        'price': int,
+                        'description': str,
+                        'image_url': str,
+                        'available': bool,
+                        'category': str
+                    },
+                    ...
+                ]
+            }
+        """
+        logger.info(f"Received get menus request: {data}")
+
+        try:
+            menus = self.db.get_available_menus()
+            menu_list = []
+            for menu in menus:
+                menu_list.append({
+                    'id': menu.id,
+                    'name': menu.name,
+                    'price': menu.price,
+                    'description': menu.description or '',
+                    'image_url': menu.image_url or '',
+                    'available': menu.available,
+                    'category': menu.category or ''
+                })
+
+            logger.info(f"Returning {len(menu_list)} menus")
+            # Return menus directly (will be wrapped by _process_message)
+            return {'menus': menu_list}
+
+        except Exception as e:
+            logger.warning(f"DB error, returning mock menus: {e}")
+            # Return mock data when DB is not available
+            mock_menus = [
+                {'id': 'M001', 'name': '햄치즈샌드위치', 'price': 5000, 'description': '재료: 빵, 양상추, 토마토, 치즈, 햄', 'image_url': '', 'available': True, 'category': '샌드위치'},
+                {'id': 'M002', 'name': '머쉬룸샌드위치', 'price': 5500, 'description': '재료: 빵, 버섯, 토마토, 치즈, 햄', 'image_url': '', 'available': True, 'category': '샌드위치'},
+                {'id': 'M003', 'name': '올인원샌드위치', 'price': 6500, 'description': '재료: 빵, 토마토, 치즈, 햄, 버섯, 양상추', 'image_url': '', 'available': True, 'category': '샌드위치'},
+            ]
+            return {'menus': mock_menus}
+
+    def handle_submit_order(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Handle submit order request from Customer GUI
+
+        Args:
+            data: {
+                'order': {
+                    'table_number': int,
+                    'items': [
+                        {
+                            'menu_id': str,
+                            'menu_name': str,
+                            'price': int,
+                            'quantity': int
+                        },
+                        ...
+                    ],
+                    'total_price': int
+                }
+            }
+
+        Returns:
+            {
+                'order_id': str,
+                'message': str
+            }
+        """
+        logger.info(f"Received submit order request: {data}")
+
+        order_data = data.get('order', data)  # Support both nested and flat structure
+        table_number = order_data.get('table_number')
+        items = order_data.get('items', [])
+
+        if not items:
+            return {
+                'status': 'error',
+                'message': '주문 항목이 없습니다.'
+            }
+
+        first_item = items[0]
+        order_id = None
+
+        # Try to create order in database
+        try:
+            order_id = self.db.create_order(
+                table_number=str(table_number),
+                menu_id=first_item.get('menu_id'),
+                quantity=first_item.get('quantity', 1),
+                voice_order=False
+            )
+            if order_id:
+                self.db.update_order_status(str(order_id), 'CONFIRMED')
+        except Exception as e:
+            logger.warning(f"DB error, using mock order ID: {e}")
+
+        # Generate mock order ID if DB failed
+        if not order_id:
+            import uuid
+            order_id = str(uuid.uuid4())[:8].upper()
+            logger.info(f"Using mock order ID: {order_id}")
+
+        # Send order to FMS via ROS (this is the important part)
+        try:
+            self.ros_bridge.publish_order_request(
+                order_id=str(order_id),
+                menu_id=first_item.get('menu_id'),
+                table_number=str(table_number),
+                quantity=first_item.get('quantity', 1),
+                sauce_type='mayo',
+                voice_order=False,
+                created_at=datetime.utcnow()
+            )
+            logger.info(f"Order {order_id} sent to FMS for table {table_number}")
+        except Exception as e:
+            logger.error(f"Failed to send order to FMS: {e}")
+            return {
+                'status': 'error',
+                'message': f'FMS 전송 실패: {str(e)}'
+            }
+
+        return {
+            'status': 'success',
+            'order_id': str(order_id),
+            'message': '주문이 접수되었습니다.'
+        }
+
     # ========================================
     # ROS Message Handlers (from FMS/Robot Arms)
     # ========================================
@@ -431,10 +570,28 @@ class MainServer:
                     status=robot['status']
                 )
 
+            # Convert datetime objects to ISO strings for JSON serialization
+            serializable_data = {
+                'robots': [],
+                'pending_orders': fleet_data.get('pending_orders', 0),
+                'active_orders': fleet_data.get('active_orders', 0),
+                'timestamp': fleet_data['timestamp'].isoformat() if isinstance(fleet_data.get('timestamp'), datetime) else str(fleet_data.get('timestamp', ''))
+            }
+            for robot in fleet_data['robots']:
+                robot_data = {
+                    'robot_id': robot['robot_id'],
+                    'status': robot['status'],
+                    'current_pose': robot.get('current_pose', {}),
+                    'battery_voltage': robot.get('battery_voltage', 0),
+                    'battery_present': robot.get('battery_present', False),
+                    'timestamp': robot['timestamp'].isoformat() if isinstance(robot.get('timestamp'), datetime) else str(robot.get('timestamp', ''))
+                }
+                serializable_data['robots'].append(robot_data)
+
             # Broadcast to Admin GUI clients
             self.tcp_server.broadcast({
                 'type': 'fleet_status_update',
-                'data': fleet_data
+                'data': serializable_data
             })
 
         except Exception as e:
@@ -518,18 +675,16 @@ class MainServer:
         """
         logger.info(f"Table arrival: robot={robot_id}, order={order_id}, table={table_number}")
 
+        # Try to update DB status (but don't fail if DB is down)
         try:
-            # Update order status to AT_TABLE
             self.db.update_order_status(order_id, 'AT_TABLE')
+        except Exception as e:
+            logger.warning(f"DB update failed (continuing): {e}")
 
-            # Get order details
-            order = self.db.get_order(order_id)
-            if not order:
-                logger.error(f"Order {order_id} not found in database")
-                return
-
-            # Broadcast delivery notification to TCP clients (kiosk/GUI)
-            # This triggers the customer GUI to show delivery notification
+        # Broadcast delivery notification to TCP clients (kiosk/GUI)
+        # This triggers the customer GUI to show delivery notification
+        # This MUST happen regardless of DB status
+        try:
             self.tcp_server.broadcast({
                 'type': 'delivery_notification',
                 'data': {
@@ -540,11 +695,9 @@ class MainServer:
                     'timestamp': datetime.utcnow().isoformat()
                 }
             })
-
             logger.info(f"Order {order_id} marked as AT_TABLE, delivery notification sent to kiosk")
-
         except Exception as e:
-            logger.error(f"Error handling table arrival: {e}")
+            logger.error(f"Error sending delivery notification: {e}")
 
     # ========================================
     # Server Control

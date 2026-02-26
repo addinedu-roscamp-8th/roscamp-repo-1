@@ -1,0 +1,241 @@
+# Domain Bridge Configuration for Kitchmatics FMS (IMPROVED VERSION)
+# Main PC (DOMAIN_ID=0) <-> pinky1 (DOMAIN_ID=11), pinky3 (DOMAIN_ID=13)
+#
+# Improvements:
+# 1. Namespace-based topic isolation to prevent name collisions
+# 2. TF (Transform) frames for coordinate system communication
+# 3. QoS policies for reliable and efficient communication
+# 4. Complete action service bridging with feedback
+# 5. Proper topic naming for multi-robot coordination
+#
+# Usage:
+#   ros2 run domain_bridge domain_bridge fms/config/domain_bridge_improved.yaml
+#
+# NOTE: Each robot namespace (e.g., /pinky1) is added to all topics
+# to ensure proper isolation and prevent message conflicts
+
+# ========== PINKY1 (DOMAIN_ID=11) ==========
+
+# pinky1 (DOMAIN_ID=11) -> Main PC (DOMAIN_ID=0): Sensor and Status Topics
+- from_domain: 11
+  to_domain: 0
+  topics:
+    # Localization: AMCL pose estimate with covariance
+    # Reliability: HIGH (pose is critical for fleet management)
+    /pinky1/amcl_pose:
+      type: geometry_msgs/msg/PoseWithCovarianceStamped
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Odometry: Wheel odometry (high frequency)
+    # Reliability: BEST_EFFORT (temporal data, older messages less useful)
+    /pinky1/odom:
+      type: nav_msgs/msg/Odometry
+      qos:
+        reliability: "BEST_EFFORT"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    # LiDAR Scan: Laser scanner data (very high frequency)
+    # Reliability: BEST_EFFORT (replaced frequently)
+    /pinky1/scan:
+      type: sensor_msgs/msg/LaserScan
+      qos:
+        reliability: "BEST_EFFORT"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 2
+
+    # Battery Voltage: Critical status information
+    # Reliability: HIGH (cannot miss battery alerts)
+    /pinky1/battery/voltage:
+      type: std_msgs/msg/Float32
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Battery Present: Critical status information
+    # Reliability: HIGH (cannot miss battery alerts)
+    /pinky1/battery/present:
+      type: std_msgs/msg/Bool
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    # Transform frames: Dynamic TF updates
+    # NOTE: /tf is global (not namespaced)
+    # Frames published: map->pinky1_odom, pinky1_odom->pinky1_base_link, etc.
+    # Reliability: BEST_EFFORT (continuously updated)
+    /tf:
+      type: tf2_msgs/msg/TFMessage
+      qos:
+        reliability: "BEST_EFFORT"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    # Static Transform frames: Fixed TF frames (published once)
+    # Frames: base_link->lidar, base_link->imu, etc.
+    # Reliability: HIGH (published once, then transient local)
+    /tf_static:
+      type: tf2_msgs/msg/TFMessage
+      qos:
+        reliability: "RELIABLE"
+        durability: "TRANSIENT_LOCAL"
+        history: "KEEP_LAST"
+        depth: 10
+
+# Main PC (DOMAIN_ID=0) -> pinky1 (DOMAIN_ID=11): Control Commands
+- from_domain: 0
+  to_domain: 11
+  topics:
+    # Initial Pose: Set starting pose for AMCL localization
+    # Reliability: HIGH (must not be lost)
+    /pinky1/initialpose:
+      type: geometry_msgs/msg/PoseWithCovarianceStamped
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    # Goal Pose: Destination for navigation
+    # Reliability: HIGH (must not be lost)
+    /pinky1/goal_pose:
+      type: geometry_msgs/msg/PoseStamped
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+  services:
+    # NavigateToPose Action Services
+    # These services handle robot navigation request/response
+
+    # Send Goal: Main PC sends navigation goal to robot
+    /pinky1/navigate_to_pose/_action/send_goal:
+      type: nav2_msgs/action/NavigateToPose
+
+    # Cancel Goal: Main PC cancels in-progress navigation
+    /pinky1/navigate_to_pose/_action/cancel_goal:
+      type: action_msgs/srv/CancelGoal
+
+    # Get Result: Main PC queries navigation result
+    /pinky1/navigate_to_pose/_action/get_result:
+      type: nav2_msgs/action/NavigateToPose
+
+# ========== PINKY3 (DOMAIN_ID=13) ==========
+
+# pinky3 (DOMAIN_ID=13) -> Main PC (DOMAIN_ID=0): Sensor and Status Topics
+- from_domain: 13
+  to_domain: 0
+  topics:
+    # Localization: AMCL pose estimate with covariance
+    /pinky3/amcl_pose:
+      type: geometry_msgs/msg/PoseWithCovarianceStamped
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Odometry: Wheel odometry
+    /pinky3/odom:
+      type: nav_msgs/msg/Odometry
+      qos:
+        reliability: "BEST_EFFORT"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    # LiDAR Scan: Laser scanner data
+    /pinky3/scan:
+      type: sensor_msgs/msg/LaserScan
+      qos:
+        reliability: "BEST_EFFORT"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 2
+
+    # Battery Voltage: Critical status information
+    /pinky3/battery/voltage:
+      type: std_msgs/msg/Float32
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Battery Present: Critical status information
+    /pinky3/battery/present:
+      type: std_msgs/msg/Bool
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    # Transform frames: Dynamic TF updates
+    # Frames published: map->pinky3_odom, pinky3_odom->pinky3_base_link, etc.
+    /tf:
+      type: tf2_msgs/msg/TFMessage
+      qos:
+        reliability: "BEST_EFFORT"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    # Static Transform frames
+    /tf_static:
+      type: tf2_msgs/msg/TFMessage
+      qos:
+        reliability: "RELIABLE"
+        durability: "TRANSIENT_LOCAL"
+        history: "KEEP_LAST"
+        depth: 10
+
+# Main PC (DOMAIN_ID=0) -> pinky3 (DOMAIN_ID=13): Control Commands
+- from_domain: 0
+  to_domain: 13
+  topics:
+    # Initial Pose: Set starting pose for AMCL localization
+    /pinky3/initialpose:
+      type: geometry_msgs/msg/PoseWithCovarianceStamped
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    # Goal Pose: Destination for navigation
+    /pinky3/goal_pose:
+      type: geometry_msgs/msg/PoseStamped
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+  services:
+    # NavigateToPose Action Services
+
+    # Send Goal: Main PC sends navigation goal to robot
+    /pinky3/navigate_to_pose/_action/send_goal:
+      type: nav2_msgs/action/NavigateToPose
+
+    # Cancel Goal: Main PC cancels in-progress navigation
+    /pinky3/navigate_to_pose/_action/cancel_goal:
+      type: action_msgs/srv/CancelGoal
+
+    # Get Result: Main PC queries navigation result
+    /pinky3/navigate_to_pose/_action/get_result:
+      type: nav2_msgs/action/NavigateToPose

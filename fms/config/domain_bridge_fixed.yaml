@@ -1,0 +1,151 @@
+# Domain Bridge Configuration for Kitchmatics FMS (FIXED)
+# Main PC (DOMAIN_ID=0)에서 로봇들과 통신
+#
+# 주요 개선사항:
+# 1. /pose 토픽 추가 (로봇 위치 실시간 업데이트용)
+# 2. 모든 필수 토픽/서비스 포함
+# 3. 다중 로봇 지원 (pinky1, pinky3)
+#
+# 사용법:
+#   ros2 run domain_bridge domain_bridge fms/config/domain_bridge_fixed.yaml
+#
+
+# ============================================
+# pinky1 (DOMAIN_ID=11) - pinky3로 테스트 중
+# ============================================
+
+# pinky1 → FMS (로봇 → 서버): 상태 정보 전달
+- from_domain: 11
+  to_domain: 0
+  topics:
+    # 필수: 로봇 위치 (FMS 네비게이션 완료 감지용)
+    /pose:
+      type: geometry_msgs/msg/Pose
+
+    # 보조: AMCL 기반 위치 추정
+    /amcl_pose:
+      type: geometry_msgs/msg/PoseWithCovarianceStamped
+
+    # 선택: 주행거리 측정 기반 위치
+    /odom:
+      type: nav_msgs/msg/Odometry
+
+    # 선택: LIDAR 스캔 (향후 장애물 감지용)
+    /scan:
+      type: sensor_msgs/msg/LaserScan
+
+    # 필수: 배터리 전압 (오류 감지용)
+    /battery/voltage:
+      type: std_msgs/msg/Float32
+
+    # 필수: 배터리 존재 여부 (상태 검증용)
+    /battery/present:
+      type: std_msgs/msg/Bool
+
+# FMS → pinky1 (서버 → 로봇): 제어 명령 전달
+- from_domain: 0
+  to_domain: 11
+  topics:
+    # 필수: AMCL 초기 위치 설정 (로봇 시작 시)
+    /initialpose:
+      type: geometry_msgs/msg/PoseWithCovarianceStamped
+
+    # 선택: 목표 위치 (향후 사용)
+    /goal_pose:
+      type: geometry_msgs/msg/PoseStamped
+
+  services:
+    # 필수: Nav2 네비게이션 액션 (목표 전송)
+    /navigate_to_pose/_action/send_goal:
+      type: nav2_msgs/action/NavigateToPose
+
+    # 필수: Nav2 네비게이션 액션 (목표 취소)
+    /navigate_to_pose/_action/cancel_goal:
+      type: action_msgs/srv/CancelGoal
+
+    # 필수: Nav2 네비게이션 액션 (결과 조회)
+    /navigate_to_pose/_action/get_result:
+      type: nav2_msgs/action/NavigateToPose
+
+# ============================================
+# pinky3 (DOMAIN_ID=13) - 현재 활성 로봇
+# ============================================
+
+# pinky3 → FMS (로봇 → 서버): 상태 정보 전달
+- from_domain: 13
+  to_domain: 0
+  topics:
+    # 필수: 로봇 위치 (FMS 네비게이션 완료 감지용)
+    /pose:
+      type: geometry_msgs/msg/Pose
+
+    # 보조: AMCL 기반 위치 추정
+    /amcl_pose:
+      type: geometry_msgs/msg/PoseWithCovarianceStamped
+
+    # 선택: 주행거리 측정 기반 위치
+    /odom:
+      type: nav_msgs/msg/Odometry
+
+    # 선택: LIDAR 스캔 (향후 장애물 감지용)
+    /scan:
+      type: sensor_msgs/msg/LaserScan
+
+    # 필수: 배터리 전압 (오류 감지용)
+    /battery/voltage:
+      type: std_msgs/msg/Float32
+
+    # 필수: 배터리 존재 여부 (상태 검증용)
+    /battery/present:
+      type: std_msgs/msg/Bool
+
+# FMS → pinky3 (서버 → 로봇): 제어 명령 전달
+- from_domain: 0
+  to_domain: 13
+  topics:
+    # 필수: AMCL 초기 위치 설정 (로봇 시작 시)
+    /initialpose:
+      type: geometry_msgs/msg/PoseWithCovarianceStamped
+
+    # 선택: 목표 위치 (향후 사용)
+    /goal_pose:
+      type: geometry_msgs/msg/PoseStamped
+
+  services:
+    # 필수: Nav2 네비게이션 액션 (목표 전송)
+    /navigate_to_pose/_action/send_goal:
+      type: nav2_msgs/action/NavigateToPose
+
+    # 필수: Nav2 네비게이션 액션 (목표 취소)
+    /navigate_to_pose/_action/cancel_goal:
+      type: action_msgs/srv/CancelGoal
+
+    # 필수: Nav2 네비게이션 액션 (결과 조회)
+    /navigate_to_pose/_action/get_result:
+      type: nav2_msgs/action/NavigateToPose
+
+# ============================================
+# 향후 확장: FMS 상태 토픽 브릿지 (선택)
+# ============================================
+# 다중 도메인 시스템으로 확장 시 추가
+# (현재는 FMS가 단일 도메인이므로 불필요)
+#
+# - from_domain: 0
+#   to_domain: 11
+#   topics:
+#     /fms/fleet_status:
+#       type: fleet_interfaces/msg/FleetStatus
+#     /fms/error_alert:
+#       type: fleet_interfaces/msg/ErrorAlert
+#     /cooking/order:
+#       type: fleet_interfaces/msg/CookingOrder
+#
+# - from_domain: 0
+#   to_domain: 13
+#   topics:
+#     /fms/fleet_status:
+#       type: fleet_interfaces/msg/FleetStatus
+#     /fms/error_alert:
+#       type: fleet_interfaces/msg/ErrorAlert
+#     /cooking/order:
+#       type: fleet_interfaces/msg/CookingOrder

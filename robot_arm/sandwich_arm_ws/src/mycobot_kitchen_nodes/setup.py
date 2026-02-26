@@ -33,6 +33,8 @@ setup(
             'inventory_manager = mycobot_kitchen_nodes.inven_manager_node:main',
             'recipe_executor = mycobot_kitchen_nodes.recipe_executor_node:main',
             'refill_executor = mycobot_kitchen_nodes.refill_executor_node:main',
+            'fms_command_interface = mycobot_kitchen_nodes.fms_command_interface_node:main',
+            'cooking_interface = mycobot_kitchen_nodes.cooking_interface_node:main',
         ],
     },
 )

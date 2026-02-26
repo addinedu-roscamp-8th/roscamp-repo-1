@@ -1,0 +1,644 @@
+# ==============================================================================
+# Domain Bridge Complete Configuration for Kitchmatics FMS
+# ==============================================================================
+#
+# Main PC (DOMAIN_ID=25) <-> All Robots
+#
+# Robot Configuration:
+#   - pinky1 (Mobile Robot): DOMAIN_ID=11
+#   - pinky2 (Mobile Robot): DOMAIN_ID=12
+#   - pinky3 (Mobile Robot): DOMAIN_ID=13
+#   - jetcobot1 (Robot Arm): DOMAIN_ID=20
+#   - jetcobot2 (Robot Arm): DOMAIN_ID=21
+#
+# Features:
+#   1. Bidirectional bridge for all 5 robots
+#   2. Namespace-based topic isolation
+#   3. Complete action service bridging (send_goal, cancel_goal, get_result, feedback, status)
+#   4. QoS policies optimized for each data type
+#   5. Robot arm command/status topics
+#
+# Usage:
+#   ros2 run domain_bridge domain_bridge fms/config/domain_bridge_complete.yaml
+#
+# ==============================================================================
+
+
+# ##############################################################################
+#                           MOBILE ROBOTS (pinky1, pinky2, pinky3)
+# ##############################################################################
+
+# ==============================================================================
+# PINKY1 (DOMAIN_ID=11)
+# ==============================================================================
+
+# pinky1 -> Main PC: Sensor and Status Topics
+- from_domain: 11
+  to_domain: 25
+  topics:
+    # Localization: AMCL pose estimate with covariance
+    # Reliability: RELIABLE (pose is critical for fleet management)
+    /pinky1/amcl_pose:
+      type: geometry_msgs/msg/PoseWithCovarianceStamped
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Odometry: Wheel odometry (high frequency)
+    # Reliability: BEST_EFFORT (temporal data, older messages less useful)
+    /pinky1/odom:
+      type: nav_msgs/msg/Odometry
+      qos:
+        reliability: "BEST_EFFORT"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    # LiDAR Scan: Laser scanner data (very high frequency)
+    # Reliability: BEST_EFFORT (replaced frequently)
+    /pinky1/scan:
+      type: sensor_msgs/msg/LaserScan
+      qos:
+        reliability: "BEST_EFFORT"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 2
+
+    # Battery Voltage: Critical status information
+    # Reliability: RELIABLE (cannot miss battery alerts)
+    /pinky1/battery/voltage:
+      type: std_msgs/msg/Float32
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Battery Present: Critical status information
+    # Reliability: RELIABLE (cannot miss battery alerts)
+    /pinky1/battery/present:
+      type: std_msgs/msg/Bool
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    # Transform frames: Dynamic TF updates
+    # Frames: map->odom, odom->base_link, etc.
+    # Reliability: BEST_EFFORT (continuously updated)
+    /tf:
+      type: tf2_msgs/msg/TFMessage
+      qos:
+        reliability: "BEST_EFFORT"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 100
+
+    # Static Transform frames: Fixed TF frames (published once)
+    # Frames: base_link->lidar, base_link->imu, etc.
+    # Reliability: RELIABLE with TRANSIENT_LOCAL (late joiners receive data)
+    /tf_static:
+      type: tf2_msgs/msg/TFMessage
+      qos:
+        reliability: "RELIABLE"
+        durability: "TRANSIENT_LOCAL"
+        history: "KEEP_LAST"
+        depth: 100
+
+    # NavigateToPose Action: Feedback from robot
+    /pinky1/navigate_to_pose/_action/feedback:
+      type: nav2_msgs/action/NavigateToPose_FeedbackMessage
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # NavigateToPose Action: Status updates
+    /pinky1/navigate_to_pose/_action/status:
+      type: action_msgs/msg/GoalStatusArray
+      qos:
+        reliability: "RELIABLE"
+        durability: "TRANSIENT_LOCAL"
+        history: "KEEP_LAST"
+        depth: 10
+
+# Main PC -> pinky1: Control Commands
+- from_domain: 25
+  to_domain: 11
+  topics:
+    # Initial Pose: Set starting pose for AMCL localization
+    # Reliability: RELIABLE (must not be lost)
+    /pinky1/initialpose:
+      type: geometry_msgs/msg/PoseWithCovarianceStamped
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    # Goal Pose: Destination for navigation
+    # Reliability: RELIABLE (must not be lost)
+    /pinky1/goal_pose:
+      type: geometry_msgs/msg/PoseStamped
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+  services:
+    # NavigateToPose Action: Send navigation goal to robot
+    /pinky1/navigate_to_pose/_action/send_goal:
+      type: nav2_msgs/action/NavigateToPose_SendGoal
+
+    # NavigateToPose Action: Cancel in-progress navigation
+    /pinky1/navigate_to_pose/_action/cancel_goal:
+      type: action_msgs/srv/CancelGoal
+
+    # NavigateToPose Action: Query navigation result
+    /pinky1/navigate_to_pose/_action/get_result:
+      type: nav2_msgs/action/NavigateToPose_GetResult
+
+
+# ==============================================================================
+# PINKY2 (DOMAIN_ID=12)
+# ==============================================================================
+
+# pinky2 -> Main PC: Sensor and Status Topics
+- from_domain: 12
+  to_domain: 25
+  topics:
+    # Localization: AMCL pose estimate with covariance
+    /pinky2/amcl_pose:
+      type: geometry_msgs/msg/PoseWithCovarianceStamped
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Odometry: Wheel odometry (high frequency)
+    /pinky2/odom:
+      type: nav_msgs/msg/Odometry
+      qos:
+        reliability: "BEST_EFFORT"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    # LiDAR Scan: Laser scanner data (very high frequency)
+    /pinky2/scan:
+      type: sensor_msgs/msg/LaserScan
+      qos:
+        reliability: "BEST_EFFORT"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 2
+
+    # Battery Voltage: Critical status information
+    /pinky2/battery/voltage:
+      type: std_msgs/msg/Float32
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Battery Present: Critical status information
+    /pinky2/battery/present:
+      type: std_msgs/msg/Bool
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    # Transform frames: Dynamic TF updates
+    /tf:
+      type: tf2_msgs/msg/TFMessage
+      qos:
+        reliability: "BEST_EFFORT"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 100
+
+    # Static Transform frames: Fixed TF frames
+    /tf_static:
+      type: tf2_msgs/msg/TFMessage
+      qos:
+        reliability: "RELIABLE"
+        durability: "TRANSIENT_LOCAL"
+        history: "KEEP_LAST"
+        depth: 100
+
+    # NavigateToPose Action: Feedback from robot
+    /pinky2/navigate_to_pose/_action/feedback:
+      type: nav2_msgs/action/NavigateToPose_FeedbackMessage
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # NavigateToPose Action: Status updates
+    /pinky2/navigate_to_pose/_action/status:
+      type: action_msgs/msg/GoalStatusArray
+      qos:
+        reliability: "RELIABLE"
+        durability: "TRANSIENT_LOCAL"
+        history: "KEEP_LAST"
+        depth: 10
+
+# Main PC -> pinky2: Control Commands
+- from_domain: 25
+  to_domain: 12
+  topics:
+    # Initial Pose: Set starting pose for AMCL localization
+    /pinky2/initialpose:
+      type: geometry_msgs/msg/PoseWithCovarianceStamped
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    # Goal Pose: Destination for navigation
+    /pinky2/goal_pose:
+      type: geometry_msgs/msg/PoseStamped
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+  services:
+    # NavigateToPose Action: Send navigation goal to robot
+    /pinky2/navigate_to_pose/_action/send_goal:
+      type: nav2_msgs/action/NavigateToPose_SendGoal
+
+    # NavigateToPose Action: Cancel in-progress navigation
+    /pinky2/navigate_to_pose/_action/cancel_goal:
+      type: action_msgs/srv/CancelGoal
+
+    # NavigateToPose Action: Query navigation result
+    /pinky2/navigate_to_pose/_action/get_result:
+      type: nav2_msgs/action/NavigateToPose_GetResult
+
+
+# ==============================================================================
+# PINKY3 (DOMAIN_ID=13)
+# ==============================================================================
+
+# pinky3 -> Main PC: Sensor and Status Topics
+- from_domain: 13
+  to_domain: 25
+  topics:
+    # Localization: AMCL pose estimate with covariance
+    /pinky3/amcl_pose:
+      type: geometry_msgs/msg/PoseWithCovarianceStamped
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Odometry: Wheel odometry (high frequency)
+    /pinky3/odom:
+      type: nav_msgs/msg/Odometry
+      qos:
+        reliability: "BEST_EFFORT"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    # LiDAR Scan: Laser scanner data (very high frequency)
+    /pinky3/scan:
+      type: sensor_msgs/msg/LaserScan
+      qos:
+        reliability: "BEST_EFFORT"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 2
+
+    # Battery Voltage: Critical status information
+    /pinky3/battery/voltage:
+      type: std_msgs/msg/Float32
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Battery Present: Critical status information
+    /pinky3/battery/present:
+      type: std_msgs/msg/Bool
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    # Transform frames: Dynamic TF updates
+    /tf:
+      type: tf2_msgs/msg/TFMessage
+      qos:
+        reliability: "BEST_EFFORT"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 100
+
+    # Static Transform frames: Fixed TF frames
+    /tf_static:
+      type: tf2_msgs/msg/TFMessage
+      qos:
+        reliability: "RELIABLE"
+        durability: "TRANSIENT_LOCAL"
+        history: "KEEP_LAST"
+        depth: 100
+
+    # NavigateToPose Action: Feedback from robot
+    /pinky3/navigate_to_pose/_action/feedback:
+      type: nav2_msgs/action/NavigateToPose_FeedbackMessage
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # NavigateToPose Action: Status updates
+    /pinky3/navigate_to_pose/_action/status:
+      type: action_msgs/msg/GoalStatusArray
+      qos:
+        reliability: "RELIABLE"
+        durability: "TRANSIENT_LOCAL"
+        history: "KEEP_LAST"
+        depth: 10
+
+# Main PC -> pinky3: Control Commands
+- from_domain: 25
+  to_domain: 13
+  topics:
+    # Initial Pose: Set starting pose for AMCL localization
+    /pinky3/initialpose:
+      type: geometry_msgs/msg/PoseWithCovarianceStamped
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    # Goal Pose: Destination for navigation
+    /pinky3/goal_pose:
+      type: geometry_msgs/msg/PoseStamped
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+  services:
+    # NavigateToPose Action: Send navigation goal to robot
+    /pinky3/navigate_to_pose/_action/send_goal:
+      type: nav2_msgs/action/NavigateToPose_SendGoal
+
+    # NavigateToPose Action: Cancel in-progress navigation
+    /pinky3/navigate_to_pose/_action/cancel_goal:
+      type: action_msgs/srv/CancelGoal
+
+    # NavigateToPose Action: Query navigation result
+    /pinky3/navigate_to_pose/_action/get_result:
+      type: nav2_msgs/action/NavigateToPose_GetResult
+
+
+# ##############################################################################
+#                           ROBOT ARMS (jetcobot1, jetcobot2)
+# ##############################################################################
+
+# ==============================================================================
+# JETCOBOT1 (DOMAIN_ID=20) - Robot Arm
+# ==============================================================================
+
+# jetcobot1 -> Main PC: Status Topics
+- from_domain: 20
+  to_domain: 25
+  topics:
+    # Arm A Status: Current state of arm A
+    # Reliability: RELIABLE (status updates must be received)
+    /jetcobot1/arm_a/status:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Arm B Status: Current state of arm B
+    /jetcobot1/arm_b/status:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Joint States: Current joint positions, velocities, efforts
+    /jetcobot1/joint_states:
+      type: sensor_msgs/msg/JointState
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Robot State: Overall robot arm state
+    /jetcobot1/robot_state:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Error/Fault Status
+    /jetcobot1/error_status:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 20
+
+    # Transform frames: Robot arm TF
+    /tf:
+      type: tf2_msgs/msg/TFMessage
+      qos:
+        reliability: "BEST_EFFORT"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 100
+
+    # Static Transform frames
+    /tf_static:
+      type: tf2_msgs/msg/TFMessage
+      qos:
+        reliability: "RELIABLE"
+        durability: "TRANSIENT_LOCAL"
+        history: "KEEP_LAST"
+        depth: 100
+
+# Main PC -> jetcobot1: Command Topics
+- from_domain: 25
+  to_domain: 20
+  topics:
+    # Arm A Command: Control commands for arm A
+    # Reliability: RELIABLE (commands must be received)
+    /jetcobot1/arm_a/cmd:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Arm B Command: Control commands for arm B
+    /jetcobot1/arm_b/cmd:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Emergency Stop Command
+    /jetcobot1/emergency_stop:
+      type: std_msgs/msg/Bool
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    # Gripper Command
+    /jetcobot1/gripper/cmd:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+
+# ==============================================================================
+# JETCOBOT2 (DOMAIN_ID=21) - Robot Arm
+# ==============================================================================
+
+# jetcobot2 -> Main PC: Status Topics
+- from_domain: 21
+  to_domain: 25
+  topics:
+    # Arm A Status: Current state of arm A
+    /jetcobot2/arm_a/status:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Arm B Status: Current state of arm B
+    /jetcobot2/arm_b/status:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Joint States: Current joint positions, velocities, efforts
+    /jetcobot2/joint_states:
+      type: sensor_msgs/msg/JointState
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Robot State: Overall robot arm state
+    /jetcobot2/robot_state:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Error/Fault Status
+    /jetcobot2/error_status:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 20
+
+    # Transform frames: Robot arm TF
+    /tf:
+      type: tf2_msgs/msg/TFMessage
+      qos:
+        reliability: "BEST_EFFORT"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 100
+
+    # Static Transform frames
+    /tf_static:
+      type: tf2_msgs/msg/TFMessage
+      qos:
+        reliability: "RELIABLE"
+        durability: "TRANSIENT_LOCAL"
+        history: "KEEP_LAST"
+        depth: 100
+
+# Main PC -> jetcobot2: Command Topics
+- from_domain: 25
+  to_domain: 21
+  topics:
+    # Arm A Command: Control commands for arm A
+    /jetcobot2/arm_a/cmd:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Arm B Command: Control commands for arm B
+    /jetcobot2/arm_b/cmd:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Emergency Stop Command
+    /jetcobot2/emergency_stop:
+      type: std_msgs/msg/Bool
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 5
+
+    # Gripper Command
+    /jetcobot2/gripper/cmd:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10

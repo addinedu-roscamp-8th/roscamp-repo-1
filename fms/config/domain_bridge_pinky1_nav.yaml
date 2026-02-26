@@ -1,0 +1,33 @@
+# Domain Bridge - pinky1 Navigation (Main PC Domain 25)
+# pinky1 (DOMAIN_ID=11) <-> Main PC (DOMAIN_ID=25)
+
+# pinky1 -> Main PC: 로봇 상태
+- from_domain: 11
+  to_domain: 25
+  topics:
+    /pose:
+      type: geometry_msgs/msg/Pose
+    /amcl_pose:
+      type: geometry_msgs/msg/PoseWithCovarianceStamped
+    /odom:
+      type: nav_msgs/msg/Odometry
+    /battery/voltage:
+      type: std_msgs/msg/Float32
+    /battery/present:
+      type: std_msgs/msg/Bool
+
+# Main PC -> pinky1: 제어 명령
+- from_domain: 25
+  to_domain: 11
+  topics:
+    /initialpose:
+      type: geometry_msgs/msg/PoseWithCovarianceStamped
+    /goal_pose:
+      type: geometry_msgs/msg/PoseStamped
+  services:
+    /navigate_to_pose/_action/send_goal:
+      type: nav2_msgs/action/NavigateToPose
+    /navigate_to_pose/_action/cancel_goal:
+      type: action_msgs/srv/CancelGoal
+    /navigate_to_pose/_action/get_result:
+      type: nav2_msgs/action/NavigateToPose

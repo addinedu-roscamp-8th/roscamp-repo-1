@@ -1,0 +1,140 @@
+# Domain Bridge Configuration for Kitchmatics FMS
+# Main PC (DOMAIN_ID=25)에서 로봇들과 통신
+#
+# 사용법:
+#   ROS_DOMAIN_ID=25 ros2 run domain_bridge domain_bridge fms/config/domain_bridge.yaml
+#
+# 로봇 Domain ID 할당:
+#   - pinky1: DOMAIN_ID=11
+#   - pinky2: DOMAIN_ID=12
+#   - pinky3: DOMAIN_ID=13
+#   - Main PC (FMS): DOMAIN_ID=25
+#
+# 토픽 리매핑 규칙:
+#   - 로봇 측: /amcl_pose → FMS 측: /pinky1/amcl_pose
+#   - 각 로봇의 토픽이 고유한 이름으로 FMS에 전달됨
+
+# ============================================================
+# pinky1 (DOMAIN_ID=11) <-> Main PC (DOMAIN_ID=25)
+# ============================================================
+name: pinky1_bridge
+from_domain: 11
+to_domain: 25
+topics:
+  # Robot -> FMS: AMCL Pose (로봇 위치)
+  amcl_pose:
+    type: geometry_msgs/msg/PoseWithCovarianceStamped
+    remap: pinky1/amcl_pose
+  # Robot -> FMS: Battery voltage
+  battery/voltage:
+    type: std_msgs/msg/Float32
+    remap: pinky1/battery/voltage
+  # Robot -> FMS: Battery present
+  battery/present:
+    type: std_msgs/msg/Bool
+    remap: pinky1/battery/present
+  # FMS -> Robot: Initial pose setting
+  pinky1/initialpose:
+    type: geometry_msgs/msg/PoseWithCovarianceStamped
+    remap: initialpose
+    reversed: true
+services:
+  # Lifecycle services for nav2
+  lifecycle_manager_navigation/get_state:
+    type: lifecycle_msgs/srv/GetState
+    remap: pinky1/lifecycle_manager_navigation/get_state
+actions:
+  # FMS -> Robot: FollowWaypoints navigation action
+  pinky1/follow_waypoints:
+    type: nav2_msgs/action/FollowWaypoints
+    remap: follow_waypoints
+    reversed: true
+  # FMS -> Robot: NavigateToPose navigation action
+  pinky1/navigate_to_pose:
+    type: nav2_msgs/action/NavigateToPose
+    remap: navigate_to_pose
+    reversed: true
+
+---
+# ============================================================
+# pinky2 (DOMAIN_ID=12) <-> Main PC (DOMAIN_ID=25)
+# ============================================================
+name: pinky2_bridge
+from_domain: 12
+to_domain: 25
+topics:
+  # Robot -> FMS: AMCL Pose (로봇 위치)
+  amcl_pose:
+    type: geometry_msgs/msg/PoseWithCovarianceStamped
+    remap: pinky2/amcl_pose
+  # Robot -> FMS: Battery voltage
+  battery/voltage:
+    type: std_msgs/msg/Float32
+    remap: pinky2/battery/voltage
+  # Robot -> FMS: Battery present
+  battery/present:
+    type: std_msgs/msg/Bool
+    remap: pinky2/battery/present
+  # FMS -> Robot: Initial pose setting
+  pinky2/initialpose:
+    type: geometry_msgs/msg/PoseWithCovarianceStamped
+    remap: initialpose
+    reversed: true
+services:
+  # Lifecycle services for nav2
+  lifecycle_manager_navigation/get_state:
+    type: lifecycle_msgs/srv/GetState
+    remap: pinky2/lifecycle_manager_navigation/get_state
+actions:
+  # FMS -> Robot: FollowWaypoints navigation action
+  pinky2/follow_waypoints:
+    type: nav2_msgs/action/FollowWaypoints
+    remap: follow_waypoints
+    reversed: true
+  # FMS -> Robot: NavigateToPose navigation action
+  pinky2/navigate_to_pose:
+    type: nav2_msgs/action/NavigateToPose
+    remap: navigate_to_pose
+    reversed: true
+
+---
+# ============================================================
+# pinky3 (DOMAIN_ID=13) <-> Main PC (DOMAIN_ID=25)
+# ============================================================
+name: pinky3_bridge
+from_domain: 13
+to_domain: 25
+topics:
+  # Robot -> FMS: AMCL Pose (로봇 위치)
+  amcl_pose:
+    type: geometry_msgs/msg/PoseWithCovarianceStamped
+    remap: pinky3/amcl_pose
+  # Robot -> FMS: Battery voltage
+  battery/voltage:
+    type: std_msgs/msg/Float32
+    remap: pinky3/battery/voltage
+  # Robot -> FMS: Battery present
+  battery/present:
+    type: std_msgs/msg/Bool
+    remap: pinky3/battery/present
+  # FMS -> Robot: Initial pose setting
+  pinky3/initialpose:
+    type: geometry_msgs/msg/PoseWithCovarianceStamped
+    remap: initialpose
+    reversed: true
+services:
+  # Lifecycle services for nav2
+  lifecycle_manager_navigation/get_state:
+    type: lifecycle_msgs/srv/GetState
+    remap: pinky3/lifecycle_manager_navigation/get_state
+actions:
+  # FMS -> Robot: FollowWaypoints navigation action
+  pinky3/follow_waypoints:
+    type: nav2_msgs/action/FollowWaypoints
+    remap: follow_waypoints
+    reversed: true
+  # FMS -> Robot: NavigateToPose navigation action
+  pinky3/navigate_to_pose:
+    type: nav2_msgs/action/NavigateToPose
+    remap: navigate_to_pose
+    reversed: true
