@@ -1,0 +1,30 @@
+# Pinky2 Bridge: Domain 12 -> Domain 25
+name: pinky2_bridge
+from_domain: 12
+to_domain: 25
+wait_for_publisher: true
+topics:
+  amcl_pose:
+    type: geometry_msgs/msg/PoseWithCovarianceStamped
+    remap: pinky2/amcl_pose
+  odom:
+    type: nav_msgs/msg/Odometry
+    remap: pinky2/odom
+  battery/voltage:
+    type: std_msgs/msg/Float32
+    remap: pinky2/battery/voltage
+  battery/present:
+    type: std_msgs/msg/Bool
+    remap: pinky2/battery/present
+  follow_waypoints/_action/feedback:
+    type: nav2_msgs/action/FollowWaypoints_FeedbackMessage
+    remap: pinky2/follow_waypoints/_action/feedback
+  follow_waypoints/_action/status:
+    type: action_msgs/msg/GoalStatusArray
+    remap: pinky2/follow_waypoints/_action/status
+  navigate_to_pose/_action/feedback:
+    type: nav2_msgs/action/NavigateToPose_FeedbackMessage
+    remap: pinky2/navigate_to_pose/_action/feedback
+  navigate_to_pose/_action/status:
+    type: action_msgs/msg/GoalStatusArray
+    remap: pinky2/navigate_to_pose/_action/status

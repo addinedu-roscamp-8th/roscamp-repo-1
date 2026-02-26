@@ -1,0 +1,167 @@
+# Domain Bridge Configuration for Robot Arms
+# armA (DOMAIN_ID=20), armB (DOMAIN_ID=21) <-> Main PC (DOMAIN_ID=25)
+#
+# Robot Arm Mapping:
+#   - armA: 192.168.1.4, DOMAIN_ID=20
+#   - armB: 192.168.1.10, DOMAIN_ID=21
+#
+# Coordinator Node publishes/subscribes to these topics without namespace
+#
+# Usage:
+#   ROS_DOMAIN_ID=25 ros2 run domain_bridge domain_bridge fms/config/domain_bridge_arms.yaml
+
+name: arms_bridge
+
+topics:
+  # ============================================
+  # ARM A (Domain 20) ↔ Main PC (Domain 25)
+  # ============================================
+
+  # Arm A Status: Current state from recipe_executor_node
+  # Direction: armA → Main PC
+  arm_a/status:
+    type: std_msgs/msg/String
+    from_domain: 20
+    to_domain: 25
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 10
+
+  # Arm A Command: Control commands to recipe_executor_node
+  # Direction: Main PC → armA
+  arm_a/cmd:
+    type: std_msgs/msg/String
+    from_domain: 25
+    to_domain: 20
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 10
+
+  # ============================================
+  # ARM B (Domain 21) ↔ Main PC (Domain 25)
+  # ============================================
+
+  # Arm B Status: Current state from sauce node
+  # Direction: armB → Main PC
+  arm_b/status:
+    type: std_msgs/msg/String
+    from_domain: 21
+    to_domain: 25
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 10
+
+  # Arm B Command: Control commands to sauce node
+  # Direction: Main PC → armB
+  arm_b/cmd:
+    type: std_msgs/msg/String
+    from_domain: 25
+    to_domain: 21
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 10
+
+  # ============================================
+  # Verify Node (Domain 21) ↔ Main PC (Domain 25)
+  # ============================================
+
+  # Verify Status: Current state from verify node
+  # Direction: armB → Main PC
+  verify/status:
+    type: std_msgs/msg/String
+    from_domain: 21
+    to_domain: 25
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 10
+
+  # Verify Command: Control commands to verify node
+  # Direction: Main PC → armB
+  verify/cmd:
+    type: std_msgs/msg/String
+    from_domain: 25
+    to_domain: 21
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 10
+
+  # ============================================
+  # FMS ↔ Coordinator Communication
+  # ============================================
+
+  # Pickup Arrival Notification: FMS → Coordinator (armA)
+  # Direction: Main PC → armA (Domain 20)
+  fms_pickup_arrival_20:
+    topic: fms/pickup_arrival
+    type: fleet_interfaces/msg/PickupArrival
+    from_domain: 25
+    to_domain: 20
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 10
+
+  # Pickup Arrival Notification: FMS → Coordinator (armB)
+  # Direction: Main PC → armB (Domain 21)
+  fms_pickup_arrival_21:
+    topic: fms/pickup_arrival
+    type: fleet_interfaces/msg/PickupArrival
+    from_domain: 25
+    to_domain: 21
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 10
+
+  # Cooking Order: FMS → Coordinator (armA)
+  # Direction: Main PC → armA (Domain 20)
+  cooking_order_20:
+    topic: cooking/order
+    type: fleet_interfaces/msg/CookingOrder
+    from_domain: 25
+    to_domain: 20
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 10
+
+  # Cooking Order: FMS → Coordinator (armB)
+  # Direction: Main PC → armB (Domain 21)
+  cooking_order_21:
+    topic: cooking/order
+    type: fleet_interfaces/msg/CookingOrder
+    from_domain: 25
+    to_domain: 21
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 10
+
+  # Loading Complete: Coordinator → FMS
+  # Direction: armB (Domain 21) → Main PC
+  # Note: Coordinator runs on domain 21 and publishes to this topic
+  cooking/loading_complete:
+    type: fleet_interfaces/msg/LoadingComplete
+    from_domain: 21
+    to_domain: 25
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 10

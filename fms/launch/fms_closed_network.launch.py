@@ -52,28 +52,15 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'tcp_port',
             default_value='9000',
-            description='FMS TCP Server port'
+            description='FMS TCP Server port (used by fms_node gui_tcp_server)'
         ),
 
-        # FMS Node with TCP Server
-        Node(
-            package='fms',
-            executable='fms_tcp_node',
-            name='fms_tcp_node',
-            output='screen',
-            parameters=[
-                {'use_sim_time': use_sim},
-                {'tcp_port': tcp_port},
-                {'config_file': fms_config_file},
-                {'network_config_file': network_config_file},
-            ],
-            remappings=[
-                ('/fms/fleet_status', '/fms/fleet_status'),
-                ('/fms/order_request', '/fms/order_request'),
-            ]
-        ),
+        # CRITICAL FIX: Removed fms_tcp_node to avoid port 9000 conflict
+        # fms_tcp_node was for robot TCP communication (old architecture)
+        # fms_node has embedded gui_tcp_server for GUI communication (current architecture)
+        # Having both causes "No handler for message type: new_order" warnings
 
-        # Original FMS Node (for ROS 2 integration)
+        # FMS Node with embedded GUI TCP Server (port 9000)
         Node(
             package='fms',
             executable='fms_node',

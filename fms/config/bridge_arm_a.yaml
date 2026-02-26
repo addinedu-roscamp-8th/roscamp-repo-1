@@ -1,0 +1,8 @@
+# Arm A Bridge: Domain 20 -> Domain 25
+name: bridge_arm_a
+from_domain: 20
+to_domain: 25
+wait_for_publisher: true
+topics:
+  arm_a/status:
+    type: std_msgs/msg/String

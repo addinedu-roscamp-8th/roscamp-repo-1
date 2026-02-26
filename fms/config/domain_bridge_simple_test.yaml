@@ -1,0 +1,17 @@
+# Simple test config for domain_bridge
+# Bridges from pinky1 (domain 11) to main PC (domain 25)
+
+name: simple_test_bridge
+
+from_domain: 11
+to_domain: 25
+
+wait_for_publisher: true
+wait_for_subscription: false
+
+topics:
+  amcl_pose:
+    type: geometry_msgs/msg/PoseWithCovarianceStamped
+    qos:
+      reliability: reliable
+      durability: volatile
