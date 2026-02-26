@@ -90,6 +90,8 @@ def create_menu():
             price: { type: integer }
             category: { type: string }
             available: { type: boolean }
+            description: { type: string }
+            image_url: { type: string }
     responses:
       201:
         description: 생성됨
@@ -114,6 +116,8 @@ def create_menu():
             price=int(data["price"]),
             category=data["category"],
             available=data.get("available", True),
+            description=data.get("description") or "",
+            image_url=data.get("image_url") or "",
         )
         db.add(row)
         db.commit()
@@ -146,6 +150,8 @@ def update_menu(id):
             price: { type: integer }
             category: { type: string }
             available: { type: boolean }
+            description: { type: string }
+            image_url: { type: string }
     responses:
       200:
         description: 수정됨
@@ -170,6 +176,10 @@ def update_menu(id):
             row.category = data["category"]
         if "available" in data:
             row.available = bool(data["available"])
+        if "description" in data:
+            row.description = data["description"] or ""
+        if "image_url" in data:
+            row.image_url = data["image_url"] or ""
         db.commit()
         return jsonify(row_to_dict(row))
     except Exception as e:

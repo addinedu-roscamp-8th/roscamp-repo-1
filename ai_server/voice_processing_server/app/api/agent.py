@@ -1,8 +1,16 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field
 from app.agent.voice_agent import run_agent_turn
+from app.core.voice_order_state import process_order_turn
+from app.api.monitor import add_attempt
 
 router = APIRouter(prefix="/agent", tags=["Agent"])
+
+
+class OrderTurnRequest(BaseModel):
+    session_id: str = Field(default="default", description="세션 ID")
+    text: str = Field(..., description="사용자 발화")
+    table_number: int | None = Field(default=None, description="테이블 번호 (1~4)")
 
 
 class AgentTextRequest(BaseModel):
@@ -52,5 +60,23 @@ async def post_agent_voice_text(body: AgentTextRequest) -> dict:
             run_function_on_wake=body.run_function_on_wake,
             tts_reply=body.tts_reply,
         )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/order_turn",
+    summary="음성 주문 1턴",
+    description="추가주문/주문 완료 플로우. session_id별 상태 유지.",
+)
+async def post_agent_order_turn(body: OrderTurnRequest) -> dict:
+    try:
+        reply, state = process_order_turn(
+            session_id=body.session_id,
+            text=body.text,
+            table_number=body.table_number,
+        )
+        add_attempt(session_id=body.session_id, text=body.text, reply_text=reply, state=state)
+        return {"reply_text": reply, "state": state}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

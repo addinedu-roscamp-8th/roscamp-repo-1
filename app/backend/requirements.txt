@@ -1,0 +1,8 @@
+# Backend (Main Server) - run_main_server.py 실행 시 필요
+# PostgreSQL + SQLAlchemy
+sqlalchemy>=1.4
+psycopg2-binary>=2.9
+# ROS2 rclpy 의존 (parameter 등에서 yaml 사용)
+PyYAML>=5.1
+# ROS2 geometry_msgs 등 메시지 타입에서 사용
+numpy>=1.20

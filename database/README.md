@@ -47,7 +47,13 @@ source SETUP_GUIDE.md
 ### SQL Files
 - **[schema.sql](schema.sql)** - Base database schema (production schema)
 - **[migrations/001_add_fms_optimization.sql](migrations/001_add_fms_optimization.sql)** - FMS tables and indexes
+- **[migrations/003_add_menus_description_image_url.sql](migrations/003_add_menus_description_image_url.sql)** - Add `description`, `image_url` to `menus` (Backend/db_server 호환)
 - **[test_data.sql](test_data.sql)** - Sample test data for development
+
+**기존 DB에 003 마이그레이션 적용 (pinky_robot_store):**
+```bash
+psql -h 192.168.0.27 -p 5432 -U deepdive -d pinky_robot_store -f database/migrations/003_add_menus_description_image_url.sql
+```
 
 ---
 

@@ -1,5 +1,5 @@
 # Kitchmatic schema (database/schema.sql) - SQLAlchemy models
-from sqlalchemy import Column, String, Integer, Boolean, Float, ForeignKey, DateTime, UniqueConstraint, CheckConstraint
+from sqlalchemy import Column, String, Integer, Boolean, Float, ForeignKey, DateTime, UniqueConstraint, CheckConstraint, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -21,6 +21,8 @@ class Menu(Base):
     price = Column(Integer, nullable=False)
     category = Column(String(50), nullable=False)
     available = Column(Boolean, default=True)
+    description = Column(Text, default="", nullable=True)
+    image_url = Column(String(500), default="", nullable=True)
     created_at = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
 
 

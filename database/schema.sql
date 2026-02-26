@@ -9,16 +9,18 @@ CREATE TABLE menus (
     price INTEGER NOT NULL,
     category VARCHAR(50) NOT NULL,
     available BOOLEAN DEFAULT TRUE,
+    description TEXT DEFAULT '',
+    image_url VARCHAR(500) DEFAULT '',
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
 
     CONSTRAINT chk_price CHECK (price >= 0)
 );
 
 -- 초기 데이터
-INSERT INTO menus (id, name, price, category) VALUES
-    ('M001', '햄치즈샌드위치', 5000, '샌드위치'),
-    ('M002', '머쉬룸샌드위치', 5500, '샌드위치'),
-    ('M003', '올인원샌드위치', 6500, '샌드위치');
+INSERT INTO menus (id, name, price, category, description, image_url) VALUES
+    ('M001', '햄치즈샌드위치', 5000, '샌드위치', '', ''),
+    ('M002', '머쉬룸샌드위치', 5500, '샌드위치', '', ''),
+    ('M003', '올인원샌드위치', 6500, '샌드위치', '', '');
 
 -- ========================================
 -- 2. 식재료 테이블

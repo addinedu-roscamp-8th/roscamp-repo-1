@@ -27,6 +27,8 @@ class Menu(Base):
     price = Column(Integer, nullable=False)
     category = Column(String(50), nullable=False)
     available = Column(Boolean, default=True)
+    description = Column(String(500), default='', nullable=True)
+    image_url = Column(String(500), default='', nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     __table_args__ = (

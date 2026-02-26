@@ -364,23 +364,11 @@ class MainServer:
 
     def handle_get_menus(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Handle get menus request from Customer GUI
+        Handle get menus request from Customer GUI.
+        DB menus 테이블: id, name, price, category, available, description, image_url, created_at.
 
         Returns:
-            {
-                'menus': [
-                    {
-                        'id': str,
-                        'name': str,
-                        'price': int,
-                        'description': str,
-                        'image_url': str,
-                        'available': bool,
-                        'category': str
-                    },
-                    ...
-                ]
-            }
+            {'menus': [{'id', 'name', 'price', 'category', 'available', 'description', 'image_url'}, ...]}
         """
         logger.info(f"Received get menus request: {data}")
 
@@ -392,23 +380,21 @@ class MainServer:
                     'id': menu.id,
                     'name': menu.name,
                     'price': menu.price,
+                    'category': menu.category or '',
+                    'available': menu.available,
                     'description': menu.description or '',
                     'image_url': menu.image_url or '',
-                    'available': menu.available,
-                    'category': menu.category or ''
                 })
 
-            logger.info(f"Returning {len(menu_list)} menus")
-            # Return menus directly (will be wrapped by _process_message)
+            logger.info(f"Returning {len(menu_list)} menus from DB")
             return {'menus': menu_list}
 
         except Exception as e:
             logger.warning(f"DB error, returning mock menus: {e}")
-            # Return mock data when DB is not available
             mock_menus = [
-                {'id': 'M001', 'name': '햄치즈샌드위치', 'price': 5000, 'description': '재료: 빵, 양상추, 토마토, 치즈, 햄', 'image_url': '', 'available': True, 'category': '샌드위치'},
-                {'id': 'M002', 'name': '머쉬룸샌드위치', 'price': 5500, 'description': '재료: 빵, 버섯, 토마토, 치즈, 햄', 'image_url': '', 'available': True, 'category': '샌드위치'},
-                {'id': 'M003', 'name': '올인원샌드위치', 'price': 6500, 'description': '재료: 빵, 토마토, 치즈, 햄, 버섯, 양상추', 'image_url': '', 'available': True, 'category': '샌드위치'},
+                {'id': 'M001', 'name': '햄치즈샌드위치', 'price': 5000, 'description': '', 'image_url': '', 'available': True, 'category': '샌드위치'},
+                {'id': 'M002', 'name': '머쉬룸샌드위치', 'price': 5500, 'description': '', 'image_url': '', 'available': True, 'category': '샌드위치'},
+                {'id': 'M003', 'name': '올인원샌드위치', 'price': 6500, 'description': '', 'image_url': '', 'available': True, 'category': '샌드위치'},
             ]
             return {'menus': mock_menus}
 

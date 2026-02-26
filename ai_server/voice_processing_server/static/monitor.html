@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>음성 주문 - 최근 주문 시도 대시보드</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: sans-serif; margin: 16px; background: #f8f9fa; }
+    h1 { font-size: 1.35rem; margin-bottom: 8px; }
+    .meta { color: #666; font-size: 0.9rem; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }
+    th { background: #333; color: #fff; font-weight: 600; }
+    tr:hover { background: #f5f5f5; }
+    .col-time { width: 160px; }
+    .col-session { width: 90px; }
+    .col-stage { width: 100px; }
+    .col-items { width: 80px; }
+    .col-order-ids { max-width: 200px; word-break: break-all; font-size: 0.85rem; }
+    .empty { padding: 24px; color: #888; text-align: center; }
+    .stage-idle { color: #888; }
+    .stage-collecting { color: #0a0; }
+    .stage-ask_more { color: #07c; }
+    .stage-confirming { color: #c60; }
+  </style>
+</head>
+<body>
+  <h1>최근 주문 시도 대시보드</h1>
+  <p class="meta">Voice 서버 /agent/order_turn 호출 시 자동 기록 · <span id="baseUrl"></span> · <span id="lastUpdate">-</span></p>
+  <table>
+    <thead>
+      <tr>
+        <th class="col-time">시각</th>
+        <th class="col-session">세션</th>
+        <th>사용자 발화</th>
+        <th>Agent 응답</th>
+        <th class="col-stage">단계</th>
+        <th class="col-items">항목 수</th>
+        <th class="col-order-ids">order_ids</th>
+      </tr>
+    </thead>
+    <tbody id="tbody">
+      <tr><td colspan="7" class="empty">불러오는 중...</td></tr>
+    </tbody>
+  </table>
+
+  <script>
+    const tbody = document.getElementById('tbody');
+    const lastUpdate = document.getElementById('lastUpdate');
+    const baseUrl = document.getElementById('baseUrl');
+    const API_BASE = window.location.origin;
+    baseUrl.textContent = API_BASE;
+
+    function formatTime(iso) {
+      if (!iso) return '-';
+      const d = new Date(iso);
+      return d.toLocaleString('ko-KR');
+    }
+
+    function stageClass(s) {
+      if (!s) return '';
+      if (s === 'idle') return 'stage-idle';
+      if (s === 'collecting') return 'stage-collecting';
+      if (s === 'ask_more') return 'stage-ask_more';
+      if (s === 'confirming') return 'stage-confirming';
+      return '';
+    }
+
+    function render(attempts) {
+      lastUpdate.textContent = '마지막 갱신: ' + new Date().toLocaleTimeString('ko-KR');
+      if (!attempts || attempts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">아직 기록이 없습니다. /agent/order_turn 을 호출하면 여기에 표시됩니다.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = attempts.map(a => {
+        const state = a.state || {};
+        const stage = state.stage || '-';
+        const items = state.items || [];
+        const orderIds = state.order_ids || [];
+        return `<tr>
+          <td class="col-time">${formatTime(a.timestamp)}</td>
+          <td class="col-session">${escapeHtml(a.session_id)}</td>
+          <td>${escapeHtml(a.text)}</td>
+          <td>${escapeHtml(a.reply_text)}</td>
+          <td class="col-stage ${stageClass(stage)}">${escapeHtml(stage)}</td>
+          <td class="col-items">${items.length}</td>
+          <td class="col-order-ids">${orderIds.length ? orderIds.join(', ') : '-'}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function escapeHtml(s) {
+      if (s == null) return '';
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    async function fetchAttempts() {
+      try {
+        const res = await fetch(API_BASE + '/monitor/order_attempts?limit=50');
+        const data = await res.json();
+        render(data.attempts || []);
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">오류: ' + escapeHtml(e.message) + '</td></tr>';
+      }
+    }
+
+    fetchAttempts();
+    setInterval(fetchAttempts, 3000);
+  </script>
+</body>
+</html>

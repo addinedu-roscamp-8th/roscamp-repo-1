@@ -53,6 +53,10 @@ class Config:
     # 테이블 번호
     TABLE_NUMBER = int(os.getenv('TABLE_NUMBER', '1'))
 
+    # Voice 처리 서버 URL (음성 주문 GUI가 STT/웨이크업/order_turn/TTS 호출 시 사용)
+    # 미설정 시 로컬 기본값. 다른 호스트/포트 사용 시 예: VOICE_SERVER_URL=http://192.168.1.10:8000
+    VOICE_SERVER_URL = os.getenv('VOICE_SERVER_URL', 'http://127.0.0.1:8000').rstrip('/')
+
     # 로그 레벨
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 

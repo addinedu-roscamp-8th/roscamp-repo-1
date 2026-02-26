@@ -12,6 +12,9 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+# 요청 처리 중인 클라이언트 (broadcast 시 해당 클라이언트 제외 → Voice가 다음 응답을 올바르게 수신)
+_current_client_id = threading.local()
+
 
 class TCPServer:
     """
@@ -149,12 +152,14 @@ class TCPServer:
                     message = json.loads(data.decode('utf-8'))
                     logger.debug(f"Received from {client_id}: {message}")
 
-                    # Handle message
-                    response = self._process_message(message)
-
-                    # Send response with length header
-                    if response:
-                        self._send_with_header(client_socket, response)
+                    # 요청 처리 중인 클라이언트 기록 (broadcast 시 이 클라이언트 제외 → Voice 클라이언트가 다음 응답을 올바르게 수신)
+                    _current_client_id.value = client_id
+                    try:
+                        response = self._process_message(message)
+                        if response:
+                            self._send_with_header(client_socket, response)
+                    finally:
+                        _current_client_id.value = None
 
                 except json.JSONDecodeError as e:
                     logger.error(f"Invalid JSON from {client_id}: {e}")
@@ -230,29 +235,35 @@ class TCPServer:
                 'message': f'Unknown message type: {message_type}'
             }
 
-    def broadcast(self, message: Dict[str, Any]):
+    def broadcast(self, message: Dict[str, Any], exclude_client_id: str | None = None):
         """
-        Broadcast message to all connected clients
+        Broadcast message to all connected clients.
+        exclude_client_id: 이 클라이언트에는 전송하지 않음 (요청한 클라이언트가 broadcast를 응답으로 읽지 않도록).
 
         Args:
             message: Message dict to broadcast
+            exclude_client_id: 제외할 client_id (None이면 thread-local에서 요청 처리 중인 클라이언트 자동 제외)
         """
+        if exclude_client_id is None:
+            exclude_client_id = getattr(_current_client_id, "value", None)
+
         json_data = json.dumps(message, ensure_ascii=False).encode('utf-8')
         length_header = len(json_data).to_bytes(4, byteorder='big')
         message_data = length_header + json_data
 
         with self.client_lock:
             disconnected = []
-            for client_id, client_socket in self.clients.items():
+            for cid, client_socket in self.clients.items():
+                if cid == exclude_client_id:
+                    continue
                 try:
                     client_socket.sendall(message_data)
                 except Exception as e:
-                    logger.error(f"Failed to send to {client_id}: {e}")
-                    disconnected.append(client_id)
+                    logger.error(f"Failed to send to {cid}: {e}")
+                    disconnected.append(cid)
 
-            # Remove disconnected clients
-            for client_id in disconnected:
-                del self.clients[client_id]
+            for cid in disconnected:
+                del self.clients[cid]
 
     def send_to_client(self, client_id: str, message: Dict[str, Any]):
         """

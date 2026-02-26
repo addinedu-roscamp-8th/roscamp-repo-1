@@ -93,13 +93,34 @@
 
 ### 2. 로컬 테스트 시작
 
+**방법 A – 리포지토리 루트 워크스페이스 (권장)**  
+루트에서 빌드·실행 스크립트 사용. `build/`, `install/`, `log/`는 `.gitignore`에 있어 git에는 올라가지 않음.
+
+```bash
+# 리포지토리 루트에서 (최초 1회 빌드 후 실행)
+./run_backend_from_workspace.sh
+```
+
+수동으로 빌드만 하려면 (패키지명은 **fleet_interfaces**. `fleet_ointerfaces` 오타 주의):
+
+```bash
+cd /path/to/roscamp-repo-1
+source /opt/ros/jazzy/setup.bash   # 또는 humble
+# --paths: robot_arm/venv 등 다른 setup.py 경로 스캔 방지
+colcon build --paths fleet_interfaces --paths app/backend --packages-select fleet_interfaces main_server
+source install/setup.bash
+python3 app/backend/run_main_server.py
+```
+
+**방법 B – 기존 절차 (동일 머신 경로 기준)**
+
 ```bash
 # 1. Database 설정
-cd /home/gw/kitchmatics/roscamp-repo-1/database
+cd /path/to/roscamp-repo-1/database
 ./setup_database.sh
 
-# 2. 빌드
-cd /home/gw/kitchmatics/roscamp-repo-1
+# 2. 빌드 (루트에서)
+cd /path/to/roscamp-repo-1
 colcon build --packages-select fleet_interfaces main_server
 source install/setup.bash
 

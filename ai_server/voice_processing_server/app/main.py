@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import stt, tts, wakeword, function_calling, pipeline, agent, a2a
+from app.api import stt, tts, wakeword, function_calling, pipeline, agent, a2a, monitor
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -50,6 +50,7 @@ app.include_router(function_calling.router)
 app.include_router(pipeline.router)
 app.include_router(agent.router)
 app.include_router(a2a.router)
+app.include_router(monitor.router)
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -84,6 +85,9 @@ async def root():
             "pipeline_run": "POST /pipeline/run",
             "agent_voice": "POST /agent/voice",
             "agent_voice_text": "POST /agent/voice/text",
+            "agent_order_turn": "POST /agent/order_turn",
+            "monitor_order_attempts": "GET /monitor/order_attempts",
+            "monitor_dashboard": "GET /static/monitor.html",
             "a2a_voice": "POST /a2a/voice",
             "a2a_voice_text": "POST /a2a/voice/text",
         },

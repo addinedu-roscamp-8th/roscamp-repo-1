@@ -26,8 +26,8 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-#ros2
-build/
+# ROS2 workspace at repo root (colcon build output - do not commit)
+# Run "colcon build" from repo root; build/ install/ log/ stay local
 install/
 log/
 *.db3

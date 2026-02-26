@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     host: str = Field(default="0.0.0.0", alias="VOICE_SERVER_HOST")
     port: int = Field(default=8000, alias="VOICE_SERVER_PORT")
 
+    # Order Backend (Main Server TCP)
+    order_backend_host: str = Field(default="127.0.0.1", alias="ORDER_BACKEND_HOST")
+    order_backend_port: int = Field(default=9999, alias="ORDER_BACKEND_PORT")
+    voice_order_table_number: int = Field(default=1, alias="VOICE_ORDER_TABLE_NUMBER")
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

@@ -61,6 +61,26 @@
   </section>
 
   <section>
+    <h2>6. 음성 주문 (한 턴씩) – 실제 주문 플로우</h2>
+    <p>테이블을 선택한 뒤, 한 문장씩 녹음하면 음성 주문 1턴으로 전송됩니다. (주문할게요 → 메뉴명 → 추가주문 → 주문 완료 → 네)</p>
+    <label>테이블 번호</label>
+    <select id="orderTableNumber">
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+      <option value="4">4</option>
+    </select>
+    <br><br>
+    <button type="button" id="btnOrderRecord">녹음 후 주문 턴 전송</button>
+    <button type="button" id="btnOrderStop" disabled>중지</button>
+    <p id="orderStatus"></p>
+    <p><strong>인식:</strong> <span id="orderStt">-</span></p>
+    <p><strong>응답:</strong> <span id="orderReply">-</span></p>
+    <p><strong>주문 상태:</strong> <span id="orderState">-</span></p>
+    <audio id="orderTtsAudio" controls></audio>
+  </section>
+
+  <section>
     <h2>로그</h2>
     <div id="log" class="log"></div>
   </section>
@@ -221,6 +241,75 @@
         if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
         document.getElementById("btnPipelineRecord").disabled = false;
         document.getElementById("btnPipelineStop").disabled = true;
+      };
+
+      // 6. 음성 주문 (한 턴씩): 녹음 → STT → /agent/order_turn → 응답 표시 + TTS 재생
+      document.getElementById("btnOrderRecord").onclick = async function () {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          audioChunks = [];
+          mediaRecorder = new MediaRecorder(stream);
+          mediaRecorder.ondataavailable = (e) => e.data.size && audioChunks.push(e.data);
+          mediaRecorder.onstop = async () => {
+            stream.getTracks().forEach((t) => t.stop());
+            const blob = new Blob(audioChunks, { type: "audio/webm" });
+            document.getElementById("orderStatus").textContent = "인식 중...";
+            const fd = new FormData();
+            fd.append("file", blob, "audio.webm");
+            const sttRes = await fetch(getBase() + "/stt/", { method: "POST", body: fd });
+            if (!sttRes.ok) throw new Error("STT 실패: " + await sttRes.text());
+            const sttData = await sttRes.json();
+            const text = (sttData.text || "").trim();
+            document.getElementById("orderStt").textContent = text || "(없음)";
+            if (!text) {
+              document.getElementById("orderStatus").textContent = "인식된 내용이 없습니다.";
+              document.getElementById("btnOrderRecord").disabled = false;
+              document.getElementById("btnOrderStop").disabled = true;
+              return;
+            }
+            document.getElementById("orderStatus").textContent = "주문 턴 전송 중...";
+            const tableNum = parseInt(document.getElementById("orderTableNumber").value, 10);
+            const orderRes = await fetch(getBase() + "/agent/order_turn", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ session_id: "default", text: text, table_number: tableNum }),
+            });
+            if (!orderRes.ok) throw new Error("주문 턴 실패: " + await orderRes.text());
+            const orderData = await orderRes.json();
+            document.getElementById("orderReply").textContent = orderData.reply_text || "-";
+            const state = orderData.state || {};
+            document.getElementById("orderState").textContent = (state.stage || "-") + " / 항목 " + (state.items && state.items.length ? state.items.length : 0) + "개";
+            if (orderData.reply_text) {
+              const ttsRes = await fetch(getBase() + "/tts/", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text: orderData.reply_text }),
+              });
+              if (ttsRes.ok) {
+                const ttsBlob = await ttsRes.blob();
+                document.getElementById("orderTtsAudio").src = URL.createObjectURL(ttsBlob);
+              }
+            }
+            document.getElementById("orderStatus").textContent = "완료";
+            log("Order turn: " + text + " -> " + (orderData.reply_text || ""));
+            document.getElementById("btnOrderRecord").disabled = false;
+            document.getElementById("btnOrderStop").disabled = true;
+          };
+          mediaRecorder.start();
+          document.getElementById("btnOrderRecord").disabled = true;
+          document.getElementById("btnOrderStop").disabled = false;
+          document.getElementById("orderStatus").textContent = "녹음 중...";
+        } catch (e) {
+          log(e.message, true);
+          document.getElementById("orderStatus").textContent = "오류: " + e.message;
+          document.getElementById("btnOrderRecord").disabled = false;
+          document.getElementById("btnOrderStop").disabled = true;
+        }
+      };
+      document.getElementById("btnOrderStop").onclick = function () {
+        if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+        document.getElementById("btnOrderRecord").disabled = false;
+        document.getElementById("btnOrderStop").disabled = true;
       };
     })();
   </script>
