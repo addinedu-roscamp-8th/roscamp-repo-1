@@ -6,6 +6,9 @@ PyQt5-sip==12.13.0
 # 환경 변수 관리
 python-dotenv==1.0.0
 
+# YAML 설정 파일 (common/config.py)
+PyYAML>=6.0
+
 # JSON 데이터 처리 (Python 기본 json 모듈 사용)
 
 # 로깅 (Python 기본 logging 모듈 사용)
