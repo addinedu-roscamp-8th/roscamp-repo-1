@@ -159,9 +159,9 @@ class FleetController:
             'pinky3': 'pinky3_spot'
         }
 
-        # Pickup spot position (point13: waiting point near kitchen)
-        # Robot first moves to point13, then food loading is handled (skip mode)
-        self.pickup_spot = 'point13'
+        # Pickup spot position
+        # Robot moves directly to pickup_spot for food loading
+        self.pickup_spot = 'pickup_spot'
 
         logger.info(f"FleetController initialized with {len(self.robots)} robots")
 

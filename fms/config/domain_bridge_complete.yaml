@@ -642,3 +642,130 @@
         durability: "VOLATILE"
         history: "KEEP_LAST"
         depth: 10
+
+
+# ##############################################################################
+#              COORDINATOR ROBOT ARM COMMUNICATION (No Namespace)
+# ##############################################################################
+#
+# Coordinator Node uses non-namespaced topics:
+#   - /arm_a/cmd, /arm_a/status  -> Domain 20 (jetcobot_aa1f)
+#   - /arm_b/cmd, /arm_b/status  -> Domain 21 (jetcobot_aa85)
+#   - /verify/cmd, /verify/status -> Domain 21 (verify node on jetcobot_aa85)
+#
+# ==============================================================================
+
+# Domain 20 -> Domain 25: Arm A Status (no namespace)
+- from_domain: 20
+  to_domain: 25
+  topics:
+    # Arm A Status from recipe_executor_node
+    /arm_a/status:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+# Domain 25 -> Domain 20: Arm A Command and FMS Notifications (no namespace)
+- from_domain: 25
+  to_domain: 20
+  topics:
+    # Arm A Command to recipe_executor_node
+    /arm_a/cmd:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # FMS Pickup Arrival Notification to Coordinator (CRITICAL)
+    /fms/pickup_arrival:
+      type: fleet_interfaces/msg/PickupArrival
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # FMS Cooking Order to Coordinator (CRITICAL)
+    /cooking/order:
+      type: fleet_interfaces/msg/CookingOrder
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+# Domain 21 -> Domain 25: Arm B and Verify Status (no namespace)
+- from_domain: 21
+  to_domain: 25
+  topics:
+    # Arm B Status from sauce node
+    /arm_b/status:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Verify Status from verify node
+    /verify/status:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Loading Complete notification from coordinator to FMS (CRITICAL)
+    /cooking/loading_complete:
+      type: fleet_interfaces/msg/LoadingComplete
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+# Domain 25 -> Domain 21: Arm B and Verify Command and FMS Notifications (no namespace)
+- from_domain: 25
+  to_domain: 21
+  topics:
+    # Arm B Command to sauce node
+    /arm_b/cmd:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # Verify Command to verify node
+    /verify/cmd:
+      type: std_msgs/msg/String
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # FMS Pickup Arrival Notification to Coordinator (CRITICAL)
+    /fms/pickup_arrival:
+      type: fleet_interfaces/msg/PickupArrival
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10
+
+    # FMS Cooking Order to Coordinator (CRITICAL)
+    /cooking/order:
+      type: fleet_interfaces/msg/CookingOrder
+      qos:
+        reliability: "RELIABLE"
+        durability: "VOLATILE"
+        history: "KEEP_LAST"
+        depth: 10

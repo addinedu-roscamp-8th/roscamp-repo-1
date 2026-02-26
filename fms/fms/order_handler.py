@@ -269,18 +269,17 @@ class OrderHandler:
         workflow.assign_robot(assigned_robot_id)
         logger.info(f"[STEP 2] Robot assigned: {assigned_robot_id}")
 
-        # Step 3: Navigate robot to point13 (pickup waiting point)
+        # Step 3: Navigate robot to pickup_spot
         if self.navigate_robot_callback:
-            self.navigate_robot_callback(assigned_robot_id, 'point13')
+            self.navigate_robot_callback(assigned_robot_id, 'pickup_spot')
             workflow.transition_to(OrderWorkflow.STATE_LOADING)
-            logger.info(f"[STEP 3] Navigation started: {assigned_robot_id} -> point13")
+            logger.info(f"[STEP 3] Navigation started: {assigned_robot_id} -> pickup_spot")
         else:
             raise RuntimeError("Navigate robot callback not registered")
 
-    def handle_robot_arrived_point13(self, robot_id: str, order_id: str):
+    def handle_robot_arrived_pickup_spot(self, robot_id: str, order_id: str):
         """
-        Handle robot arrival at point13
-        Skip precision control and pickup_spot (as per requirements)
+        Handle robot arrival at pickup_spot
         Wait for cooking completion
 
         Args:
@@ -292,7 +291,7 @@ class OrderHandler:
             logger.warning(f"Order {order_id} not found for robot arrival")
             return
 
-        logger.info(f"Robot {robot_id} arrived at point13, waiting for cooking completion")
+        logger.info(f"Robot {robot_id} arrived at pickup_spot, waiting for cooking completion")
         # State remains LOADING until food is loaded
 
     def handle_cooking_complete(self, order_id: str):
@@ -499,11 +498,11 @@ class OrderHandler:
         else:
             logger.error("Cooking command callback not registered")
 
-        # Navigate robot to pickup point (point13)
+        # Navigate robot to pickup_spot
         if self.navigate_robot_callback:
-            self.navigate_robot_callback(robot_id, 'point13')
+            self.navigate_robot_callback(robot_id, 'pickup_spot')
             workflow.transition_to(OrderWorkflow.STATE_LOADING)
-            logger.info(f"[AUTO-DISPATCH STEP 2] Robot {robot_id} navigating to point13")
+            logger.info(f"[AUTO-DISPATCH STEP 2] Robot {robot_id} navigating to pickup_spot")
         else:
             logger.error("Navigate robot callback not registered")
 

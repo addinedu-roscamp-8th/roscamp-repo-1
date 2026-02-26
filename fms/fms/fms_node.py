@@ -25,9 +25,12 @@ from fleet_interfaces.msg import (
 from std_msgs.msg import Float32, Bool, String
 from builtin_interfaces.msg import Time
 import logging
+import math
 import os
 import signal
 import sys
+import subprocess
+import json
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
@@ -76,11 +79,14 @@ class FMSNode(Node):
         logger.info("Initializing Fleet Management System...")
 
         # 로봇팔 스킵 모드 (로봇팔 연결 전 테스트용)
-        self.declare_parameter('skip_robot_arm', True)
+        self.declare_parameter('skip_robot_arm', False)  # Production mode: use robot arm
         self.skip_robot_arm = self.get_parameter('skip_robot_arm').value
         if self.skip_robot_arm:
             logger.info("*** SKIP ROBOT ARM MODE ENABLED ***")
             logger.info("로봇이 pickup_spot 도착 후 3초 뒤 자동으로 테이블로 이동합니다.")
+        else:
+            logger.info("*** ROBOT ARM MODE ENABLED ***")
+            logger.info("로봇이 pickup_spot 도착 후 로봇팔의 LoadingComplete를 기다립니다.")
 
         # Initial Pose 자동 설정 모드
         self.declare_parameter('auto_set_initial_pose', True)
@@ -90,9 +96,9 @@ class FMSNode(Node):
         # Each robot runs on separate DOMAIN_ID in closed network
         # FMS runs on DOMAIN_ID=25, Domain Bridge handles cross-domain communication
         robot_configs = [
-            {'robot_id': 'pinky1', 'domain_id': 11, 'ip': '192.168.1.7'},
-            {'robot_id': 'pinky2', 'domain_id': 12, 'ip': '192.168.1.6'},
-            {'robot_id': 'pinky3', 'domain_id': 13, 'ip': '192.168.1.11'}
+            {'robot_id': 'pinky1', 'domain_id': 11, 'ip': '192.168.1.7', 'enabled': True},
+            {'robot_id': 'pinky2', 'domain_id': 12, 'ip': '192.168.1.6', 'enabled': True},
+            {'robot_id': 'pinky3', 'domain_id': 13, 'ip': '192.168.1.11', 'enabled': False}  # pinky_d29d excluded
         ]
 
         # Initialize core components
@@ -702,6 +708,15 @@ class FMSNode(Node):
         # Update zone manager
         self.zone_manager.update_robot_position(robot_id, msg)
 
+        # Update collision avoidance - release passed nodes in real-time
+        released_nodes = self.collision_avoidance.update_robot_position(
+            robot_id, msg.position.x, msg.position.y
+        )
+
+        # If nodes were released, trigger replan for waiting robots
+        if released_nodes:
+            self._trigger_waiting_robots_replan(robot_id, released_nodes)
+
         # Check if robot reached destination
         self._check_navigation_status(robot_id)
 
@@ -781,19 +796,19 @@ class FMSNode(Node):
 
     def _send_robot_to_pickup(self, robot_id: str):
         """
-        Send robot to point13 (pickup area waiting point) using waypoint-based navigation
+        Send robot to pickup_spot using waypoint-based navigation
 
         Flow:
-        1. Robot moves to point13 via waypoints (FollowWaypoints action)
-        2. At point13: precision control mode (skip mode auto-handles this)
+        1. Robot moves to pickup_spot via waypoints (FollowWaypoints action)
+        2. At pickup_spot: precision control mode (skip mode auto-handles this)
         3. After food loaded: robot moves to table
 
         Args:
             robot_id: Robot ID
         """
         # Use waypoint navigation to ensure robot follows defined paths
-        logger.info(f"[WAYPOINT NAV] Sending robot {robot_id} to point13 (pickup area)")
-        self._navigate_robot_by_name(robot_id, 'point13')
+        logger.info(f"[WAYPOINT NAV] Sending robot {robot_id} to pickup_spot")
+        self._navigate_robot_by_name(robot_id, 'pickup_spot')
 
     def _send_robot_to_table(self, robot_id: str, table_number: str):
         """
@@ -881,9 +896,9 @@ class FMSNode(Node):
             self._check_navigation_status_with_order_handler(robot_id)
 
             if robot.status == RobotState.STATUS_MOVING_TO_PICKUP:
-                # Reached pickup spot (point13)
+                # Reached pickup_spot
                 self.fleet_controller.robot_reached_pickup(robot_id)
-                logger.info(f"Robot {robot_id} reached point13 (pickup area)")
+                logger.info(f"Robot {robot_id} reached pickup_spot")
 
                 # Get current task from scheduler
                 scheduler_task = self.task_scheduler.get_robot_task(robot_id)
@@ -951,6 +966,9 @@ class FMSNode(Node):
                 self.fleet_controller.robot_reached_table(robot_id)
                 logger.info(f"Robot {robot_id} reached table, waiting for customer")
 
+                # Clear collision avoidance path - robot has arrived at destination
+                self.collision_avoidance.clear_robot_path(robot_id)
+
                 # SC-183/321: Get current task for TableArrival message
                 scheduler_task = self.task_scheduler.get_robot_task(robot_id)
                 task = None
@@ -983,6 +1001,9 @@ class FMSNode(Node):
                 # Returned home
                 self.fleet_controller.robot_returned_home(robot_id)
                 logger.info(f"Robot {robot_id} returned home, now IDLE")
+
+                # Clear collision avoidance path - robot returned home
+                self.collision_avoidance.clear_robot_path(robot_id)
 
     # ========================================
     # Order Handler Callbacks (Infrastructure Layer)
@@ -1055,15 +1076,32 @@ class FMSNode(Node):
 
         # Determine starting waypoint
         current_waypoint = None
+        own_spot = f"{robot_id}_spot"
+
         if robot.current_pose:
-            # Find nearest waypoint to current position
-            current_waypoint = self.path_planner.graph.get_nearest_waypoint(
-                robot.current_pose.position.x,
-                robot.current_pose.position.y
-            )
+            # First, check if robot is near its own spot (within 0.2m)
+            own_spot_pos = self.path_planner.graph.get_position(own_spot)
+            if own_spot_pos:
+                dist_to_own_spot = math.sqrt(
+                    (robot.current_pose.position.x - own_spot_pos[0])**2 +
+                    (robot.current_pose.position.y - own_spot_pos[1])**2
+                )
+                if dist_to_own_spot < 0.2:
+                    # Robot is near its own spot, use that as starting point
+                    current_waypoint = own_spot
+                    logger.info(f"Robot {robot_id} is near its own spot ({dist_to_own_spot:.3f}m), using {own_spot}")
+
+            # If not near own spot, find nearest waypoint
+            if not current_waypoint:
+                current_waypoint = self.path_planner.graph.get_nearest_waypoint(
+                    robot.current_pose.position.x,
+                    robot.current_pose.position.y
+                )
+                logger.info(f"Robot {robot_id} nearest waypoint: {current_waypoint}")
+
         if not current_waypoint:
             # Use parking spot as default starting point
-            current_waypoint = f"{robot_id}_spot"
+            current_waypoint = own_spot
             logger.info(f"Using {current_waypoint} as starting waypoint for {robot_id}")
 
         # Set final target location
@@ -1071,33 +1109,29 @@ class FMSNode(Node):
         robot.final_destination = location_name  # Store final destination
         logger.info(f"Set target_location={location_name} for {robot_id}")
 
-        # Use collision avoidance controller for path planning
+        # Use collision avoidance for path planning
         route, success = self.collision_avoidance.plan_path_with_avoidance(
             robot_id, current_waypoint, location_name
         )
 
         if success and route:
-            # No collision detected, proceed with planned route
+            # No collision, proceed with planned route
             robot.current_route = route
             robot.route_index = 0
             logger.info(f"[COLLISION_AVOIDANCE] Route planned for {robot_id}: {' -> '.join(route)}")
-
-            # Use FollowWaypoints action for strict waypoint following
             self._follow_waypoints(robot_id, route)
         elif route and not success:
-            # Collision detected, robot should move to waiting position
+            # Collision detected, move to waiting position
             robot.current_route = route
             robot.route_index = 0
             wait_state = self.collision_avoidance.get_robot_wait_state(robot_id)
             if wait_state:
-                logger.info(f"[COLLISION_AVOIDANCE] {robot_id} moving to waiting position: "
-                           f"{wait_state.waiting_at}, waiting for: {wait_state.waiting_for}")
+                logger.info(f"[COLLISION_AVOIDANCE] {robot_id} waiting at {wait_state.waiting_at} "
+                           f"for {wait_state.waiting_for}, goal: {location_name}")
             else:
-                logger.info(f"[COLLISION_AVOIDANCE] {robot_id} moving to waiting position: {route[-1] if route else 'unknown'}")
-
+                logger.info(f"[COLLISION_AVOIDANCE] {robot_id} moving to waiting position")
             # Navigate to waiting position
-            if route:
-                self._follow_waypoints(robot_id, route)
+            self._follow_waypoints(robot_id, route)
         elif current_waypoint == location_name:
             # Robot is already at or very near the destination
             logger.info(f"[WAYPOINT] Robot {robot_id} already at destination {location_name}")
@@ -1136,7 +1170,9 @@ class FMSNode(Node):
 
         # Wait for action server
         if not client.wait_for_server(timeout_sec=5.0):
-            logger.error(f"FollowWaypoints action server not available for {robot_id}")
+            logger.warning(f"FollowWaypoints action server not available via domain bridge for {robot_id}")
+            logger.info(f"Falling back to SSH-based navigation for {robot_id}")
+            self._follow_waypoints_via_ssh(robot_id, waypoints)
             return
 
         # Build waypoint poses
@@ -1221,6 +1257,113 @@ class FMSNode(Node):
             robot.route_index = 0
             self._on_final_destination_reached(robot_id, final_dest)
 
+    def _follow_waypoints_via_ssh(self, robot_id: str, waypoints: List[str]):
+        """
+        Fallback method: Send waypoints to robot via SSH when domain bridge action fails
+
+        Args:
+            robot_id: Robot ID (pinky1, pinky2, pinky3)
+            waypoints: List of waypoint names to follow
+        """
+        # Get robot configuration
+        robot_config = {
+            'pinky1': {'ip': '192.168.1.7', 'domain': 11},
+            'pinky2': {'ip': '192.168.1.6', 'domain': 12},
+            'pinky3': {'ip': '192.168.1.11', 'domain': 13},
+        }
+
+        config = robot_config.get(robot_id)
+        if not config:
+            logger.error(f"Unknown robot {robot_id} for SSH navigation")
+            return
+
+        # Build waypoints JSON
+        waypoint_positions = []
+        for wp_name in waypoints:
+            pose = self.map_positions.get(wp_name)
+            if pose:
+                if hasattr(pose, 'position'):
+                    waypoint_positions.append({'x': pose.position.x, 'y': pose.position.y})
+                else:
+                    waypoint_positions.append({'x': pose['x'], 'y': pose['y']})
+
+        if not waypoint_positions:
+            logger.error(f"No valid waypoints for SSH navigation: {waypoints}")
+            return
+
+        # Build ROS2 message for FollowWaypoints
+        poses_str_list = []
+        for wp in waypoint_positions:
+            pose_str = f'{{header: {{frame_id: "map"}}, pose: {{position: {{x: {wp["x"]:.3f}, y: {wp["y"]:.3f}, z: 0.0}}, orientation: {{w: 1.0}}}}}}'
+            poses_str_list.append(pose_str)
+        poses_str = '[' + ', '.join(poses_str_list) + ']'
+
+        # Build SSH command
+        ssh_cmd = [
+            'ssh', f'pinky@{config["ip"]}',
+            f'source /opt/ros/jazzy/setup.bash && source ~/pinky_pro/install/setup.bash && '
+            f'ROS_DOMAIN_ID={config["domain"]} ros2 action send_goal /follow_waypoints '
+            f'nav2_msgs/action/FollowWaypoints "{{poses: {poses_str}}}"'
+        ]
+
+        logger.info(f"[SSH-NAV] Sending {len(waypoint_positions)} waypoints to {robot_id} via SSH")
+
+        # Execute in background
+        try:
+            process = subprocess.Popen(
+                ssh_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            logger.info(f"[SSH-NAV] Navigation command sent to {robot_id}, PID: {process.pid}")
+
+            # Store process for monitoring
+            if not hasattr(self, '_ssh_nav_processes'):
+                self._ssh_nav_processes = {}
+            self._ssh_nav_processes[robot_id] = {
+                'process': process,
+                'waypoints': waypoints,
+                'start_time': datetime.utcnow()
+            }
+
+            # Start a timer to check completion (simple polling)
+            self.create_timer(2.0, lambda: self._check_ssh_nav_completion(robot_id))
+
+        except Exception as e:
+            logger.error(f"[SSH-NAV] Failed to send navigation to {robot_id}: {e}")
+
+    def _check_ssh_nav_completion(self, robot_id: str):
+        """Check if SSH-based navigation completed"""
+        if not hasattr(self, '_ssh_nav_processes') or robot_id not in self._ssh_nav_processes:
+            return
+
+        nav_info = self._ssh_nav_processes[robot_id]
+        process = nav_info['process']
+
+        poll_result = process.poll()
+        if poll_result is not None:
+            # Process completed
+            stdout, stderr = process.communicate()
+            logger.info(f"[SSH-NAV] {robot_id} navigation completed with exit code: {poll_result}")
+            if stdout:
+                logger.debug(f"[SSH-NAV] stdout: {stdout[:500]}")
+            if stderr and 'Goal accepted' not in stderr:
+                logger.warning(f"[SSH-NAV] stderr: {stderr[:500]}")
+
+            # Trigger destination reached
+            waypoints = nav_info['waypoints']
+            if waypoints:
+                robot = self.fleet_controller.get_robot(robot_id)
+                if robot:
+                    final_dest = getattr(robot, 'final_destination', robot.target_location)
+                    logger.info(f"[SSH-NAV] {robot_id} route complete via SSH, arrived at {final_dest}")
+                    robot.current_route = None
+                    robot.route_index = 0
+                    self._on_final_destination_reached(robot_id, final_dest)
+
+            del self._ssh_nav_processes[robot_id]
+
     def _navigate_to_waypoint(self, robot_id: str, waypoint_name: str):
         """
         [DEPRECATED] Legacy method - DO NOT USE.
@@ -1281,8 +1424,11 @@ class FMSNode(Node):
             if order_id:
                 self.order_handler.handle_robot_arrived_table(robot_id, order_id)
 
-        elif location_name == 'point13':
-            # Pickup area arrival
+            # Clear collision avoidance path - robot has arrived at table
+            self.collision_avoidance.clear_robot_path(robot_id)
+
+        elif location_name == 'pickup_spot':
+            # Pickup spot arrival
             active_orders = self.order_handler.get_all_active_orders()
             order_id = None
             for oid, order_status in active_orders.items():
@@ -1290,11 +1436,29 @@ class FMSNode(Node):
                     order_id = oid
                     break
             if order_id:
-                self.order_handler.handle_robot_arrived_point13(robot_id, order_id)
+                self.order_handler.handle_robot_arrived_pickup_spot(robot_id, order_id)
 
-        elif location_name.endswith('_spot'):
+                # Publish PickupArrival message
+                robot = self.fleet_controller.get_robot(robot_id)
+                if robot:
+                    arrival_msg = PickupArrival()
+                    arrival_msg.robot_id = robot_id
+                    arrival_msg.order_id = order_id
+                    arrival_msg.current_pose = robot.current_pose
+                    arrival_msg.arrived_at = self.get_clock().now().to_msg()
+                    self.pickup_arrival_pub.publish(arrival_msg)
+                    logger.info(f"Published PickupArrival for {robot_id}, order {order_id} to /fms/pickup_arrival")
+
+            # Clear collision avoidance path - robot reached pickup spot
+            # The next path (pickup_spot -> table) will be set after cooking completes
+            self.collision_avoidance.clear_robot_path(robot_id)
+
+        elif location_name.endswith('_spot') and location_name != 'pickup_spot':
             # Parking spot arrival
             logger.info(f"{robot_id} returned to parking spot {location_name}")
+
+            # Clear collision avoidance path - robot returned home
+            self.collision_avoidance.clear_robot_path(robot_id)
 
     def _start_arrival_timer(self, robot_id: str, location_name: str):
         """
@@ -1514,9 +1678,9 @@ class FMSNode(Node):
 
         # Check if reached (within 0.1m threshold)
         if distance < 0.1:
-            # point13 arrival (pickup waiting point)
-            if robot.target_location == 'point13':
-                logger.info(f"Robot {robot_id} reached point13")
+            # pickup_spot arrival
+            if robot.target_location == 'pickup_spot':
+                logger.info(f"Robot {robot_id} reached pickup_spot")
 
                 # Get current order
                 # Try to find order from order_handler
@@ -1528,7 +1692,13 @@ class FMSNode(Node):
                         break
 
                 if order_id:
-                    self.order_handler.handle_robot_arrived_point13(robot_id, order_id)
+                    self.order_handler.handle_robot_arrived_pickup_spot(robot_id, order_id)
+
+                    # Skip robot arm mode: auto-trigger cooking complete after 3 seconds
+                    if self.skip_robot_arm:
+                        logger.info(f"[SKIP_MODE] Robot {robot_id} at pickup_spot, auto cooking complete in 3s...")
+                        import threading
+                        threading.Timer(3.0, lambda oid=order_id: self.order_handler.handle_cooking_complete(oid)).start()
 
             # Table arrival
             elif robot.target_location.startswith('table'):
@@ -1937,6 +2107,50 @@ class FMSNode(Node):
         )
 
         logger.info(f"Operator command {command_str} queued for robot {robot_id}")
+
+    def _trigger_waiting_robots_replan(self, moved_robot_id: str, released_nodes: List[str]):
+        """
+        특정 로봇이 노드를 지나가서 해제되었을 때, 대기 중인 다른 로봇들의 재계획을 트리거
+
+        Args:
+            moved_robot_id: 이동한 로봇 ID
+            released_nodes: 해제된 노드 목록
+        """
+        from .collision_avoidance import ReplanTrigger, WaitState
+
+        robots = self.fleet_controller.get_all_robots()
+
+        for robot in robots:
+            # 이동한 로봇 자신은 제외
+            if robot.robot_id == moved_robot_id:
+                continue
+
+            # 대기 중인 로봇만 확인
+            wait_state = self.collision_avoidance.get_robot_wait_state(robot.robot_id)
+            if not wait_state or wait_state.state == WaitState.NOT_WAITING:
+                continue
+
+            # 이동한 로봇을 기다리고 있는지 확인
+            if wait_state.waiting_for != moved_robot_id:
+                continue
+
+            # 해제된 노드가 블로킹된 노드 목록에 있는지 확인
+            blocked_released = set(released_nodes) & set(wait_state.blocked_nodes)
+            if not blocked_released:
+                continue
+
+            logger.info(f"[COLLISION] {robot.robot_id}: 노드 {blocked_released} 해제됨, 재계획 시도")
+
+            # 재계획 시도
+            if wait_state.original_goal:
+                new_path, success = self.collision_avoidance.handle_replan_trigger(
+                    robot.robot_id, ReplanTrigger.ROBOT_MOVED
+                )
+                if success and new_path:
+                    logger.info(f"[COLLISION] {robot.robot_id} 경로 확보, 이동 시작!")
+                    robot.current_route = new_path
+                    robot.route_index = 0
+                    self._follow_waypoints(robot.robot_id, new_path)
 
     def _check_collisions(self):
         """
