@@ -364,8 +364,8 @@ def main():
     if client.connect():
         # 테스트 주문
         test_order = Order(table_number=1)
-        test_order.add_item(MenuItem('M001', '햄버거', 5000, '맛있는 햄버거'), 2)
-        test_order.add_item(MenuItem('M002', '피자', 15000, '치즈 피자'), 1)
+        test_order.add_item(MenuItem('M001', '햄치즈 샌드위치', 5000, '재료: 빵, 양상추, 토마토, 치즈, 햄'), 2)
+        test_order.add_item(MenuItem('M002', '버섯 샌드위치', 5500, '재료: 빵, 버섯, 토마토, 치즈'), 1)
 
         order_id = client.submit_order(test_order)
         print(f'[Test] 주문 전송 완료: {order_id}')
@@ -384,7 +384,7 @@ def main():
         mock_client.connect()
 
         test_order = Order(table_number=1)
-        test_order.add_item(MenuItem('M001', '햄버거', 5000), 1)
+        test_order.add_item(MenuItem('M001', '햄치즈 샌드위치', 5000), 1)
         order_id = mock_client.submit_order(test_order)
         print(f'[Test] Mock 주문 전송 완료: {order_id}')
 

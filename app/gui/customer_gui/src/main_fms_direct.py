@@ -30,10 +30,9 @@ from fms_client import FMSOrderServiceClient, MockFMSOrderServiceClient
 
 # Mock 메뉴 데이터 (테스트용)
 MOCK_MENUS = [
-    MenuItem('M001', '햄버거', 8000, '신선한 소고기 패티와 야채', '', True, '메인'),
-    MenuItem('M002', '치즈버거', 9000, '더블 치즈 햄버거', '', True, '메인'),
-    MenuItem('M003', '피자', 15000, '마르게리타 피자', '', True, '메인'),
-    MenuItem('M004', '샌드위치', 6000, '클럽 샌드위치', '', True, '메인'),
+    MenuItem('M001', '햄치즈 샌드위치', 5000, '재료: 빵, 양상추, 토마토, 치즈, 햄', '', True, '샌드위치'),
+    MenuItem('M002', '버섯 샌드위치', 5500, '재료: 빵, 버섯, 토마토, 치즈', '', True, '샌드위치'),
+    MenuItem('M003', '올인원 샌드위치', 6500, '재료: 빵, 토마토, 치즈, 햄, 버섯, 양상추', '', True, '샌드위치'),
 ]
 
 
@@ -242,6 +241,12 @@ class CustomerGUIApp(QStackedWidget):
                 print('[App] 오류: 배달 알림에서 order_id를 찾을 수 없음')
                 return
 
+            # 테이블 번호 확인 - 이 GUI의 테이블과 일치하는지 확인
+            notification_table = int(table_number) if table_number else 0
+            if notification_table != Config.TABLE_NUMBER:
+                print(f'[App] 다른 테이블({notification_table})의 알림, 이 테이블({Config.TABLE_NUMBER})과 무관')
+                return
+
             # 현재 주문 또는 대기 중인 주문이 있으면 배달 알림 표시
             active_order = self.current_order or self.pending_order
             if active_order:
@@ -322,25 +327,35 @@ class CustomerGUIApp(QStackedWidget):
 
 def main():
     """메인 함수"""
+    import argparse
+
+    # 명령줄 인자 파서
+    parser = argparse.ArgumentParser(description='고객용 GUI (FMS Direct)')
+    parser.add_argument('--table', type=int, default=1, help='테이블 번호 (기본값: 1)')
+    parser.add_argument('--mock', action='store_true', help='Mock 모드 사용')
+
+    # PyQt의 sys.argv 처리를 위해 알려진 인자만 파싱
+    args, unknown = parser.parse_known_args()
+
+    # 테이블 번호 설정
+    Config.TABLE_NUMBER = args.table
+
     # QApplication 생성
     app = QApplication(sys.argv)
 
-    # 명령줄 인자 처리
-    use_mock = '--mock' in sys.argv
-
     # 애플리케이션 설정
-    app.setApplicationName('주문 키오스크 (FMS Direct)')
+    app.setApplicationName(f'주문 키오스크 (테이블 {args.table})')
     app.setOrganizationName('Kitchmatics')
 
     # 메인 윈도우 생성 및 표시
-    window = CustomerGUIApp(use_mock=use_mock)
+    window = CustomerGUIApp(use_mock=args.mock)
     window.show()
 
     print('=' * 60)
     print('[App] 고객용 GUI 시작 (FMS Direct)')
     print(f'[App] 테이블 번호: {Config.TABLE_NUMBER}')
     print(f'[App] FMS 주소: {Config.FMS_HOST}:{Config.FMS_PORT}')
-    print(f'[App] Mock 모드: {use_mock}')
+    print(f'[App] Mock 모드: {args.mock}')
     print('=' * 60)
 
     # 이벤트 루프 실행
