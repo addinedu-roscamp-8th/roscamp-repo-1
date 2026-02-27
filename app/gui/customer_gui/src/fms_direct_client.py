@@ -259,12 +259,23 @@ class FMSDirectClient(QObject):
         # FMS 메시지 포맷으로 변환
         order_items = []
         for item in order.items:
+            # sauce 이름 변환: 마요네즈 -> mayo, 케찹 -> ketchup, 머스타드 -> mustard
+            sauce_map = {
+                '마요네즈': 'mayo',
+                '케찹': 'ketchup',
+                '머스타드': 'mustard',
+                '소스선택x': '',
+                '': ''
+            }
+            sauce_value = sauce_map.get(item.sauce, item.sauce) if item.sauce else ''
+
             order_items.append({
                 'menu_id': item.menu_item.menu_id,
                 'menu_name': item.menu_item.name,
                 'quantity': item.quantity,
                 'price': item.menu_item.price,
-                'subtotal': item.get_subtotal()
+                'subtotal': item.get_subtotal(),
+                'sauce': sauce_value
             })
 
         request = {

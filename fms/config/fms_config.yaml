@@ -20,7 +20,7 @@ robots:
     type: "SERVING_BOT_3"
     parking_spot: "pinky3_spot"
     ip_address: "192.168.1.11"
-    enabled: false  # pinky3 (d29d) not connected
+    enabled: true
 
 # Map Positions (in meters, based on map frame)
 # Calibrated positions based on real.png (410x210px, 0.005m/pixel, origin [-0.025, -0.025, 0.0])

@@ -98,7 +98,7 @@ class FMSNode(Node):
         robot_configs = [
             {'robot_id': 'pinky1', 'domain_id': 11, 'ip': '192.168.1.7', 'enabled': True},
             {'robot_id': 'pinky2', 'domain_id': 12, 'ip': '192.168.1.6', 'enabled': True},
-            {'robot_id': 'pinky3', 'domain_id': 13, 'ip': '192.168.1.11', 'enabled': False}  # pinky_d29d excluded
+            {'robot_id': 'pinky3', 'domain_id': 13, 'ip': '192.168.1.11', 'enabled': True}
         ]
 
         # Initialize core components
@@ -1030,6 +1030,8 @@ class FMSNode(Node):
         menu_id = menu_items[0].get('menu_id', 'M001') if menu_items else 'M001'
         quantity = menu_items[0].get('quantity', 1) if menu_items else 1
         operation = cooking_command.get('operation', 'START')
+        # Extract sauce from first menu item (GUI sends sauce per item)
+        sauce_type = menu_items[0].get('sauce', '') if menu_items else ''
 
         # Publish to /cooking/command (String - JSON format for cooking_interface_node)
         import json
@@ -1049,11 +1051,11 @@ class FMSNode(Node):
         order_msg.order_id = order_id
         order_msg.menu_id = menu_id
         order_msg.quantity = quantity
-        order_msg.sauce_type = cooking_command.get('sauce_type', '')
+        order_msg.sauce_type = sauce_type
         order_msg.assigned_robot_id = 'pinky1'  # Always pinky1 as per requirements
 
         self.cooking_order_pub.publish(order_msg)
-        logger.info(f"Published /cooking/order: order={order_id}, menu={menu_id}, qty={quantity}")
+        logger.info(f"Published /cooking/order: order={order_id}, menu={menu_id}, qty={quantity}, sauce={sauce_type}")
 
     def _navigate_robot_by_name(self, robot_id: str, location_name: str):
         """

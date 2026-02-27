@@ -1,0 +1,31 @@
+# Pinky3 Reverse Bridge: Domain 25 -> Domain 13
+# Topics from FMS (/pinky3/*) are remapped to robot namespace (no prefix)
+name: pinky3_reverse_bridge
+from_domain: 25
+to_domain: 13
+topics:
+  pinky3/initialpose:
+    type: geometry_msgs/msg/PoseWithCovarianceStamped
+    remap: initialpose
+  pinky3/goal_pose:
+    type: geometry_msgs/msg/PoseStamped
+    remap: goal_pose
+services:
+  pinky3/follow_waypoints/_action/send_goal:
+    type: nav2_msgs/action/FollowWaypoints_SendGoal
+    remap: follow_waypoints/_action/send_goal
+  pinky3/follow_waypoints/_action/cancel_goal:
+    type: action_msgs/srv/CancelGoal
+    remap: follow_waypoints/_action/cancel_goal
+  pinky3/follow_waypoints/_action/get_result:
+    type: nav2_msgs/action/FollowWaypoints_GetResult
+    remap: follow_waypoints/_action/get_result
+  pinky3/navigate_to_pose/_action/send_goal:
+    type: nav2_msgs/action/NavigateToPose_SendGoal
+    remap: navigate_to_pose/_action/send_goal
+  pinky3/navigate_to_pose/_action/cancel_goal:
+    type: action_msgs/srv/CancelGoal
+    remap: navigate_to_pose/_action/cancel_goal
+  pinky3/navigate_to_pose/_action/get_result:
+    type: nav2_msgs/action/NavigateToPose_GetResult
+    remap: navigate_to_pose/_action/get_result
