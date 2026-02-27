@@ -250,24 +250,27 @@ class OrderHandler:
         logger.info(f"[WORKFLOW START] Order {workflow.order_id} for table {workflow.table_number}")
         logger.info(f"=" * 60)
 
-        # Step 1: Send cooking command to robot arm (/cooking/command)
+        # Step 1: Assign robot to order (use provided robot_id - already selected by get_available_robot)
+        if not robot_id:
+            raise RuntimeError("No robot_id provided - get_available_robot should have selected one")
+        assigned_robot_id = robot_id
+        workflow.assign_robot(assigned_robot_id)
+        logger.info(f"[STEP 1] Robot assigned: {assigned_robot_id}")
+
+        # Step 2: Send cooking command to robot arm (/cooking/command)
         if self.send_cooking_command_callback:
             cooking_command = {
                 'order_id': workflow.order_id,
                 'operation': 'START',
                 'menu_items': workflow.order_data.get('items', []),
-                'table_number': workflow.table_number
+                'table_number': workflow.table_number,
+                'assigned_robot_id': assigned_robot_id  # Include robot ID for coordinator
             }
             self.send_cooking_command_callback(cooking_command)
             workflow.transition_to(OrderWorkflow.STATE_COOKING)
-            logger.info(f"[STEP 1] Cooking command sent to robot arm: /cooking/command")
+            logger.info(f"[STEP 2] Cooking command sent to robot arm: /cooking/command")
         else:
             raise RuntimeError("Cooking command callback not registered")
-
-        # Step 2: Assign robot to order (use provided robot_id or default to pinky1)
-        assigned_robot_id = robot_id if robot_id else "pinky1"
-        workflow.assign_robot(assigned_robot_id)
-        logger.info(f"[STEP 2] Robot assigned: {assigned_robot_id}")
 
         # Step 3: Navigate robot to pickup_spot
         if self.navigate_robot_callback:

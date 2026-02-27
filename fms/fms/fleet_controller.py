@@ -71,10 +71,17 @@ class RobotState:
         """로봇이 새로운 task를 수행할 수 있는지 확인합니다
 
         로봇이 가용한 조건:
+        - 최근에 POSE 데이터를 수신함 (10초 이내)
         - 상태가 IDLE (오류 또는 작업 중 상태가 아님)
         - 현재 할당된 task가 없음
         - 현재 할당된 order가 없음
         """
+        # Check if robot is online (received POSE data within last 10 seconds)
+        POSE_TIMEOUT_SECONDS = 10.0
+        time_since_update = (datetime.utcnow() - self.last_update).total_seconds()
+        if time_since_update > POSE_TIMEOUT_SECONDS:
+            logger.debug(f"Robot {self.robot_id} offline (no POSE for {time_since_update:.1f}s)")
+            return False
         if self.status == self.STATUS_ERROR:
             return False
         if self.status != self.STATUS_IDLE:

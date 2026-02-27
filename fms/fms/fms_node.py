@@ -1055,10 +1055,17 @@ class FMSNode(Node):
         order_msg.menu_id = menu_id
         order_msg.quantity = quantity
         order_msg.sauce_type = sauce_type
-        order_msg.assigned_robot_id = 'pinky1'  # Always pinky1 as per requirements
+        # Use assigned robot from cooking_command, or get available robot
+        assigned_robot = cooking_command.get('assigned_robot_id')
+        if not assigned_robot:
+            # Fallback: get available robot from fleet controller
+            available = self.fleet_controller.get_available_robot()
+            assigned_robot = available.robot_id if available else 'pinky3'  # Default to pinky3 if no robot available
+            logger.warning(f"No assigned_robot_id in cooking_command, using {assigned_robot}")
+        order_msg.assigned_robot_id = assigned_robot
 
         self.cooking_order_pub.publish(order_msg)
-        logger.info(f"Published /cooking/order: order={order_id}, menu={menu_id}, qty={quantity}, sauce={sauce_type}")
+        logger.info(f"Published /cooking/order: order={order_id}, menu={menu_id}, qty={quantity}, sauce={sauce_type}, robot={assigned_robot}")
 
     def _navigate_robot_by_name(self, robot_id: str, location_name: str):
         """
