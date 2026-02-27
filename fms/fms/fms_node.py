@@ -1027,11 +1027,14 @@ class FMSNode(Node):
         """
         order_id = cooking_command['order_id']
         menu_items = cooking_command.get('menu_items', [{}])
+        logger.info(f"[DEBUG] cooking_command: {cooking_command}")
+        logger.info(f"[DEBUG] menu_items: {menu_items}")
         menu_id = menu_items[0].get('menu_id', 'M001') if menu_items else 'M001'
         quantity = menu_items[0].get('quantity', 1) if menu_items else 1
         operation = cooking_command.get('operation', 'START')
         # Extract sauce from first menu item (GUI sends sauce per item)
         sauce_type = menu_items[0].get('sauce', '') if menu_items else ''
+        logger.info(f"[DEBUG] extracted sauce_type: '{sauce_type}'")
 
         # Publish to /cooking/command (String - JSON format for cooking_interface_node)
         import json

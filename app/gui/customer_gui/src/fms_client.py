@@ -191,6 +191,17 @@ class FMSOrderServiceClient(QObject):
         self.client.disconnect()
         self.disconnected_signal.emit()
 
+    def _convert_sauce(self, sauce: str) -> str:
+        """소스 이름을 영문으로 변환합니다."""
+        sauce_map = {
+            '마요네즈': 'mayo',
+            '케찹': 'ketchup',
+            '머스타드': 'mustard',
+            '소스선택x': '',
+            '': ''
+        }
+        return sauce_map.get(sauce, sauce) if sauce else ''
+
     def submit_order(self, order: Order) -> Optional[str]:
         """
         주문 전송 (FMS로 직접)
@@ -221,7 +232,8 @@ class FMSOrderServiceClient(QObject):
                         'menu_id': item.menu_item.menu_id,
                         'name': item.menu_item.name,
                         'quantity': item.quantity,
-                        'price': item.menu_item.price
+                        'price': item.menu_item.price,
+                        'sauce': self._convert_sauce(item.sauce)
                     }
                     for item in order.items
                 ],
