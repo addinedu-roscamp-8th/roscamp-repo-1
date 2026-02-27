@@ -134,7 +134,8 @@ class CollisionAvoidanceController:
 
     # 상수 정의
     PICKUP_WAITING_NODE = "pickup_spot"       # 픽업 대기 위치
-    SECONDARY_WAITING_NODES = ["point2", "point3"]  # 보조 대기 위치
+    # 보조 대기 위치 - 좌측 열(point2,3), 중간 열(point5-8), 우측 열(point9-12)
+    SECONDARY_WAITING_NODES = ["point2", "point3", "point5", "point6", "point7", "point8"]
     DEFAULT_WAIT_TIMEOUT = 30.0               # 기본 대기 타임아웃 (초)
     ROBOT_SPEED_MPS = 0.3                     # 로봇 평균 속도 (m/s)
     NODE_OCCUPATION_RADIUS = 0.15             # 노드 점유 반경 (m)

@@ -52,6 +52,9 @@ def generate_launch_description():
     bridge_pinky3_config = os.path.join(pkg_dir, 'config', 'bridge_pinky3.yaml')
     bridge_pinky3_reverse_config = os.path.join(pkg_dir, 'config', 'bridge_pinky3_reverse.yaml')
 
+    # Robot Arms domain bridge config
+    bridge_arms_config = os.path.join(pkg_dir, 'config', 'domain_bridge_arms.yaml')
+
     return LaunchDescription([
         # Declare launch arguments
         DeclareLaunchArgument(
@@ -147,6 +150,21 @@ def generate_launch_description():
             executable='domain_bridge',
             name='pinky3_reverse_bridge',
             arguments=[bridge_pinky3_reverse_config],
+            output='screen',
+            respawn=True,
+            respawn_delay=2.0,
+        ),
+
+        # ============================================================
+        # Domain Bridge for Robot Arms (armA, armB)
+        # ============================================================
+
+        # Robot Arms Domain Bridge: Domain 20, 21 <-> Domain 25
+        Node(
+            package='domain_bridge',
+            executable='domain_bridge',
+            name='arms_bridge',
+            arguments=[bridge_arms_config],
             output='screen',
             respawn=True,
             respawn_delay=2.0,

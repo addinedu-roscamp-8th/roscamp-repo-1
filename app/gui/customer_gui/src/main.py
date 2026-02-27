@@ -254,6 +254,16 @@ class CustomerGUIApp(QStackedWidget):
                 print('[App] 오류: 배달 알림에서 order_id를 찾을 수 없음')
                 return
 
+            # 테이블 번호 확인 - 이 GUI의 테이블과 일치하는지 확인
+            try:
+                notification_table = int(table_number) if table_number else 0
+            except (ValueError, TypeError):
+                notification_table = 0
+
+            if notification_table != Config.TABLE_NUMBER:
+                print(f'[App] 다른 테이블({notification_table})의 알림, 이 테이블({Config.TABLE_NUMBER})과 무관')
+                return
+
             # 현재 주문 또는 대기 중인 주문이 있으면 배달 알림 표시
             active_order = self.current_order or self.pending_order
             if active_order:

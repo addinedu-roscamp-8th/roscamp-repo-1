@@ -10,8 +10,9 @@ from queue import Queue
 
 import rclpy
 from rclpy.node import Node
+from rclpy.executors import MultiThreadedExecutor
 from std_msgs.msg import String
-from fleet_interfaces.msg import CookingOrder, LoadingComplete
+from fleet_interfaces.msg import CookingOrder, LoadingComplete, PickupArrival
 from builtin_interfaces.msg import Time
 
 
@@ -102,10 +103,23 @@ class CoordinatorNode(Node):
             10
         )
 
+        # PickupArrival subscriber - receive pinky arrival notifications from FMS
+        self.pickup_arrival_sub = self.create_subscription(
+            PickupArrival,
+            '/fms/pickup_arrival',
+            self._on_pickup_arrival,
+            10
+        )
+
         # job_id -> (state, kv)
         self.a_status: Dict[str, Tuple[str, Dict[str, str]]] = {}
         self.b_status: Dict[str, Tuple[str, Dict[str, str]]] = {}
         self.v_status: Dict[str, Tuple[str, Dict[str, str]]] = {}
+
+        # Pinky arrival tracking: order_id -> bool (arrived or not)
+        self.pinky_at_pickup: Dict[str, bool] = {}
+        self.pinky_arrival_lock = threading.Lock()
+        self.pinky_arrival_cv = threading.Condition(self.pinky_arrival_lock)
 
         # Order processing queue and thread
         self.order_queue: Queue = Queue()
@@ -177,7 +191,7 @@ class CoordinatorNode(Node):
             if quantity > 1:
                 self.get_logger().info(f"Making sandwich {i+1}/{quantity} for order {order_id}")
 
-            ok = self.run_order(order)
+            ok = self.run_order(order, order_id)
             if not ok:
                 self.get_logger().error(f"Failed to make sandwich for order {order_id}")
                 success = False
@@ -185,6 +199,10 @@ class CoordinatorNode(Node):
 
         # Publish LoadingComplete
         self._publish_loading_complete(order_id, robot_id, success)
+
+        # Cleanup pinky arrival tracking to prevent memory leak
+        with self.pinky_arrival_cv:
+            self.pinky_at_pickup.pop(order_id, None)
 
     def _publish_loading_complete(self, order_id: str, robot_id: str, success: bool):
         """
@@ -224,6 +242,21 @@ class CoordinatorNode(Node):
         job_id, state, kv = parse_msg(msg.data)
         if job_id and state:
             self.v_status[job_id] = (state, kv)
+
+    def _on_pickup_arrival(self, msg: PickupArrival):
+        """
+        Handle pinky arrival notification at pickup spot
+
+        Args:
+            msg: PickupArrival message with robot_id, order_id, current_pose, arrived_at
+        """
+        self.get_logger().info(
+            f"Pinky arrived at pickup: robot={msg.robot_id}, order={msg.order_id}"
+        )
+
+        with self.pinky_arrival_cv:
+            self.pinky_at_pickup[msg.order_id] = True
+            self.pinky_arrival_cv.notify_all()  # Wake up waiting threads
 
     def _publish(self, pub, text: str, settle_sec: float = 0.15):
         m = String()
@@ -281,11 +314,47 @@ class CoordinatorNode(Node):
 
         return False, "timeout"
 
-    def run_order(self, order: Order) -> bool:
+    def wait_for_pinky_arrival(self, order_id: str, timeout_sec: float = 120.0) -> bool:
+        """
+        Wait for pinky to arrive at pickup spot before handoff
+
+        Args:
+            order_id: Order ID to wait for
+            timeout_sec: Maximum time to wait
+
+        Returns:
+            True if pinky arrived, False if timeout
+        """
+        self.get_logger().info(f"Waiting for pinky arrival for order {order_id} (timeout={timeout_sec}s)")
+
+        with self.pinky_arrival_cv:
+            # Check if already arrived
+            if self.pinky_at_pickup.get(order_id, False):
+                self.get_logger().info(f"Pinky already at pickup for order {order_id}")
+                return True
+
+            # Wait for arrival with timeout
+            start_time = time.time()
+            while rclpy.ok():
+                remaining = timeout_sec - (time.time() - start_time)
+                if remaining <= 0:
+                    self.get_logger().warn(f"Timeout waiting for pinky arrival: order={order_id}")
+                    return False
+
+                if self.pinky_at_pickup.get(order_id, False):
+                    self.get_logger().info(f"Pinky arrived for order {order_id}")
+                    return True
+
+                # Wait for notification or timeout
+                self.pinky_arrival_cv.wait(timeout=min(remaining, 1.0))
+
+        return False
+
+    def run_order(self, order: Order, order_id: Optional[str] = None) -> bool:
         job_id = uuid.uuid4().hex[:8]
         sauce = (order.sauce or "").strip()
 
-        self.get_logger().info(f"start job={job_id} recipe={order.recipe} sauce='{sauce}' pause_before_last={order.pause_before_last}")
+        self.get_logger().info(f"start job={job_id} recipe={order.recipe} sauce='{sauce}' pause_before_last={order.pause_before_last} order_id={order_id}")
 
         # sauce가 비어있으면 B 필요 없음(소스 동기화만)
         need_b = 1 if sauce != "" else 0
@@ -333,7 +402,7 @@ class CoordinatorNode(Node):
         # 4) NEW: B가 verify로 운반 + verify 분석 + 결과 따라 분기
         # -----------------------------
         self.get_logger().info(f"A stacked DONE -> B TRANSPORT_TO_VERIFY job={job_id}")
-        self._publish(self.pub_b, build_msg(job_id, "TRANSPORT_TO_VERIFY"))
+        self._publish(self.pub_verify, build_msg(job_id, "TRANSPORT_TO_VERIFY", sauce=sauce if sauce else "none"))
 
         ok, msg = self.wait_for(job_id, "B", "DONE", order.timeout_transport_verify_sec)
         if not ok:
@@ -349,8 +418,20 @@ class CoordinatorNode(Node):
         # verify 결과 대기: OK 또는 DEFECT (너 verify 노드 출력에 맞춰 변경)
         ok_ok, _ = self.wait_for(job_id, "V", "OK", order.timeout_verify_sec)
         if ok_ok:
-            self.get_logger().info(f"VERIFY OK -> HANDOFF_PINKY job={job_id}")
-            self._publish(self.pub_b, build_msg(job_id, "HANDOFF_PINKY"))
+            self.get_logger().info(f"VERIFY OK -> waiting for pinky arrival job={job_id}")
+
+            # Wait for pinky arrival before handoff (only in production mode with order_id)
+            if order_id:
+                pinky_arrived = self.wait_for_pinky_arrival(order_id, timeout_sec=order.timeout_handoff_sec)
+                if not pinky_arrived:
+                    self.get_logger().error(f"Pinky did not arrive in time for order {order_id}")
+                    self._publish(self.pub_b, build_msg(job_id, "CANCEL"))
+                    return False
+            else:
+                self.get_logger().info(f"Test mode: skipping pinky arrival check for job={job_id}")
+
+            self.get_logger().info(f"Pinky ready -> HANDOFF_PINKY job={job_id}")
+            self._publish(self.pub_verify, build_msg(job_id, "HANDOFF_PINKY"))
             ok2, msg2 = self.wait_for(job_id, "B", "DONE", order.timeout_handoff_sec)
             if not ok2:
                 self.get_logger().error(f"B handoff failed: {msg2}")
@@ -363,7 +444,7 @@ class CoordinatorNode(Node):
             else:
                 self.get_logger().warn(f"VERIFY not OK within timeout -> treat as DEFECT job={job_id}")
 
-            self._publish(self.pub_b, build_msg(job_id, "DISCARD"))
+            self._publish(self.pub_verify, build_msg(job_id, "DISCARD"))
             ok2, msg2 = self.wait_for(job_id, "B", "DONE", order.timeout_handoff_sec)
             if not ok2:
                 self.get_logger().error(f"B discard failed: {msg2}")
@@ -421,25 +502,36 @@ def main():
         node.get_logger().info(f"  recipe: {test_recipe}")
         node.get_logger().info(f"  sauce: {test_sauce}")
         node.get_logger().info(f"  pause_before_last: {test_pause}")
+        node.get_logger().info("  NOTE: Pinky arrival check will be skipped in test mode")
         node.get_logger().info("=" * 50)
 
-        ok = node.run_order(Order(
-            recipe=str(test_recipe),
-            sauce=str(test_sauce),
-            pause_before_last=int(test_pause)
-        ))
+        ok = node.run_order(
+            Order(
+                recipe=str(test_recipe),
+                sauce=str(test_sauce),
+                pause_before_last=int(test_pause)
+            ),
+            order_id=None  # No order_id in test mode - skips pinky arrival check
+        )
         node.get_logger().info(f"Test order result: ok={ok}")
 
         node.destroy_node()
         rclpy.shutdown()
     else:
         # ===== PRODUCTION MODE (FMS 연동) =====
+        node.get_logger().info("=" * 50)
+        node.get_logger().info("PRODUCTION MODE: Waiting for FMS orders...")
+        node.get_logger().info("Listening on /cooking/order topic")
+        node.get_logger().info("Using MultiThreadedExecutor for concurrent callback processing")
+        node.get_logger().info("=" * 50)
+
+        # Use MultiThreadedExecutor to allow concurrent callback processing
+        # This fixes the threading bug where spin_once() in background threads doesn't work
+        executor = MultiThreadedExecutor(num_threads=4)
+        executor.add_node(node)
+
         try:
-            node.get_logger().info("=" * 50)
-            node.get_logger().info("PRODUCTION MODE: Waiting for FMS orders...")
-            node.get_logger().info("Listening on /cooking/order topic")
-            node.get_logger().info("=" * 50)
-            rclpy.spin(node)
+            executor.spin()
         except KeyboardInterrupt:
             node.get_logger().info("Shutting down Sandwich Coordinator...")
         finally:

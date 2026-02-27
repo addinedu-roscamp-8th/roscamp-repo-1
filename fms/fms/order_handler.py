@@ -431,15 +431,14 @@ class OrderHandler:
         # 로봇 해제
         robot_id = workflow.robot_id
 
-        # Update fleet controller to mark robot as completing delivery
-        if self.fleet_controller_callback:
-            self.fleet_controller_callback(robot_id, 'complete_delivery')
-
         logger.info(f"=" * 60)
         logger.info(f"[WORKFLOW COMPLETE] Order {workflow.order_id} delivered successfully")
         logger.info(f"=" * 60)
 
         # 대기 주문 확인 및 자동 디스패치
+        # NOTE: auto-dispatch 시에는 complete_delivery를 호출하지 않음
+        # 왜냐하면 complete_delivery가 로봇을 RETURNING 상태로 만들어서
+        # 다음 task 할당이 실패하기 때문임
         if self.pending_order_queue:
             next_workflow = self.pending_order_queue.popleft()
             if next_workflow:
@@ -451,6 +450,10 @@ class OrderHandler:
                 return
 
         # 대기 주문 없으면 home 복귀
+        # 이 경우에만 complete_delivery 호출 (RETURNING 상태로 변경)
+        if self.fleet_controller_callback:
+            self.fleet_controller_callback(robot_id, 'complete_delivery')
+
         logger.info(f"[NO PENDING ORDERS] Robot {robot_id} returning to home")
         if self.navigate_robot_home_callback:
             self.navigate_robot_home_callback(robot_id)

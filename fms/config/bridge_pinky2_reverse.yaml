@@ -1,4 +1,5 @@
 # Pinky2 Reverse Bridge: Domain 25 -> Domain 12
+# Topics from FMS (/pinky2/*) are remapped to robot namespace (no prefix)
 name: pinky2_reverse_bridge
 from_domain: 25
 to_domain: 12
@@ -9,6 +10,10 @@ topics:
   pinky2/goal_pose:
     type: geometry_msgs/msg/PoseStamped
     remap: goal_pose
+  # Velocity command for teleop/manual control
+  pinky2/cmd_vel:
+    type: geometry_msgs/msg/Twist
+    remap: cmd_vel
 services:
   pinky2/follow_waypoints/_action/send_goal:
     type: nav2_msgs/action/FollowWaypoints_SendGoal

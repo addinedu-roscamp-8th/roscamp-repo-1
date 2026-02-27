@@ -10,6 +10,10 @@ topics:
   pinky1/goal_pose:
     type: geometry_msgs/msg/PoseStamped
     remap: goal_pose
+  # Velocity command for teleop/manual control
+  pinky1/cmd_vel:
+    type: geometry_msgs/msg/Twist
+    remap: cmd_vel
 services:
   pinky1/follow_waypoints/_action/send_goal:
     type: nav2_msgs/action/FollowWaypoints_SendGoal

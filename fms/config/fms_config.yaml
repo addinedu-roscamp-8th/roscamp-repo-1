@@ -190,6 +190,7 @@ zones:
     radius: 0.08
 
   # Waypoint zones (for multi-robot coordination)
+  # Left column (x = 0.78)
   - id: "zone_point1"
     center_x: 0.78
     center_y: 0.15
@@ -206,6 +207,44 @@ zones:
     center_x: 0.78
     center_y: 0.85
     radius: 0.08
+
+  # Middle column (x = 1.325)
+  - id: "zone_point5"
+    center_x: 1.325
+    center_y: 0.15
+    radius: 0.08
+  - id: "zone_point6"
+    center_x: 1.325
+    center_y: 0.35
+    radius: 0.08
+  - id: "zone_point7"
+    center_x: 1.325
+    center_y: 0.65
+    radius: 0.08
+  - id: "zone_point8"
+    center_x: 1.325
+    center_y: 0.85
+    radius: 0.08
+
+  # Right column (x = 1.85)
+  - id: "zone_point9"
+    center_x: 1.85
+    center_y: 0.15
+    radius: 0.08
+  - id: "zone_point10"
+    center_x: 1.85
+    center_y: 0.35
+    radius: 0.08
+  - id: "zone_point11"
+    center_x: 1.85
+    center_y: 0.65
+    radius: 0.08
+  - id: "zone_point12"
+    center_x: 1.85
+    center_y: 0.85
+    radius: 0.08
+
+  # Pickup approach point
   - id: "zone_point13"
     center_x: 0.585
     center_y: 0.63

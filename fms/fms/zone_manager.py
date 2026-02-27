@@ -192,11 +192,25 @@ class ZoneManager:
                 {'id': 'zone_parking2', 'center_x': 0.585, 'center_y': 0.255, 'radius': 0.08},
                 {'id': 'zone_parking3', 'center_x': 0.585, 'center_y': 0.915, 'radius': 0.08},
 
-                # Waypoint zones
+                # Waypoint zones - Left column (x = 0.78)
                 {'id': 'zone_point1', 'center_x': 0.78, 'center_y': 0.15, 'radius': 0.08},
                 {'id': 'zone_point2', 'center_x': 0.78, 'center_y': 0.35, 'radius': 0.08},
                 {'id': 'zone_point3', 'center_x': 0.78, 'center_y': 0.65, 'radius': 0.08},
                 {'id': 'zone_point4', 'center_x': 0.78, 'center_y': 0.85, 'radius': 0.08},
+
+                # Waypoint zones - Middle column (x = 1.325)
+                {'id': 'zone_point5', 'center_x': 1.325, 'center_y': 0.15, 'radius': 0.08},
+                {'id': 'zone_point6', 'center_x': 1.325, 'center_y': 0.35, 'radius': 0.08},
+                {'id': 'zone_point7', 'center_x': 1.325, 'center_y': 0.65, 'radius': 0.08},
+                {'id': 'zone_point8', 'center_x': 1.325, 'center_y': 0.85, 'radius': 0.08},
+
+                # Waypoint zones - Right column (x = 1.85)
+                {'id': 'zone_point9', 'center_x': 1.85, 'center_y': 0.15, 'radius': 0.08},
+                {'id': 'zone_point10', 'center_x': 1.85, 'center_y': 0.35, 'radius': 0.08},
+                {'id': 'zone_point11', 'center_x': 1.85, 'center_y': 0.65, 'radius': 0.08},
+                {'id': 'zone_point12', 'center_x': 1.85, 'center_y': 0.85, 'radius': 0.08},
+
+                # Pickup approach point
                 {'id': 'zone_point13', 'center_x': 0.585, 'center_y': 0.63, 'radius': 0.08},
             ]
 
@@ -373,7 +387,7 @@ class ZoneManager:
         Get zone ID for location name
 
         Args:
-            location_name: Location name (pickup_spot, table1-8, pinky1_spot, etc.)
+            location_name: Location name (pickup_spot, table1-8, pinky1_spot, point1-13, etc.)
 
         Returns:
             Zone ID if found, None otherwise
@@ -381,6 +395,7 @@ class ZoneManager:
         # Map location names to zone IDs
         location_to_zone = {
             'pickup_spot': 'zone_pickup',
+            # Tables
             'table1': 'zone_table1',
             'table2': 'zone_table2',
             'table3': 'zone_table3',
@@ -389,9 +404,27 @@ class ZoneManager:
             'table6': 'zone_table6',
             'table7': 'zone_table7',
             'table8': 'zone_table8',
+            # Parking spots
             'pinky1_spot': 'zone_parking1',
             'pinky2_spot': 'zone_parking2',
             'pinky3_spot': 'zone_parking3',
+            # Waypoints - Left column (x = 0.78)
+            'point1': 'zone_point1',
+            'point2': 'zone_point2',
+            'point3': 'zone_point3',
+            'point4': 'zone_point4',
+            # Waypoints - Middle column (x = 1.325)
+            'point5': 'zone_point5',
+            'point6': 'zone_point6',
+            'point7': 'zone_point7',
+            'point8': 'zone_point8',
+            # Waypoints - Right column (x = 1.85)
+            'point9': 'zone_point9',
+            'point10': 'zone_point10',
+            'point11': 'zone_point11',
+            'point12': 'zone_point12',
+            # Pickup approach point
+            'point13': 'zone_point13',
         }
 
         return location_to_zone.get(location_name)

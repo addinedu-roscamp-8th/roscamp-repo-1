@@ -1565,6 +1565,10 @@ class FMSNode(Node):
         """
         Assign robot to order in fleet controller
 
+        This method handles both:
+        1. Normal assignment when robot is IDLE
+        2. Auto-dispatch when robot just completed a delivery (may be in DELIVERING state)
+
         Args:
             robot_id: Robot ID to assign
             order_id: Order ID to assign to
@@ -1581,10 +1585,26 @@ class FMSNode(Node):
                 # Create a minimal task for order handler workflow
                 task_id = f"task_{order_id}"
 
-            # Assign task to robot in fleet controller
-            self.fleet_controller.assign_task_to_robot(robot_id, task_id, order_id)
-            logger.info(f"Assigned robot {robot_id} to order {order_id}")
-            return True
+            # First, try normal assignment
+            success = self.fleet_controller.assign_task_to_robot(robot_id, task_id, order_id)
+
+            if not success:
+                # Robot may be in DELIVERING state from previous order (auto-dispatch case)
+                # Force clear the robot state and retry assignment
+                robot = self.fleet_controller.get_robot(robot_id)
+                if robot:
+                    logger.info(f"Robot {robot_id} is in state {robot.status}, forcing reset for auto-dispatch")
+                    # Clear previous task and set to available
+                    self.fleet_controller.mark_robot_available(robot_id)
+                    # Retry assignment
+                    success = self.fleet_controller.assign_task_to_robot(robot_id, task_id, order_id)
+
+            if success:
+                logger.info(f"Assigned robot {robot_id} to order {order_id}")
+            else:
+                logger.warning(f"Failed to assign robot {robot_id} to order {order_id}")
+
+            return success
         except Exception as e:
             logger.error(f"Failed to assign robot {robot_id} to order {order_id}: {e}")
             return False

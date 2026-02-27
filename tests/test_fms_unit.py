@@ -320,7 +320,7 @@ class TestRobotState:
         robot = RobotState('pinky1', 11)
 
         assert robot.robot_id == 'pinky1'
-        assert robot.domain_id == '/pinky1'
+        assert robot.domain_id == 11  # domain_id is now an integer
         assert robot.status == RobotState.STATUS_IDLE
         assert robot.current_pose is None
         assert robot.battery_voltage == 0.0

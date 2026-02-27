@@ -39,6 +39,7 @@ def generate_launch_description():
     pinky1_config = os.path.join(config_dir, 'domain_bridge_pinky1.yaml')
     pinky2_config = os.path.join(config_dir, 'domain_bridge_pinky2.yaml')
     pinky3_config = os.path.join(config_dir, 'domain_bridge_pinky3.yaml')
+    arms_config = os.path.join(config_dir, 'domain_bridge_arms.yaml')
 
     return LaunchDescription([
         # pinky1 Domain Bridge (Domain 11 <-> 25)
@@ -69,6 +70,17 @@ def generate_launch_description():
             executable='domain_bridge',
             name='pinky3_bridge',
             arguments=[pinky3_config],
+            output='screen',
+            respawn=True,
+            respawn_delay=2.0,
+        ),
+
+        # Robot Arms Domain Bridge (Domain 20, 21 <-> 25)
+        Node(
+            package='domain_bridge',
+            executable='domain_bridge',
+            name='arms_bridge',
+            arguments=[arms_config],
             output='screen',
             respawn=True,
             respawn_delay=2.0,

@@ -8,6 +8,7 @@ import sys
 import os
 import threading
 import time
+import queue
 from typing import Optional, List
 from PyQt5.QtCore import QObject, pyqtSignal
 
@@ -16,7 +17,7 @@ from common import Config, MenuItem, Order, OrderItem
 
 
 class FMSMessageListener(threading.Thread):
-    """FMS 메시지 리스너 스레드 - 배달 알림 수신"""
+    """FMS 메시지 리스너 스레드 - 배달 알림 수신 및 응답 전달"""
 
     def __init__(self, client: 'FMSDirectClient'):
         super().__init__(daemon=True)
@@ -31,7 +32,13 @@ class FMSMessageListener(threading.Thread):
                 message = self.client._receive_message_internal()
                 if message:
                     message_type = message.get('type')
-                    if message_type == 'delivery_notification':
+                    status = message.get('status')
+
+                    # 응답 메시지인 경우 (status 필드가 있는 경우) 응답 큐에 넣음
+                    if status is not None:
+                        print(f'[FMSListener] 응답 메시지 수신: {message}')
+                        self.client._response_queue.put(message)
+                    elif message_type == 'delivery_notification':
                         print(f'[FMSListener] 배달 알림 수신: {message}')
                         self.client.delivery_notification_signal.emit(message)
                     else:
@@ -77,6 +84,7 @@ class FMSDirectClient(QObject):
         self.listener_thread: Optional[FMSMessageListener] = None
         self.listener_lock = threading.Lock()
         self.send_lock = threading.Lock()  # 송신 락
+        self._response_queue = queue.Queue()  # 응답 대기 큐
 
         print(f'[FMSDirectClient] 초기화 - FMS 주소: {self.host}:{self.port}')
 
@@ -191,9 +199,14 @@ class FMSDirectClient(QObject):
             data += chunk
         return data
 
-    def _receive_response(self) -> Optional[dict]:
-        """요청-응답용 메시지 수신"""
-        return self._receive_message_internal()
+    def _receive_response(self, timeout: float = 5.0) -> Optional[dict]:
+        """요청-응답용 메시지 수신 (응답 큐에서 대기)"""
+        try:
+            response = self._response_queue.get(timeout=timeout)
+            return response
+        except queue.Empty:
+            print('[FMSDirectClient] 응답 대기 타임아웃')
+            return None
 
     # ==================== Mock 메뉴 데이터 ====================
 

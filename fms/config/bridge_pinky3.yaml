@@ -17,6 +17,10 @@ topics:
   battery/present:
     type: std_msgs/msg/Bool
     remap: pinky3/battery/present
+  # LiDAR scan data
+  scan:
+    type: sensor_msgs/msg/LaserScan
+    remap: pinky3/scan
   follow_waypoints/_action/feedback:
     type: nav2_msgs/action/FollowWaypoints_FeedbackMessage
     remap: pinky3/follow_waypoints/_action/feedback
