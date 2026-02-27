@@ -1218,13 +1218,13 @@ class FMSNode(Node):
         )
 
     def _follow_waypoints_feedback(self, robot_id: str, feedback_msg):
-        """Handle FollowWaypoints feedback"""
+        """FollowWaypoints feedback 처리"""
         feedback = feedback_msg.feedback
         current_idx = feedback.current_waypoint
         logger.info(f"[WAYPOINT] {robot_id} navigating to waypoint {current_idx + 1}")
 
     def _follow_waypoints_goal_response(self, robot_id: str, future, waypoints: List[str]):
-        """Handle FollowWaypoints goal response"""
+        """FollowWaypoints goal 응답 처리"""
         goal_handle = future.result()
         if not goal_handle.accepted:
             logger.error(f"[WAYPOINT] FollowWaypoints goal rejected for {robot_id}")
@@ -1239,7 +1239,7 @@ class FMSNode(Node):
         )
 
     def _follow_waypoints_result(self, robot_id: str, future, waypoints: List[str]):
-        """Handle FollowWaypoints result"""
+        """FollowWaypoints 결과 처리"""
         result = future.result().result
         missed_waypoints = result.missed_waypoints
 
@@ -1334,7 +1334,7 @@ class FMSNode(Node):
             logger.error(f"[SSH-NAV] Failed to send navigation to {robot_id}: {e}")
 
     def _check_ssh_nav_completion(self, robot_id: str):
-        """Check if SSH-based navigation completed"""
+        """SSH 기반 navigation 완료 확인"""
         if not hasattr(self, '_ssh_nav_processes') or robot_id not in self._ssh_nav_processes:
             return
 
@@ -1720,7 +1720,7 @@ class FMSNode(Node):
     # ========================================
 
     def publish_fleet_status(self):
-        """Publish fleet status"""
+        """fleet 상태 발행"""
         fleet_status = FleetStatus()
 
         # Get all robots
@@ -1763,7 +1763,7 @@ class FMSNode(Node):
             logger.debug(f"Scheduler Status: {scheduler_status}")
 
     def _datetime_to_ros_time(self, dt: datetime) -> Time:
-        """Convert Python datetime to ROS Time message"""
+        """Python datetime을 ROS Time 메시지로 변환"""
         timestamp = dt.timestamp()
         time_msg = Time()
         time_msg.sec = int(timestamp)
@@ -1974,7 +1974,7 @@ class FMSNode(Node):
     # ========================================
 
     def _register_recovery_callbacks(self):
-        """Register callbacks for operator commands"""
+        """운영자 명령용 callback 등록"""
         self.error_recovery_handler.register_action_callback(
             OperatorCommand.RETRY,
             self._handle_retry_command
@@ -2436,7 +2436,7 @@ class FMSNode(Node):
 
 
 def main():
-    """Entry point for FMS Node"""
+    """FMS Node 진입점"""
     rclpy.init()
 
     try:

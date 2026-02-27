@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Pinky Navigation Test Script
-Usage: python3 test_navigation.py `pinky1` `table1`
+Pinky 네비게이션 테스트 스크립트
+사용법: python3 test_navigation.py `pinky1` `table1`
 
-Sends a navigation command to move the specified pinky robot to the target waypoint.
-Requires: Domain Bridge running, pinky robot bringup and Nav2 running.
+지정된 pinky 로봇을 목표 waypoint로 이동시키는 네비게이션 명령을 전송합니다.
+요구사항: Domain Bridge 실행, pinky 로봇 bringup 및 Nav2 실행.
 """
 
 import sys
@@ -74,7 +74,16 @@ class NavigationClient(Node):
         self.get_logger().info(f'Action: {action_name}')
 
     def send_goal(self, x: float, y: float, theta: float = 0.0):
-        """Send navigation goal to robot"""
+        """로봇에게 네비게이션 목표 좌표를 전송합니다.
+
+        Args:
+            x: 목표 x 좌표 (미터)
+            y: 목표 y 좌표 (미터)
+            theta: 목표 방향 (라디안, 기본값 0.0)
+
+        Returns:
+            bool: 목표 전송 성공 여부
+        """
         self.get_logger().info(f'Waiting for action server...')
 
         if not self._action_client.wait_for_server(timeout_sec=10.0):
@@ -106,6 +115,11 @@ class NavigationClient(Node):
         return True
 
     def goal_response_callback(self, future):
+        """목표 전송 응답을 처리합니다.
+
+        Args:
+            future: 목표 전송 결과를 포함하는 Future 객체
+        """
         goal_handle = future.result()
         if not goal_handle.accepted:
             self.get_logger().error('Goal rejected!')
@@ -116,6 +130,11 @@ class NavigationClient(Node):
         self._get_result_future.add_done_callback(self.get_result_callback)
 
     def get_result_callback(self, future):
+        """네비게이션 최종 결과를 처리합니다.
+
+        Args:
+            future: 네비게이션 실행 결과를 포함하는 Future 객체
+        """
         result = future.result()
         status = result.status
 
@@ -131,6 +150,11 @@ class NavigationClient(Node):
         rclpy.shutdown()
 
     def feedback_callback(self, feedback_msg):
+        """네비게이션 진행 상황 피드백을 처리합니다.
+
+        Args:
+            feedback_msg: 현재 위치와 남은 거리 정보를 포함하는 피드백 메시지
+        """
         feedback = feedback_msg.feedback
         current_pose = feedback.current_pose.pose
         distance = feedback.distance_remaining

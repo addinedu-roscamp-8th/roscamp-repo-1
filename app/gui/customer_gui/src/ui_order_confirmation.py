@@ -28,7 +28,7 @@ class OrderConfirmationWidget(QWidget):
         self.connect_signals()
 
     def setup_ui(self):
-        """UI 설정"""
+        """UI를 설정합니다."""
         ui_path = os.path.join(
             os.path.dirname(__file__),
             '..',
@@ -44,17 +44,17 @@ class OrderConfirmationWidget(QWidget):
             self.resize(Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT)
 
     def connect_signals(self):
-        """시그널 연결"""
+        """시그널을 연결합니다."""
         self.btn_submit.clicked.connect(self.on_submit_order)
         self.btn_back.clicked.connect(self.on_back)
 
     def set_order(self, order: Order):
-        """주문 정보 설정 및 표시"""
+        """주문 정보를 설정하고 표시합니다."""
         self.order = order
         self.update_receipt()
 
     def update_receipt(self):
-        """영수증 내용 업데이트"""
+        """영수증 내용을 업데이트합니다."""
         if not self.order:
             return
 
@@ -113,13 +113,13 @@ class OrderConfirmationWidget(QWidget):
             self.order_submitted_signal.emit(self.order)
 
     def on_back(self):
-        """뒤로가기 버튼 클릭"""
+        """뒤로가기 버튼 클릭을 처리합니다."""
         print('[OrderConfirmation] 뒤로가기')
         self.back_signal.emit()
 
 
 def main():
-    """테스트 실행"""
+    """테스트를 실행합니다."""
     from common import MenuItem, Order, OrderItem
 
     app = QApplication(sys.argv)

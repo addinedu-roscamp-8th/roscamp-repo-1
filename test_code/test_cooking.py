@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Robot Arm Cooking Test Script
-Usage: python3 test_cooking.py `ham_cheese` `mayo`
+로봇팔 조리 테스트 스크립트
+사용법: python3 test_cooking.py `ham_cheese` `mayo`
 
-Sends a cooking order to the coordinator to start cooking with the specified menu and sauce.
-The robot arm will complete cooking, verify the sandwich, and place it on pickup_spot for pinky.
+지정된 메뉴와 소스로 조리를 시작하기 위해 coordinator에게 조리 주문을 전송합니다.
+로봇팔은 조리를 완료하고, 샌드위치를 검증한 후, pinky를 위해 pickup_spot에 배치합니다.
 
-Requires: Domain Bridge, FMS workspace sourced, Coordinator running, Robot arms running.
+요구사항: Domain Bridge, FMS workspace sourced, Coordinator 실행, 로봇팔 실행.
 """
 
 import sys
@@ -94,7 +94,13 @@ class CookingOrderClient(Node):
         self.get_logger().info('Cooking order client initialized')
 
     def send_order(self, menu_id: str, sauce: str, robot_id: str = "pinky1"):
-        """Send a cooking order to the coordinator"""
+        """coordinator에게 조리 주문을 전송합니다.
+
+        Args:
+            menu_id: 메뉴 ID (M001, M002, M003)
+            sauce: 소스 종류 (mayo, mustard, ketchup, 또는 빈 문자열)
+            robot_id: 배정할 로봇 ID (기본값: "pinky1")
+        """
 
         # Wait for subscribers
         self.get_logger().info('Waiting for coordinator subscriber...')
@@ -135,7 +141,11 @@ class CookingOrderClient(Node):
         self.get_logger().info('(Coordinator will process the order)')
 
     def loading_complete_callback(self, msg: LoadingComplete):
-        """Handle loading complete message from coordinator"""
+        """coordinator로부터 loading complete 메시지를 처리합니다.
+
+        Args:
+            msg: LoadingComplete 메시지 (주문 ID, 성공 여부, 로봇 ID, 메시지 포함)
+        """
         if msg.order_id == self.order_id:
             self.completed = True
             self.success = msg.success
@@ -179,7 +189,14 @@ def print_usage():
 
 
 def normalize_menu(menu_input: str) -> str:
-    """Convert menu input to menu_id (M001, M002, M003)"""
+    """메뉴 입력값을 menu_id로 변환합니다 (M001, M002, M003).
+
+    Args:
+        menu_input: 사용자 입력 메뉴 (예: "ham_cheese", "M001")
+
+    Returns:
+        str: 표준화된 메뉴 ID (M001, M002, M003) 또는 None (잘못된 입력)
+    """
     menu_input = menu_input.lower().strip()
 
     # Direct menu ID
@@ -195,7 +212,14 @@ def normalize_menu(menu_input: str) -> str:
 
 
 def normalize_sauce(sauce_input: str) -> str:
-    """Normalize sauce input"""
+    """소스 입력값을 표준화합니다.
+
+    Args:
+        sauce_input: 사용자 입력 소스 (예: "mayo", "none", "")
+
+    Returns:
+        str: 표준화된 소스 이름 (mayo, mustard, ketchup, 빈 문자열) 또는 None (잘못된 입력)
+    """
     sauce = sauce_input.lower().strip()
 
     # Handle empty/none cases

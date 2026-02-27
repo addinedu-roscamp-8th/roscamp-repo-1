@@ -221,7 +221,7 @@ class FMSNodeWithScheduler:
         logger.error(f"Robot {robot_id} malfunction: {error_msg}. Task requeued.")
 
     def get_fleet_status(self) -> dict:
-        """Get current fleet and scheduler status"""
+        """현재 fleet 및 scheduler 상태 반환"""
         return {
             'scheduler_status': self.task_scheduler.get_scheduler_status(),
             'task_summary': self.task_scheduler.get_task_summary(),
@@ -229,7 +229,7 @@ class FMSNodeWithScheduler:
         }
 
     def print_scheduler_status(self):
-        """Print scheduler status for debugging"""
+        """디버깅용 scheduler 상태 출력"""
         status = self.get_fleet_status()
         logger.info("=== SCHEDULER STATUS ===")
         logger.info(f"Pending tasks: {status['scheduler_status']['pending_tasks']}")

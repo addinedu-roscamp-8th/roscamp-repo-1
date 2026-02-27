@@ -138,6 +138,7 @@ class BTrayOrchestratorNode(Node):
       "<job_id>|HANDOFF_PINKY"
       "<job_id>|DISCARD"
       "<job_id>|CANCEL"
+      "<job_id>|RESET"  # Force reset - clears stuck state regardless of job_id
 
     /arm_b/status:
       "<job_id>|RUNNING|phase=..."
@@ -295,6 +296,10 @@ class BTrayOrchestratorNode(Node):
             self._cancel_internal(job_id)
             return
 
+        if op == "RESET":
+            self._reset_internal(job_id)
+            return
+
         # supported ops
         if op not in (
             "TRANSPORT_VERIFY", "TRANSPORT_TO_VERIFY",
@@ -365,6 +370,30 @@ class BTrayOrchestratorNode(Node):
 
         fut.cancel()
         self._publish_status(job_id, "FAIL", reason="canceling")
+
+    def _reset_internal(self, job_id: str) -> None:
+        """Force reset: 현재 작업과 관계없이 강제로 상태를 초기화합니다."""
+        with self._lock:
+            old_job = self._active_job_id
+            fut = self._run_task
+
+        # Cancel any running task regardless of job_id
+        if fut is not None and not fut.done():
+            try:
+                if self._loop:
+                    asyncio.run_coroutine_threadsafe(self._cancel_move_goal(), self._loop)
+            except Exception:
+                pass
+            fut.cancel()
+
+        # Clear state
+        with self._lock:
+            self._run_task = None
+            self._active_job_id = None
+            self._active_op = None
+
+        self.get_logger().info(f"RESET: Cleared stuck task (was: {old_job})")
+        self._publish_status(job_id, "RESET_OK")
 
     # -----------------------------
     # asyncio helpers

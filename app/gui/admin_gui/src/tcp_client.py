@@ -39,7 +39,7 @@ class AdminServiceClient(QObject):
         self.is_connected = False
 
     def connect(self) -> bool:
-        """서버에 연결"""
+        """서버에 연결합니다."""
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.settimeout(5.0)
@@ -55,7 +55,7 @@ class AdminServiceClient(QObject):
             return False
 
     def disconnect(self):
-        """연결 종료"""
+        """연결을 종료합니다."""
         if self.socket:
             try:
                 self.socket.close()
@@ -67,7 +67,7 @@ class AdminServiceClient(QObject):
                 self.disconnected_signal.emit()
 
     def send_request(self, request: dict) -> Optional[dict]:
-        """요청 전송 및 응답 수신"""
+        """요청을 전송하고 응답을 수신합니다."""
         if not self.is_connected:
             self.connect()
 
@@ -105,7 +105,7 @@ class AdminServiceClient(QObject):
     # ==================== 주문 관련 API ====================
 
     def get_orders(self, status: Optional[str] = None) -> List[Dict]:
-        """주문 목록 조회"""
+        """주문 목록을 조회합니다."""
         request = {
             'action': 'get_orders',
             'status': status
@@ -116,7 +116,7 @@ class AdminServiceClient(QObject):
         return []
 
     def get_order(self, order_id: str) -> Optional[Dict]:
-        """특정 주문 조회"""
+        """특정 주문을 조회합니다."""
         request = {
             'action': 'get_order',
             'order_id': order_id
@@ -127,7 +127,7 @@ class AdminServiceClient(QObject):
         return None
 
     def update_order_status(self, order_id: str, status: str) -> bool:
-        """주문 상태 업데이트"""
+        """주문 상태를 업데이트합니다."""
         request = {
             'action': 'update_order_status',
             'order_id': order_id,
@@ -137,7 +137,7 @@ class AdminServiceClient(QObject):
         return response and response.get('success', False)
 
     def cancel_order(self, order_id: str, reason: str = "") -> bool:
-        """주문 취소"""
+        """주문을 취소합니다."""
         request = {
             'action': 'cancel_order',
             'order_id': order_id,
@@ -147,7 +147,7 @@ class AdminServiceClient(QObject):
         return response and response.get('success', False)
 
     def halt_order(self, order_id: str) -> bool:
-        """주문 일시중지 (관리자 개입)"""
+        """주문을 일시중지합니다 (관리자 개입)."""
         request = {
             'action': 'halt_order',
             'order_id': order_id
@@ -156,7 +156,7 @@ class AdminServiceClient(QObject):
         return response and response.get('success', False)
 
     def confirm_inspection(self, order_id: str) -> bool:
-        """음식 검수 완료"""
+        """음식 검수를 완료합니다."""
         request = {
             'action': 'confirm_inspection',
             'order_id': order_id
@@ -165,7 +165,7 @@ class AdminServiceClient(QObject):
         return response and response.get('success', False)
 
     def start_serving(self, order_id: str) -> bool:
-        """서빙 출발"""
+        """서빙을 출발시킵니다."""
         request = {
             'action': 'start_serving',
             'order_id': order_id
@@ -176,7 +176,7 @@ class AdminServiceClient(QObject):
     # ==================== 레시피 관련 API ====================
 
     def get_recipes(self) -> List[Dict]:
-        """레시피 목록 조회"""
+        """레시피 목록을 조회합니다."""
         request = {'action': 'get_recipes'}
         response = self.send_request(request)
         if response and response.get('success'):
@@ -184,7 +184,7 @@ class AdminServiceClient(QObject):
         return []
 
     def get_recipe(self, recipe_id: str) -> Optional[Dict]:
-        """특정 레시피 조회"""
+        """특정 레시피를 조회합니다."""
         request = {
             'action': 'get_recipe',
             'recipe_id': recipe_id
@@ -195,7 +195,7 @@ class AdminServiceClient(QObject):
         return None
 
     def create_recipe(self, recipe_data: dict) -> bool:
-        """레시피 생성"""
+        """레시피를 생성합니다."""
         request = {
             'action': 'create_recipe',
             'recipe': recipe_data
@@ -204,7 +204,7 @@ class AdminServiceClient(QObject):
         return response and response.get('success', False)
 
     def update_recipe(self, recipe_id: str, recipe_data: dict) -> bool:
-        """레시피 업데이트"""
+        """레시피를 업데이트합니다."""
         request = {
             'action': 'update_recipe',
             'recipe_id': recipe_id,
@@ -214,7 +214,7 @@ class AdminServiceClient(QObject):
         return response and response.get('success', False)
 
     def delete_recipe(self, recipe_id: str) -> bool:
-        """레시피 삭제"""
+        """레시피를 삭제합니다."""
         request = {
             'action': 'delete_recipe',
             'recipe_id': recipe_id
@@ -225,7 +225,7 @@ class AdminServiceClient(QObject):
     # ==================== 재고 관련 API ====================
 
     def get_stocks(self) -> List[Dict]:
-        """재고 목록 조회"""
+        """재고 목록을 조회합니다."""
         request = {'action': 'get_stocks'}
         response = self.send_request(request)
         if response and response.get('success'):
@@ -233,7 +233,7 @@ class AdminServiceClient(QObject):
         return []
 
     def get_stock(self, stock_id: str) -> Optional[Dict]:
-        """특정 재고 조회"""
+        """특정 재고를 조회합니다."""
         request = {
             'action': 'get_stock',
             'stock_id': stock_id
@@ -244,7 +244,7 @@ class AdminServiceClient(QObject):
         return None
 
     def update_stock(self, stock_id: str, quantity: float) -> bool:
-        """재고 수량 업데이트"""
+        """재고 수량을 업데이트합니다."""
         request = {
             'action': 'update_stock',
             'stock_id': stock_id,
@@ -254,7 +254,7 @@ class AdminServiceClient(QObject):
         return response and response.get('success', False)
 
     def get_low_stocks(self) -> List[Dict]:
-        """재고 부족 항목 조회"""
+        """재고 부족 항목을 조회합니다."""
         request = {'action': 'get_low_stocks'}
         response = self.send_request(request)
         if response and response.get('success'):
@@ -282,7 +282,7 @@ class MockAdminServiceClient(QObject):
         self._init_mock_data()
 
     def _init_mock_data(self):
-        """Mock 데이터 초기화"""
+        """Mock 데이터를 초기화합니다."""
         # Mock 주문 데이터
         self.mock_orders = [
             {

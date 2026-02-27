@@ -402,7 +402,7 @@ class CoordinatorNode(Node):
         # 4) NEW: B가 verify로 운반 + verify 분석 + 결과 따라 분기
         # -----------------------------
         self.get_logger().info(f"A stacked DONE -> B TRANSPORT_TO_VERIFY job={job_id}")
-        self._publish(self.pub_b, build_msg(job_id, "TRANSPORT_TO_VERIFY"))
+        self._publish(self.pub_b, build_msg(job_id, "TRANSPORT_TO_VERIFY", sauce=sauce if sauce else "none"))
 
         ok, msg = self.wait_for(job_id, "B", "DONE", order.timeout_transport_verify_sec)
         if not ok:

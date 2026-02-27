@@ -1,13 +1,13 @@
 """
-Error Detection and Monitoring System for FMS
-Detects serving errors and triggers appropriate responses
+FMS용 오류 감지 및 모니터링 시스템
+서빙 오류를 감지하고 적절한 응답을 트리거합니다
 
-Error Types:
-- NAV_FAILED: Navigation action failed (ABORTED, CANCELED)
-- COMM_LOST: Robot communication heartbeat timeout
-- LOW_BATTERY: Battery voltage below threshold
-- TIMEOUT: Task execution timeout (pickup or delivery)
-- OBSTACLE: Persistent obstacle blocking navigation
+오류 타입:
+- NAV_FAILED: 네비게이션 action 실패 (ABORTED, CANCELED)
+- COMM_LOST: 로봇 통신 heartbeat 타임아웃
+- LOW_BATTERY: 배터리 전압이 threshold 미만
+- TIMEOUT: Task 실행 타임아웃 (pickup 또는 delivery)
+- OBSTACLE: 네비게이션을 막는 지속적인 장애물
 """
 
 import logging
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class ErrorType(Enum):
-    """Error types for robot serving"""
+    """로봇 서빙을 위한 오류 타입"""
     NAV_FAILED = 'NAV_FAILED'          # Navigation action failed
     COMM_LOST = 'COMM_LOST'            # Communication lost (heartbeat timeout)
     LOW_BATTERY = 'LOW_BATTERY'        # Battery below threshold
@@ -29,19 +29,19 @@ class ErrorType(Enum):
 
 
 class RobotError:
-    """Represents a robot error"""
+    """로봇 오류를 나타냅니다"""
 
     def __init__(self, robot_id: str, error_type: ErrorType, error_message: str,
                  current_pose: Optional[Pose] = None, battery_voltage: float = 0.0):
         """
-        Initialize robot error
+        로봇 오류를 초기화합니다
 
         Args:
             robot_id: Robot ID
-            error_type: Type of error
-            error_message: Human-readable error message
-            current_pose: Robot's position when error occurred
-            battery_voltage: Battery voltage at time of error
+            error_type: 오류 타입
+            error_message: 사람이 읽을 수 있는 오류 메시지
+            current_pose: 오류 발생 시 로봇의 위치
+            battery_voltage: 오류 발생 시 배터리 전압
         """
         self.robot_id = robot_id
         self.error_type = error_type
@@ -53,15 +53,15 @@ class RobotError:
         self.max_recovery_attempts = 3
 
     def can_retry(self) -> bool:
-        """Check if error can be retried"""
+        """오류를 재시도할 수 있는지 확인합니다"""
         return self.recovery_attempts < self.max_recovery_attempts
 
     def increment_retry(self):
-        """Increment recovery attempt counter"""
+        """복구 시도 카운터를 증가시킵니다"""
         self.recovery_attempts += 1
 
     def to_dict(self):
-        """Convert to dictionary for message"""
+        """메시지용 dictionary로 변환합니다"""
         return {
             'robot_id': self.robot_id,
             'error_type': self.error_type.value,
@@ -79,18 +79,18 @@ class RobotError:
 
 class ErrorDetector:
     """
-    Detects and tracks robot serving errors
+    로봇 서빙 오류를 감지하고 추적합니다
 
-    Monitors:
-    - Navigation failures (action ABORTED/CANCELED)
-    - Communication loss (heartbeat timeout)
-    - Low battery conditions
-    - Task timeouts (pickup and delivery)
-    - Obstacles blocking navigation
+    모니터링 항목:
+    - 네비게이션 실패 (action ABORTED/CANCELED)
+    - 통신 손실 (heartbeat 타임아웃)
+    - 낮은 배터리 상태
+    - Task 타임아웃 (pickup 및 delivery)
+    - 네비게이션을 막는 장애물
     """
 
     def __init__(self):
-        """Initialize error detector"""
+        """오류 감지기를 초기화합니다"""
         self.active_errors: Dict[str, RobotError] = {}  # {robot_id: RobotError}
         self.error_history: Dict[str, list] = {}  # {robot_id: [RobotError]}
         self.heartbeat_timestamps: Dict[str, datetime] = {}  # {robot_id: last_heartbeat}
@@ -299,7 +299,7 @@ class ErrorDetector:
         return dict(self.active_errors)
 
     def get_error_count(self) -> int:
-        """Get count of robots with active errors"""
+        """활성 에러가 있는 robot 개수 반환"""
         return len(self.active_errors)
 
     def _clear_error(self, robot_id: str):

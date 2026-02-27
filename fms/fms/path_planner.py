@@ -1,7 +1,7 @@
 """
-Path Planner - Navigation Graph based path planning
+Path Planner - Navigation Graph 기반 경로 계획
 
-Uses the navigation_graph.yaml to plan routes between waypoints.
+navigation_graph.yaml을 사용하여 waypoint 간 경로를 계획합니다.
 """
 import yaml
 import os
@@ -16,15 +16,15 @@ logger = logging.getLogger('fms.path_planner')
 
 class NavigationGraph:
     """
-    Navigation Graph for waypoint-based path planning
+    Waypoint 기반 경로 계획을 위한 Navigation Graph
 
-    Reads navigation_graph.yaml and provides:
-    - Shortest path finding between waypoints
-    - Route calculation for robot navigation
+    navigation_graph.yaml을 읽어 다음 기능을 제공합니다:
+    - Waypoint 간 최단 경로 탐색
+    - 로봇 네비게이션을 위한 경로 계산
     """
 
     def __init__(self, config_path: Optional[str] = None):
-        """Initialize navigation graph from YAML config"""
+        """YAML 설정 파일로부터 navigation graph를 초기화합니다"""
         if config_path is None:
             # Try multiple possible config locations
             possible_paths = [
@@ -53,7 +53,7 @@ class NavigationGraph:
                     f"{sum(len(v) for v in self.adjacency.values())//2} edges")
 
     def _load_graph(self, config_path: str):
-        """Load navigation graph from YAML file"""
+        """YAML 파일로부터 navigation graph를 로드합니다"""
         try:
             with open(config_path, 'r') as f:
                 data = yaml.safe_load(f)
@@ -79,7 +79,7 @@ class NavigationGraph:
             raise
 
     def _distance(self, v1: str, v2: str) -> float:
-        """Calculate Euclidean distance between two vertices"""
+        """두 vertex 간의 유클리드 거리를 계산합니다"""
         if v1 not in self.vertices or v2 not in self.vertices:
             return float('inf')
 
@@ -189,11 +189,11 @@ class NavigationGraph:
         return self.find_path(start, goal, blocked_nodes)
 
     def get_position(self, waypoint: str) -> Optional[Tuple[float, float]]:
-        """Get (x, y) position of a waypoint"""
+        """waypoint의 (x, y) 위치 반환"""
         return self.vertices.get(waypoint)
 
     def get_nearest_waypoint(self, x: float, y: float) -> Optional[str]:
-        """Find the nearest waypoint to a given position"""
+        """주어진 위치에서 가장 가까운 waypoint 찾기"""
         min_dist = float('inf')
         nearest = None
 
@@ -216,7 +216,7 @@ class PathPlanner:
     """
 
     def __init__(self, graph: Optional[NavigationGraph] = None):
-        """Initialize path planner with navigation graph"""
+        """navigation graph로 path planner 초기화"""
         self.graph = graph or NavigationGraph()
 
         # Current navigation state per robot
@@ -284,7 +284,7 @@ class PathPlanner:
         return self.get_next_waypoint(robot_id)
 
     def is_route_complete(self, robot_id: str) -> bool:
-        """Check if robot has completed its route"""
+        """robot이 경로를 완료했는지 확인"""
         if robot_id not in self.robot_routes:
             return True
 
@@ -293,7 +293,7 @@ class PathPlanner:
         return index >= len(route)
 
     def clear_route(self, robot_id: str):
-        """Clear robot's current route"""
+        """robot의 현재 경로 지우기"""
         if robot_id in self.robot_routes:
             del self.robot_routes[robot_id]
         if robot_id in self.robot_current_index:

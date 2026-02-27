@@ -123,14 +123,14 @@ class FMSTCPNode(Node):
         self._log_configured_robots()
 
     def _load_yaml(self, file_path: str) -> dict:
-        """Load YAML configuration file"""
+        """YAML 설정 파일 로드"""
         if file_path and os.path.exists(file_path):
             with open(file_path, 'r') as f:
                 return yaml.safe_load(f)
         return {}
 
     def _register_tcp_handlers(self):
-        """Register custom TCP message handlers"""
+        """커스텀 TCP 메시지 handler 등록"""
         self.tcp_server.register_handler(
             MessageType.TASK_COMPLETE.value,
             self._handle_task_complete
@@ -145,7 +145,7 @@ class FMSTCPNode(Node):
         )
 
     def _setup_robot_pose_subscribers(self):
-        """Setup pose subscribers for each configured robot (same domain_id only)"""
+        """설정된 각 robot의 pose subscriber 설정 (동일 domain_id만)"""
         import os
         current_domain = int(os.environ.get('ROS_DOMAIN_ID', 0))
         mobile_robots = self.network_config.get('mobile_robots', {})
@@ -166,7 +166,7 @@ class FMSTCPNode(Node):
                     self.get_logger().info(f'Subscribed to {topic} (domain_id={robot_domain})')
 
     def _log_configured_robots(self):
-        """Log all configured robots"""
+        """설정된 모든 robot 로깅"""
         self.get_logger().info('=== Configured Robots ===')
 
         mobile_robots = self.network_config.get('mobile_robots', {})
@@ -184,7 +184,7 @@ class FMSTCPNode(Node):
     # ========== TCP Message Handlers ==========
 
     def _handle_task_complete(self, message: TCPMessage, client_socket) -> Optional[TCPMessage]:
-        """Handle task completion from robot"""
+        """robot으로부터 task 완료 처리"""
         robot_id = message.sender_id
         task_id = message.data.get('task_id', '')
         success = message.data.get('success', False)
@@ -203,14 +203,14 @@ class FMSTCPNode(Node):
         )
 
     def _handle_nav_status(self, message: TCPMessage, client_socket) -> None:
-        """Handle navigation status from robot"""
+        """robot으로부터 navigation 상태 처리"""
         robot_id = message.sender_id
         status = message.data.get('status', '')
         self.get_logger().debug(f'Nav status from {robot_id}: {status}')
         return None
 
     def _handle_emergency_stop(self, message: TCPMessage, client_socket) -> TCPMessage:
-        """Handle emergency stop command"""
+        """비상 정지 명령 처리"""
         robot_id = message.sender_id
         self.get_logger().error(f'EMERGENCY STOP from {robot_id}!')
 
@@ -231,7 +231,7 @@ class FMSTCPNode(Node):
     # ========== ROS 2 Callbacks ==========
 
     def robot_pose_callback(self, robot_name: str, msg: PoseStamped):
-        """Handle robot pose update from ROS 2"""
+        """ROS 2로부터 robot pose 업데이트 처리"""
         # Forward pose to TCP clients if needed
         pose_data = {
             'x': msg.pose.position.x,
@@ -254,7 +254,7 @@ class FMSTCPNode(Node):
         self.tcp_server.broadcast(pose_msg)
 
     def delivery_complete_callback(self, msg):
-        """Handle delivery complete from ROS 2"""
+        """ROS 2로부터 배송 완료 처리"""
         # Forward to TCP clients
         delivery_msg = TCPMessage(
             msg_type=MessageType.TASK_COMPLETE.value,
@@ -270,7 +270,7 @@ class FMSTCPNode(Node):
     # ========== Timer Callbacks ==========
 
     def publish_fleet_status(self):
-        """Publish fleet status to ROS 2"""
+        """ROS 2로 fleet 상태 발행"""
         fleet_status = self.tcp_server.get_fleet_status()
 
         # Log status periodically
@@ -292,7 +292,7 @@ class FMSTCPNode(Node):
         self.tcp_server.broadcast(status_msg)
 
     def process_tcp_queue(self):
-        """Process messages from TCP queue"""
+        """TCP queue로부터 메시지 처리"""
         while not self.tcp_server.message_queue.empty():
             try:
                 message = self.tcp_server.message_queue.get_nowait()
@@ -301,7 +301,7 @@ class FMSTCPNode(Node):
                 break
 
     def _process_tcp_message(self, message: TCPMessage):
-        """Process a TCP message from the queue"""
+        """queue로부터 받은 TCP 메시지 처리"""
         # Log connection events
         if message.msg_type == MessageType.CONNECT.value:
             robot_id = message.data.get('robot_id', 'unknown')
@@ -316,7 +316,7 @@ class FMSTCPNode(Node):
     # ========== Navigation Commands ==========
 
     def send_nav_goal(self, robot_id: str, x: float, y: float, theta: float) -> bool:
-        """Send navigation goal to a robot via TCP"""
+        """TCP를 통해 robot에 navigation goal 전송"""
         nav_msg = TCPMessage(
             msg_type=MessageType.NAV_GOAL.value,
             data={'x': x, 'y': y, 'theta': theta},
@@ -325,7 +325,7 @@ class FMSTCPNode(Node):
         return self.tcp_server.send_to_robot(robot_id, nav_msg)
 
     def cancel_nav(self, robot_id: str) -> bool:
-        """Cancel navigation for a robot"""
+        """robot의 navigation 취소"""
         cancel_msg = TCPMessage(
             msg_type=MessageType.NAV_CANCEL.value,
             data={},
@@ -336,7 +336,7 @@ class FMSTCPNode(Node):
     # ========== Lifecycle ==========
 
     def destroy_node(self):
-        """Clean up resources"""
+        """리소스 정리"""
         self.tcp_server.stop()
         super().destroy_node()
 

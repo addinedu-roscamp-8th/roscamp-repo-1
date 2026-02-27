@@ -1,6 +1,6 @@
 """
-Zone Manager for Fleet Management System
-Handles collision avoidance and zone-based coordination
+Fleet Management System용 Zone Manager
+충돌 회피와 zone 기반 조정을 처리합니다
 """
 
 import logging
@@ -14,12 +14,12 @@ logger = logging.getLogger(__name__)
 
 class Zone:
     """
-    Represents a zone in the map
+    맵의 zone을 나타냅니다
 
-    Zones are used for collision avoidance:
-    - Only one robot can occupy a zone at a time
-    - Robots must request zone access before entering
-    - Zones can be pre-reserved to guarantee access
+    Zone은 충돌 회피에 사용됩니다:
+    - 한 번에 하나의 로봇만 zone을 점유할 수 있습니다
+    - 로봇은 진입 전에 zone 접근을 요청해야 합니다
+    - Zone은 접근을 보장하기 위해 미리 예약될 수 있습니다
     """
 
     def __init__(self, zone_id: str, center_x: float, center_y: float, radius: float,
@@ -34,19 +34,19 @@ class Zone:
         self.reserved_at = None  # Timestamp when zone was reserved
 
     def is_available(self) -> bool:
-        """Check if zone is available (not occupied or reserved)"""
+        """zone이 가용한지 확인합니다 (점유되거나 예약되지 않음)"""
         return self.occupied_by is None and self.reserved_by is None
 
     def is_occupied(self) -> bool:
-        """Check if zone is occupied"""
+        """zone이 점유되었는지 확인합니다"""
         return self.occupied_by is not None
 
     def is_reservation_expired(self) -> bool:
         """
-        Check if reservation has expired
+        예약이 만료되었는지 확인합니다
 
         Returns:
-            True if reserved but timeout exceeded, False otherwise
+            예약되었지만 타임아웃이 초과된 경우 True, 그렇지 않으면 False
         """
         if self.reserved_by is None or self.reserved_at is None:
             return False
@@ -56,13 +56,13 @@ class Zone:
 
     def reserve(self, robot_id: str) -> bool:
         """
-        Reserve zone for robot
+        로봇을 위해 zone을 예약합니다
 
         Args:
             robot_id: Robot ID
 
         Returns:
-            True if reservation successful, False otherwise
+            예약 성공 시 True, 실패 시 False
         """
         if self.is_available():
             self.reserved_by = robot_id
@@ -75,7 +75,7 @@ class Zone:
 
     def occupy(self, robot_id: str):
         """
-        Mark zone as occupied by robot
+        zone을 로봇에 의해 점유됨으로 표시합니다
 
         Args:
             robot_id: Robot ID
@@ -90,7 +90,7 @@ class Zone:
 
     def release(self, robot_id: str):
         """
-        Release zone from robot
+        로봇으로부터 zone을 해제합니다
 
         Args:
             robot_id: Robot ID

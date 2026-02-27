@@ -89,6 +89,7 @@ class PourSauceNode(Node):
         "<job_id>|POUR|sauce=<key>"
         "<job_id>|PASS"
         "<job_id>|CANCEL"
+        "<job_id>|RESET"  # Force reset - clears stuck state regardless of job_id
       /arm_b/status:
         "<job_id>|STATE|k=v..."
 
@@ -208,6 +209,15 @@ class PourSauceNode(Node):
             if job_id == self._job_id:
                 self._cancel_flag = True
             self._cancel_pass_timer(job_id)
+            return
+
+        # RESET - Force clear stuck state (regardless of job_id)
+        if op == "RESET":
+            old_job = self._job_id
+            self._job_id = None
+            self._cancel_flag = True
+            self.get_logger().info(f"RESET: Cleared stuck state (was: {old_job})")
+            self._pub_b_status(job_id, "RESET_OK")
             return
 
         sauce = kv.get("sauce", "").strip()

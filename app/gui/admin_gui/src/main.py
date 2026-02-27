@@ -30,7 +30,7 @@ class AdminGUIApp(QMainWindow):
         self.setup_ui()
 
     def setup_ui(self):
-        """UI 초기화"""
+        """UI를 초기화합니다."""
         # 윈도우 설정
         self.setWindowTitle('식당 관리 시스템 - Admin')
         self.resize(1400, 900)
@@ -67,7 +67,7 @@ class AdminGUIApp(QMainWindow):
         print('[AdminGUI] 모든 화면 초기화 완료')
 
     def keyPressEvent(self, event):
-        """키보드 이벤트 처리"""
+        """키보드 이벤트를 처리합니다."""
         if event.key() == Qt.Key_Escape:
             # ESC 키로 전체화면 해제 또는 종료
             if self.isFullScreen():
@@ -82,13 +82,13 @@ class AdminGUIApp(QMainWindow):
                 self.showFullScreen()
 
     def closeEvent(self, event):
-        """애플리케이션 종료 시"""
+        """애플리케이션 종료 시 호출됩니다."""
         print('[AdminGUI] 애플리케이션 종료')
         event.accept()
 
 
 def load_stylesheet():
-    """스타일시트 로드"""
+    """스타일시트를 로드합니다."""
     style_path = os.path.join(os.path.dirname(__file__), '..', 'resources', 'style_admin.qss')
     if os.path.exists(style_path):
         with open(style_path, 'r', encoding='utf-8') as f:
@@ -99,7 +99,7 @@ def load_stylesheet():
 
 
 def main():
-    """메인 함수"""
+    """메인 함수를 실행합니다."""
     app = QApplication(sys.argv)
 
     # 스타일시트 적용

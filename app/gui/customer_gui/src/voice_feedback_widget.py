@@ -51,7 +51,7 @@ def _numpy_available():
 
 
 def _sounddevice_available():
-    """sounddevice(및 PortAudio) 사용 가능 여부. OSError = PortAudio 미설치."""
+    """sounddevice(및 PortAudio) 사용 가능 여부를 확인합니다. OSError = PortAudio 미설치."""
     try:
         import sounddevice as sd  # noqa: F401
         return True
@@ -63,7 +63,7 @@ def _sounddevice_available():
 
 
 def _record_wav_bytes(sample_rate: int, duration_sec: float) -> Optional[bytes]:
-    """마이크로 duration_sec초 녹음 후 WAV 바이트 반환. 실패 시 None."""
+    """마이크로 duration_sec초 녹음 후 WAV 바이트를 반환합니다. 실패 시 None."""
     try:
         import sounddevice as sd
         import numpy as np
@@ -96,6 +96,7 @@ class VoiceWaveformWidget(QWidget):
         self.is_active = False
 
     def start_animation(self):
+        """애니메이션을 시작합니다."""
         self.is_active = True
         if not self.animation_timer:
             self.animation_timer = QTimer()
@@ -104,12 +105,14 @@ class VoiceWaveformWidget(QWidget):
         self.update_wave()
 
     def stop_animation(self):
+        """애니메이션을 중지합니다."""
         self.is_active = False
         if self.animation_timer:
             self.animation_timer.stop()
         self.update()
 
     def update_wave(self):
+        """파형을 업데이트합니다."""
         self.wave_offset += 5
         if self.wave_offset > 360:
             self.wave_offset = 0
@@ -155,9 +158,11 @@ class VoiceApiWorker(QObject):
         self._last_order_turn_text = ""  # 직전에 order_turn 보낸 텍스트 (중복/피드백 무시)
 
     def set_table_number(self, n: int):
+        """테이블 번호를 설정합니다."""
         self._table_number = max(1, min(4, n))
 
     def set_order_mode(self, on: bool):
+        """주문 모드를 설정합니다."""
         self._order_mode = on
         if not on:
             self._session_id = ""
@@ -230,14 +235,16 @@ class VoiceApiWorker(QObject):
         self.order_turn_done.emit(reply, state, tts_b64)
 
     def get_order_mode(self):
+        """주문 모드를 가져옵니다."""
         return self._order_mode
 
     def get_session_id(self):
+        """session ID를 가져옵니다."""
         return self._session_id
 
 
 class RecordWorker(QThread):
-    """주기적으로 마이크 녹음 후 시그널로 전달. TTS 재생 중에는 일시정지."""
+    """주기적으로 마이크 녹음 후 시그널로 전달합니다. TTS 재생 중에는 일시정지."""
     audio_recorded = pyqtSignal(bytes)
 
     def __init__(self, parent=None):
@@ -246,9 +253,11 @@ class RecordWorker(QThread):
         self._paused = False
 
     def stop(self):
+        """녹음을 중지합니다."""
         self._running = False
 
     def set_paused(self, paused: bool):
+        """일시정지 상태를 설정합니다."""
         self._paused = bool(paused)
 
     def run(self):
@@ -285,6 +294,7 @@ class VoiceFeedbackWidget(QWidget):
         self.setup_workers()
 
     def setup_ui(self):
+        """UI를 설정합니다."""
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignCenter)
 
@@ -340,6 +350,7 @@ class VoiceFeedbackWidget(QWidget):
         self.setMinimumSize(500, 380)
 
     def setup_workers(self):
+        """worker 스레드를 설정합니다."""
         self._api_worker = VoiceApiWorker()
         self._api_thread = QThread()
         self._api_worker.moveToThread(self._api_thread)
@@ -429,7 +440,7 @@ class VoiceFeedbackWidget(QWidget):
         self.show_error(msg)
 
     def _on_tts_player_state_changed(self, state):
-        """TTS 재생 상태 변경: Playing → 녹음 일시정지, Playing→Stopped 전환 시 녹음 재개."""
+        """TTS 재생 상태 변경을 처리합니다. Playing → 녹음 일시정지, Playing→Stopped 전환 시 녹음 재개."""
         from PyQt5.QtMultimedia import QMediaPlayer
         if state == QMediaPlayer.PlayingState:
             if self._record_worker:
@@ -468,12 +479,14 @@ class VoiceFeedbackWidget(QWidget):
                 self._record_worker.set_paused(False)
 
     def start_listening(self):
+        """음성 인식을 시작합니다."""
         self.state.is_listening = True
         self.label_status.setText("말씀해 주세요 (웨이크워드로 주문을 시작합니다)")
         self.waveform.start_animation()
         print("[VoiceFeedback] 음성 인식 시작")
 
     def stop_listening(self):
+        """음성 인식을 중지합니다."""
         self.state.is_listening = False
         self.waveform.stop_animation()
         if self._record_worker and self._record_worker.isRunning():
@@ -482,6 +495,7 @@ class VoiceFeedbackWidget(QWidget):
         print("[VoiceFeedback] 음성 인식 중지")
 
     def set_recognized_text(self, text: str, confidence: float = 0.0):
+        """인식된 텍스트를 설정하고 표시합니다."""
         self.state.recognized_text = text
         self.state.confidence = confidence
         if text:
@@ -493,12 +507,14 @@ class VoiceFeedbackWidget(QWidget):
             self.voice_recognition_complete.emit(text)
 
     def show_processing(self):
+        """처리 중 상태를 표시합니다."""
         self.label_status.setText("⏳ 처리 중...")
         self.label_status.setStyleSheet("""
             font-size: 20px; font-weight: bold; color: #FFA500; padding: 10px;
         """)
 
     def show_error(self, error_message: str):
+        """오류 메시지를 표시합니다."""
         self.label_status.setText(f"❌ 오류: {error_message}")
         self.label_status.setStyleSheet("""
             font-size: 18px; font-weight: bold; color: #FF4444; padding: 10px;
@@ -507,6 +523,7 @@ class VoiceFeedbackWidget(QWidget):
         print(f"[VoiceFeedback] 오류: {error_message}")
 
     def reset(self):
+        """위젯을 초기화합니다."""
         self.stop_listening()
         self.state = VoiceRecognitionState()
         self._order_mode = False
@@ -525,7 +542,7 @@ class VoiceFeedbackWidget(QWidget):
 
 
 def main():
-    """스탠드얼론 실행: 음성만으로 주문, 버튼 없음, 테이블 드롭다운만."""
+    """standalone 실행: 음성만으로 주문, 버튼 없음, 테이블 드롭다운만 제공."""
     app = QApplication(sys.argv)
 
     if not _sounddevice_available():
