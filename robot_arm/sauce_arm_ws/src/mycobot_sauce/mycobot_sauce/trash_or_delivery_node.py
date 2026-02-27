@@ -174,9 +174,9 @@ class BTrayOrchestratorNode(Node):
 
         self.poses = load_yaml(self.get_parameter("poses_yaml").value)
 
-        # topic interface - /arm_b/cmd로 통일 (Coordinator와 일치)
-        self.cmd_sub = self.create_subscription(String, "/arm_b/cmd", self._on_cmd, 10)
-        self.status_pub = self.create_publisher(String, "/arm_b/status", 10)
+        # topic interface - /verify/cmd 사용 (TRANSPORT_TO_VERIFY, HANDOFF_PINKY 등)
+        self.cmd_sub = self.create_subscription(String, "/verify/cmd", self._on_cmd, 10)
+        self.status_pub = self.create_publisher(String, "/verify/status", 10)
 
         # clients
         self.gripper_cli = self.create_client(SetGripper, "set_gripper")

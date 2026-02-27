@@ -402,7 +402,7 @@ class CoordinatorNode(Node):
         # 4) NEW: B가 verify로 운반 + verify 분석 + 결과 따라 분기
         # -----------------------------
         self.get_logger().info(f"A stacked DONE -> B TRANSPORT_TO_VERIFY job={job_id}")
-        self._publish(self.pub_b, build_msg(job_id, "TRANSPORT_TO_VERIFY", sauce=sauce if sauce else "none"))
+        self._publish(self.pub_verify, build_msg(job_id, "TRANSPORT_TO_VERIFY", sauce=sauce if sauce else "none"))
 
         ok, msg = self.wait_for(job_id, "B", "DONE", order.timeout_transport_verify_sec)
         if not ok:
@@ -431,7 +431,7 @@ class CoordinatorNode(Node):
                 self.get_logger().info(f"Test mode: skipping pinky arrival check for job={job_id}")
 
             self.get_logger().info(f"Pinky ready -> HANDOFF_PINKY job={job_id}")
-            self._publish(self.pub_b, build_msg(job_id, "HANDOFF_PINKY"))
+            self._publish(self.pub_verify, build_msg(job_id, "HANDOFF_PINKY"))
             ok2, msg2 = self.wait_for(job_id, "B", "DONE", order.timeout_handoff_sec)
             if not ok2:
                 self.get_logger().error(f"B handoff failed: {msg2}")
@@ -444,7 +444,7 @@ class CoordinatorNode(Node):
             else:
                 self.get_logger().warn(f"VERIFY not OK within timeout -> treat as DEFECT job={job_id}")
 
-            self._publish(self.pub_b, build_msg(job_id, "DISCARD"))
+            self._publish(self.pub_verify, build_msg(job_id, "DISCARD"))
             ok2, msg2 = self.wait_for(job_id, "B", "DONE", order.timeout_handoff_sec)
             if not ok2:
                 self.get_logger().error(f"B discard failed: {msg2}")
