@@ -155,6 +155,8 @@ topics:
     type: std_msgs/msg/String
   verify/status:
     type: std_msgs/msg/String
+  cooking/loading_complete:
+    type: fleet_interfaces/msg/LoadingComplete
 EOF
 
 cat > $CONFIG_DIR/fms_to_arm_b.yaml << 'EOF'
@@ -166,6 +168,10 @@ topics:
     type: std_msgs/msg/String
   verify/cmd:
     type: std_msgs/msg/String
+  cooking/order:
+    type: fleet_interfaces/msg/CookingOrder
+  fms/pickup_arrival:
+    type: fleet_interfaces/msg/PickupArrival
 EOF
 
 echo -e "${GREEN}Starting bridges...${NC}"

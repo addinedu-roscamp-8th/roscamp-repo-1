@@ -29,7 +29,7 @@ positions:
   pickup_spot:
     x: 0.47
     y: 0.63
-    theta: 3.14159
+    theta: 0.0  # +x 방향을 바라봄
 
   # Table positions
   table1:
