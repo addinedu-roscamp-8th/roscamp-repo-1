@@ -224,3 +224,6 @@ personal/
 
 # Claude Code MCP config (contains API tokens)
 .mcp.json
+
+# Accidental / stray path
+app/backend/=5.1
