@@ -40,12 +40,12 @@ def generate_launch_description():
         config_arg,
 
         # FMS Node
+        # Note: Config file is loaded directly by fms_node using yaml, not via ROS2 parameters
         Node(
             package='fms',
             executable='fms_node',
             name='fms_node',
             output='screen',
             emulate_tty=True,
-            parameters=[LaunchConfiguration('config_file')]
         ),
     ])

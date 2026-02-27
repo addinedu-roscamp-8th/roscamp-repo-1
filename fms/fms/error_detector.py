@@ -97,7 +97,8 @@ class ErrorDetector:
 
         # Configuration
         # Note: AMCL only publishes when pose changes, so use longer timeout
-        self.heartbeat_timeout = 300.0  # seconds (5 minutes)
+        # Increased to 1 hour to prevent false COMM_LOST errors during idle periods
+        self.heartbeat_timeout = 3600.0  # seconds (1 hour)
         self.battery_low_threshold = 0.0  # voltage
         self.pickup_timeout = 60.0  # seconds
         self.delivery_timeout = 120.0  # seconds

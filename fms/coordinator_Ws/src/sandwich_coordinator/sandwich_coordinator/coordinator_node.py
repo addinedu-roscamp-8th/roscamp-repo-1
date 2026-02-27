@@ -350,11 +350,64 @@ class CoordinatorNode(Node):
 
         return False
 
+    def clear_previous_jobs(self, job_id: str, max_retries: int = 3) -> bool:
+        """
+        이전 작업 상태를 클리어하기 위해 RESET 명령을 전송합니다.
+        로봇팔이 busy 상태일 때 강제로 리셋합니다.
+
+        Args:
+            job_id: 새 작업 ID (RESET 응답 확인용)
+            max_retries: 최대 재시도 횟수
+
+        Returns:
+            True if reset successful, False otherwise
+        """
+        for attempt in range(max_retries):
+            self.get_logger().info(f"Attempt {attempt + 1}/{max_retries}: Clearing previous jobs for job {job_id}")
+
+            # Clear status stores for this job_id
+            self.a_status.pop(job_id, None)
+            self.b_status.pop(job_id, None)
+            self.v_status.pop(job_id, None)
+
+            # Send RESET to both arms
+            self._publish(self.pub_a, build_msg(job_id, "RESET"))
+            self._publish(self.pub_b, build_msg(job_id, "RESET"))
+
+            # Wait for RESET_OK from both (short timeout)
+            ok_a, msg_a = self.wait_for(job_id, "A", "RESET_OK", timeout_sec=3.0)
+            ok_b, msg_b = self.wait_for(job_id, "B", "RESET_OK", timeout_sec=3.0)
+
+            if ok_a and ok_b:
+                self.get_logger().info(f"Successfully cleared previous jobs: A={ok_a}, B={ok_b}")
+                # Clear status again after RESET_OK
+                self.a_status.pop(job_id, None)
+                self.b_status.pop(job_id, None)
+                return True
+
+            # Check if busy error occurred
+            if "busy" in msg_a.lower() or "busy" in msg_b.lower():
+                self.get_logger().warn(f"Sync failed due to busy (A={msg_a}, B={msg_b}), retrying...")
+                time.sleep(0.3)
+                continue
+            else:
+                # Timeout but no busy error - arms might be ready
+                self.get_logger().info(f"RESET response timeout but no busy error - proceeding (A={msg_a}, B={msg_b})")
+                return True
+
+        self.get_logger().error(f"Failed after {max_retries} retries due to busy errors")
+        return False
+
     def run_order(self, order: Order, order_id: Optional[str] = None) -> bool:
         job_id = uuid.uuid4().hex[:8]
         sauce = (order.sauce or "").strip()
 
         self.get_logger().info(f"start job={job_id} recipe={order.recipe} sauce='{sauce}' pause_before_last={order.pause_before_last} order_id={order_id}")
+
+        # Clear any previous stuck jobs before starting
+        if not self.clear_previous_jobs(job_id):
+            self.get_logger().error(f"Failed to clear previous jobs - cannot start new order")
+            return False
 
         # sauce가 비어있으면 B 필요 없음(소스 동기화만)
         need_b = 1 if sauce != "" else 0

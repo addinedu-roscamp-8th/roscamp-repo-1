@@ -165,3 +165,59 @@ topics:
       durability: volatile
       history: keep_last
       depth: 10
+
+  # ============================================
+  # Cooking Command & Status (JSON String Interface)
+  # ============================================
+
+  # Cooking Command: FMS → Coordinator (armA)
+  # Direction: Main PC → armA (Domain 20)
+  cooking_command_20:
+    topic: cooking/command
+    type: std_msgs/msg/String
+    from_domain: 25
+    to_domain: 20
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 10
+
+  # Cooking Command: FMS → Coordinator (armB)
+  # Direction: Main PC → armB (Domain 21)
+  cooking_command_21:
+    topic: cooking/command
+    type: std_msgs/msg/String
+    from_domain: 25
+    to_domain: 21
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 10
+
+  # Cooking Status: Coordinator → FMS (from armA)
+  # Direction: armA (Domain 20) → Main PC
+  cooking_status_20:
+    topic: cooking/status
+    type: std_msgs/msg/String
+    from_domain: 20
+    to_domain: 25
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 10
+
+  # Cooking Status: Coordinator → FMS (from armB)
+  # Direction: armB (Domain 21) → Main PC
+  cooking_status_21:
+    topic: cooking/status
+    type: std_msgs/msg/String
+    from_domain: 21
+    to_domain: 25
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 10
