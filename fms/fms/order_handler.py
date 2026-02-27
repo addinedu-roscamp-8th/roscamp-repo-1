@@ -1,9 +1,9 @@
 """
 Order Handler - Application Layer
-Handles order processing workflow from GUI to robot arm and navigation
-Clean Architecture: Use Case implementation
+GUI에서 로봇 팔 및 네비게이션까지의 주문 처리 워크플로우를 처리합니다
+Clean Architecture: Use Case 구현
 
-Supports order queueing when all robots are busy.
+모든 로봇이 바쁠 때 주문 대기열을 지원합니다.
 """
 
 import logging
@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 
 class OrderWorkflow:
     """
-    Domain Entity: Order workflow state machine
+    Domain Entity: 주문 워크플로우 상태 머신
 
-    Flow:
+    흐름:
     1. RECEIVED -> 주문 접수
     2. COOKING -> 로봇팔 조리 중
     3. LOADING -> pinky1 이동 중 (point13)
@@ -50,27 +50,27 @@ class OrderWorkflow:
         self.state_timestamps = {self.STATE_RECEIVED: self.created_at}
 
     def transition_to(self, new_state: str):
-        """Transition to new state"""
+        """새로운 상태로 전환합니다"""
         logger.info(f"Order {self.order_id} state: {self.state} -> {new_state}")
         self.state = new_state
         self.state_timestamps[new_state] = datetime.utcnow()
 
     def assign_robot(self, robot_id: str):
-        """Assign robot to this order"""
+        """이 주문에 로봇을 할당합니다"""
         self.robot_id = robot_id
         logger.info(f"Order {self.order_id} assigned to robot {robot_id}")
 
 
 class OrderHandler:
     """
-    Application Layer: Order processing use case handler
+    Application Layer: 주문 처리 use case handler
 
-    Orchestrates:
-    - Order reception from GUI (TCP)
-    - Robot arm cooking command (ROS2)
-    - pinky1 navigation to point13 (ROS2)
-    - Table delivery coordination
-    - Delivery notification to GUI (TCP)
+    오케스트레이션:
+    - GUI로부터 주문 수신 (TCP)
+    - 로봇 팔 조리 명령 (ROS2)
+    - pinky1 네비게이션 to point13 (ROS2)
+    - 테이블 배달 조정
+    - GUI로 배달 알림 (TCP)
     """
 
     def __init__(self):
@@ -100,7 +100,7 @@ class OrderHandler:
         send_gui_notification: Callable,
         fleet_controller: Callable
     ):
-        """Register infrastructure callbacks"""
+        """인프라스트럭처 callback들을 등록합니다"""
         self.send_cooking_command_callback = send_cooking_command
         self.navigate_robot_callback = navigate_robot
         self.send_gui_notification_callback = send_gui_notification
@@ -109,57 +109,57 @@ class OrderHandler:
 
     def set_get_available_robot_callback(self, callback: Callable[[], Optional[str]]):
         """
-        Set callback for checking available robot
+        가용 로봇 확인을 위한 callback을 설정합니다
 
         Args:
-            callback: Function that returns available robot_id or None if none available
+            callback: 가용 로봇 robot_id를 반환하거나 가용 로봇이 없으면 None을 반환하는 함수
         """
         self.get_available_robot_callback = callback
         logger.info("Get available robot callback registered")
 
     def set_assign_robot_callback(self, callback: Callable[[str, str], bool]):
         """
-        Set callback for assigning robot to order
+        주문에 로봇을 할당하기 위한 callback을 설정합니다
 
         Args:
-            callback: Function(robot_id, order_id) -> bool that assigns robot and returns success
+            callback: Function(robot_id, order_id) -> bool 로봇을 할당하고 성공 여부를 반환하는 함수
         """
         self.assign_robot_callback = callback
         logger.info("Assign robot callback registered")
 
     def set_navigate_robot_home_callback(self, callback: Callable[[str], None]):
         """
-        Set callback for navigating robot to home position
+        로봇을 home 위치로 네비게이션하기 위한 callback을 설정합니다
 
         Args:
-            callback: Function(robot_id) that navigates robot to home
+            callback: Function(robot_id) 로봇을 home으로 네비게이션하는 함수
         """
         self.navigate_robot_home_callback = callback
         logger.info("Navigate robot home callback registered")
 
     def set_navigate_robot_callback(self, callback: Callable[[str, str], None]):
         """
-        Set callback for navigating robot to location
+        로봇을 특정 위치로 네비게이션하기 위한 callback을 설정합니다
 
         Args:
-            callback: Function(robot_id, location) that navigates robot to location
+            callback: Function(robot_id, location) 로봇을 특정 위치로 네비게이션하는 함수
         """
         self.navigate_robot_callback = callback
         logger.info("Navigate robot callback registered (via setter)")
 
     def set_send_cooking_command_callback(self, callback: Callable[[str, Dict], None]):
         """
-        Set callback for sending cooking command
+        조리 명령 전송을 위한 callback을 설정합니다
 
         Args:
-            callback: Function(order_id, order_data) that sends cooking command
+            callback: Function(order_id, order_data) 조리 명령을 전송하는 함수
         """
         self.send_cooking_command_callback = callback
         logger.info("Send cooking command callback registered (via setter)")
 
     def handle_new_order(self, order_message: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Handle new order from GUI
+        GUI로부터 새 주문을 처리합니다
 
         Args:
             order_message: {
@@ -168,7 +168,7 @@ class OrderHandler:
             }
 
         Returns:
-            Response dictionary with order_id and status
+            order_id와 status를 포함한 응답 dictionary
         """
         table_number = order_message.get('table_number')
         order_data = order_message.get('order', {})
@@ -522,13 +522,13 @@ class OrderHandler:
 
     def get_order_status(self, order_id: str) -> Optional[Dict[str, Any]]:
         """
-        Get order status
+        주문 상태를 가져옵니다
 
         Args:
             order_id: Order ID
 
         Returns:
-            Order status dictionary
+            주문 상태 dictionary
         """
         workflow = self.active_orders.get(order_id)
         if not workflow:
@@ -547,10 +547,10 @@ class OrderHandler:
 
     def get_all_active_orders(self) -> Dict[str, Dict[str, Any]]:
         """
-        Get all active orders
+        모든 활성 주문을 가져옵니다
 
         Returns:
-            Dictionary of order statuses
+            주문 상태들의 dictionary
         """
         return {
             order_id: self.get_order_status(order_id)
@@ -563,13 +563,13 @@ class OrderHandler:
 
     def queue_order(self, workflow: OrderWorkflow) -> bool:
         """
-        Add order to pending queue when no robot is available
+        가용 로봇이 없을 때 주문을 대기 큐에 추가합니다
 
         Args:
-            workflow: OrderWorkflow to queue
+            workflow: 큐에 추가할 OrderWorkflow
 
         Returns:
-            True if successfully queued
+            성공적으로 큐에 추가되면 True
         """
         workflow.transition_to(OrderWorkflow.STATE_QUEUED)
         self.pending_order_queue.append(workflow)
@@ -596,10 +596,10 @@ class OrderHandler:
 
     def get_next_queued_order(self) -> Optional[OrderWorkflow]:
         """
-        Get next order from pending queue (FIFO)
+        대기 큐에서 다음 주문을 가져옵니다 (FIFO)
 
         Returns:
-            Next OrderWorkflow or None if queue is empty
+            다음 OrderWorkflow 또는 큐가 비어있으면 None
         """
         if not self.pending_order_queue:
             return None
@@ -608,16 +608,16 @@ class OrderHandler:
 
     def process_queued_order(self, robot_id: str) -> Optional[Dict[str, Any]]:
         """
-        Process next queued order when a robot becomes available
+        로봇이 가용해졌을 때 다음 대기 중인 주문을 처리합니다
 
-        Called when a robot completes delivery and returns to home.
-        Takes the next order from the queue and assigns it to the available robot.
+        로봇이 배달을 완료하고 home으로 돌아올 때 호출됩니다.
+        큐에서 다음 주문을 가져와 가용한 로봇에 할당합니다.
 
         Args:
-            robot_id: Available robot ID (e.g., 'pinky1', 'pinky2', 'pinky3')
+            robot_id: 가용한 Robot ID (예: 'pinky1', 'pinky2', 'pinky3')
 
         Returns:
-            Dictionary with processing result or None if no queued orders
+            처리 결과를 담은 dictionary 또는 대기 중인 주문이 없으면 None
         """
         if not self.pending_order_queue:
             logger.info(f"No queued orders to process for robot {robot_id}")
@@ -671,7 +671,7 @@ class OrderHandler:
 
     def _notify_queue_position_updates(self):
         """
-        Notify GUI about updated queue positions after an order is dequeued
+        주문이 큐에서 제거된 후 GUI에 업데이트된 큐 위치를 알립니다
         """
         if not self.send_gui_notification_callback:
             return
@@ -690,12 +690,12 @@ class OrderHandler:
 
     def get_queue_status(self) -> Dict[str, Any]:
         """
-        Get current queue status for GUI display
+        GUI 표시를 위한 현재 큐 상태를 가져옵니다
 
         Returns:
-            Dictionary containing queue information:
-            - queue_length: Number of orders in queue
-            - orders: List of queued orders with their positions
+            큐 정보를 담은 dictionary:
+            - queue_length: 큐의 주문 개수
+            - orders: 위치와 함께 대기 중인 주문 목록
         """
         queued_orders = []
         for position, workflow in enumerate(self.pending_order_queue, start=1):
@@ -715,22 +715,22 @@ class OrderHandler:
 
     def get_queued_order_count(self) -> int:
         """
-        Get number of orders currently in queue
+        현재 큐에 있는 주문 개수를 가져옵니다
 
         Returns:
-            Number of queued orders
+            대기 중인 주문 개수
         """
         return len(self.pending_order_queue)
 
     def remove_queued_order(self, order_id: str) -> bool:
         """
-        Remove a specific order from the queue (e.g., for cancellation)
+        큐에서 특정 주문을 제거합니다 (예: 취소용)
 
         Args:
-            order_id: Order ID to remove
+            order_id: 제거할 Order ID
 
         Returns:
-            True if order was found and removed, False otherwise
+            주문을 찾아 제거한 경우 True, 그렇지 않으면 False
         """
         for i, workflow in enumerate(self.pending_order_queue):
             if workflow.order_id == order_id:

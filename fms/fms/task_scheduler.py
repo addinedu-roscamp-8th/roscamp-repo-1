@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 class TaskState(Enum):
-    """Task lifecycle states"""
+    """Task 생명주기 상태"""
     PENDING = "PENDING"                    # Waiting to be assigned
     ASSIGNED = "ASSIGNED"                  # Assigned to robot
     MOVING_TO_PICKUP = "MOVING_TO_PICKUP" # Robot heading to pickup
@@ -269,15 +269,15 @@ class PickupSlotManager:
             return -1  # Not in queue
 
     def is_holding_slot(self, robot_id: str) -> bool:
-        """Check if robot is currently holding pickup slot"""
+        """robot이 현재 pickup slot을 점유 중인지 확인"""
         return self.current_holder == robot_id
 
     def is_in_queue(self, robot_id: str) -> bool:
-        """Check if robot is in pickup queue (not holding slot)"""
+        """robot이 pickup queue에 있는지 확인 (slot 점유 제외)"""
         return robot_id in self.pickup_queue
 
     def get_next_in_queue(self) -> Optional[str]:
-        """Peek at next robot in queue without removing"""
+        """제거하지 않고 queue의 다음 robot 확인"""
         return self.pickup_queue[0] if self.pickup_queue else None
 
     def check_slot_timeout(self) -> bool:
@@ -387,7 +387,7 @@ class PickupSlotManager:
         return parking_spots.get(robot_id, 'pinky1_spot')
 
     def get_all_waiting_robots(self) -> List[str]:
-        """Get list of robots waiting for pickup slot"""
+        """pickup slot을 기다리는 robot 목록 반환"""
         return list(self.pickup_queue)
 
     def get_queue_status(self) -> Dict:
@@ -599,34 +599,34 @@ class TaskScheduler:
         return self.pickup_manager.get_waiting_zone(robot_id, (0, 0))
 
     def get_pickup_queue_status(self) -> Dict:
-        """Get detailed pickup queue status"""
+        """상세 pickup queue 상태 반환"""
         return self.pickup_manager.get_queue_status()
 
     def get_task_state(self, task_id: str) -> Optional[TaskState]:
-        """Get current state of task"""
+        """task의 현재 상태 반환"""
         return self.task_states.get(task_id)
 
     def get_robot_task(self, robot_id: str) -> Optional[Task]:
-        """Get current task assigned to robot"""
+        """robot에 할당된 현재 task 반환"""
         task_id = self.active_tasks.get(robot_id)
         if task_id:
             return self.assigned_tasks.get(task_id)
         return None
 
     def get_pending_count(self) -> int:
-        """Get number of pending (unassigned) tasks"""
+        """대기 중인 (미할당) task 개수 반환"""
         return len(self.pending_tasks)
 
     def get_active_count(self) -> int:
-        """Get number of active (assigned) tasks"""
+        """활성 (할당된) task 개수 반환"""
         return len(self.assigned_tasks)
 
     def get_waiting_count(self) -> int:
-        """Get number of robots waiting for pickup"""
+        """pickup을 기다리는 robot 개수 반환"""
         return len(self.pickup_manager.get_all_waiting_robots())
 
     def get_scheduler_status(self) -> Dict:
-        """Get comprehensive scheduler status"""
+        """포괄적인 scheduler 상태 반환"""
         return {
             'pending_tasks': len(self.pending_tasks),
             'active_tasks': len(self.assigned_tasks),
@@ -643,7 +643,7 @@ class TaskScheduler:
         }
 
     def get_task_summary(self) -> Dict:
-        """Get summary of all tasks by state"""
+        """상태별 모든 task 요약 반환"""
         state_counts = {}
         for state in TaskState:
             state_counts[state.value] = 0

@@ -28,7 +28,7 @@ class DeliveryNotificationWidget(QWidget):
         self.connect_signals()
 
     def setup_ui(self):
-        """UI 설정"""
+        """UI를 설정합니다."""
         ui_path = os.path.join(
             os.path.dirname(__file__),
             '..',
@@ -52,17 +52,17 @@ class DeliveryNotificationWidget(QWidget):
                 break
 
     def connect_signals(self):
-        """시그널 연결"""
+        """시그널을 연결합니다."""
         self.btn_confirm_delivery.clicked.connect(self.on_confirm_delivery)
 
     def set_order(self, order: Order):
-        """주문 정보 설정 및 표시"""
+        """주문 정보를 설정하고 표시합니다."""
         self.order = order
         self.update_notification()
         self.start_blink_animation()
 
     def update_notification(self):
-        """알림 내용 업데이트"""
+        """알림 내용을 업데이트합니다."""
         if not self.order:
             return
 
@@ -80,7 +80,7 @@ class DeliveryNotificationWidget(QWidget):
         self.text_order_items.setPlainText(items_text)
 
     def start_blink_animation(self):
-        """깜빡이는 애니메이션 시작 (시각적 알림)"""
+        """깜빡이는 애니메이션을 시작합니다 (시각적 알림)."""
         if self.blink_timer:
             self.blink_timer.stop()
 
@@ -89,7 +89,7 @@ class DeliveryNotificationWidget(QWidget):
         self.blink_timer.start(500)  # 500ms 간격
 
     def toggle_blink(self):
-        """깜빡임 토글"""
+        """깜빡임을 토글합니다."""
         self.blink_state = not self.blink_state
 
         if self.blink_state:
@@ -102,7 +102,7 @@ class DeliveryNotificationWidget(QWidget):
             self.label_notification.setStyleSheet('')
 
     def stop_blink_animation(self):
-        """깜빡임 애니메이션 중지"""
+        """깜빡임 애니메이션을 중지합니다."""
         if self.blink_timer:
             self.blink_timer.stop()
             self.label_notification.setStyleSheet('')
@@ -124,19 +124,19 @@ class DeliveryNotificationWidget(QWidget):
         })
 
     def showEvent(self, event):
-        """위젯이 표시될 때"""
+        """위젯이 표시될 때 호출됩니다."""
         super().showEvent(event)
         if self.order:
             self.start_blink_animation()
 
     def hideEvent(self, event):
-        """위젯이 숨겨질 때"""
+        """위젯이 숨겨질 때 호출됩니다."""
         super().hideEvent(event)
         self.stop_blink_animation()
 
 
 def main():
-    """테스트 실행"""
+    """테스트를 실행합니다."""
     from common import MenuItem, Order
 
     app = QApplication(sys.argv)

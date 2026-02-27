@@ -1,0 +1,9 @@
+# Arm B Command Bridge: Domain 25 -> Domain 21
+name: bridge_arm_b_cmd
+from_domain: 25
+to_domain: 21
+topics:
+  arm_b/cmd:
+    type: std_msgs/msg/String
+  verify/cmd:
+    type: std_msgs/msg/String

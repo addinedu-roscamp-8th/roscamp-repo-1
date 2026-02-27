@@ -98,7 +98,7 @@ class FMSNode(Node):
         robot_configs = [
             {'robot_id': 'pinky1', 'domain_id': 11, 'ip': '192.168.1.7', 'enabled': True},
             {'robot_id': 'pinky2', 'domain_id': 12, 'ip': '192.168.1.6', 'enabled': True},
-            {'robot_id': 'pinky3', 'domain_id': 13, 'ip': '192.168.1.11', 'enabled': False}  # pinky_d29d excluded
+            {'robot_id': 'pinky3', 'domain_id': 13, 'ip': '192.168.1.11', 'enabled': True}
         ]
 
         # Initialize core components
@@ -1027,9 +1027,14 @@ class FMSNode(Node):
         """
         order_id = cooking_command['order_id']
         menu_items = cooking_command.get('menu_items', [{}])
+        logger.info(f"[DEBUG] cooking_command: {cooking_command}")
+        logger.info(f"[DEBUG] menu_items: {menu_items}")
         menu_id = menu_items[0].get('menu_id', 'M001') if menu_items else 'M001'
         quantity = menu_items[0].get('quantity', 1) if menu_items else 1
         operation = cooking_command.get('operation', 'START')
+        # Extract sauce from first menu item (GUI sends sauce per item)
+        sauce_type = menu_items[0].get('sauce', '') if menu_items else ''
+        logger.info(f"[DEBUG] extracted sauce_type: '{sauce_type}'")
 
         # Publish to /cooking/command (String - JSON format for cooking_interface_node)
         import json
@@ -1049,11 +1054,11 @@ class FMSNode(Node):
         order_msg.order_id = order_id
         order_msg.menu_id = menu_id
         order_msg.quantity = quantity
-        order_msg.sauce_type = cooking_command.get('sauce_type', '')
+        order_msg.sauce_type = sauce_type
         order_msg.assigned_robot_id = 'pinky1'  # Always pinky1 as per requirements
 
         self.cooking_order_pub.publish(order_msg)
-        logger.info(f"Published /cooking/order: order={order_id}, menu={menu_id}, qty={quantity}")
+        logger.info(f"Published /cooking/order: order={order_id}, menu={menu_id}, qty={quantity}, sauce={sauce_type}")
 
     def _navigate_robot_by_name(self, robot_id: str, location_name: str):
         """
@@ -1175,28 +1180,49 @@ class FMSNode(Node):
             self._follow_waypoints_via_ssh(robot_id, waypoints)
             return
 
-        # Build waypoint poses
-        poses = []
+        # Build waypoint poses with orientation towards next waypoint
+        # First, collect all waypoint positions
+        waypoint_positions = []
+        waypoint_names = []
         for wp_name in waypoints:
             pose = self.map_positions.get(wp_name)
             if not pose:
                 logger.warning(f"Waypoint {wp_name} not found, skipping")
                 continue
 
+            if hasattr(pose, 'position'):
+                waypoint_positions.append((pose.position.x, pose.position.y))
+            else:
+                waypoint_positions.append((pose['x'], pose['y']))
+            waypoint_names.append(wp_name)
+
+        # Build poses with calculated orientations
+        poses = []
+        for i, (wp_name, (x, y)) in enumerate(zip(waypoint_names, waypoint_positions)):
             pose_stamped = PoseStamped()
             pose_stamped.header.frame_id = 'map'
             pose_stamped.header.stamp = self.get_clock().now().to_msg()
+            pose_stamped.pose.position.x = x
+            pose_stamped.pose.position.y = y
+            pose_stamped.pose.position.z = 0.0
 
-            if hasattr(pose, 'position'):
-                pose_stamped.pose = pose
+            # Calculate orientation towards next waypoint
+            if i < len(waypoint_positions) - 1:
+                # For non-final waypoints: orient towards the next waypoint
+                next_x, next_y = waypoint_positions[i + 1]
+                yaw = math.atan2(next_y - y, next_x - x)
             else:
-                pose_stamped.pose.position.x = pose['x']
-                pose_stamped.pose.position.y = pose['y']
-                pose_stamped.pose.position.z = 0.0
-                pose_stamped.pose.orientation.w = 1.0
+                # For final waypoint (pickup_spot): face +x direction for robot arm loading
+                yaw = 0.0
+
+            # Convert yaw to quaternion (rotation around z-axis only)
+            pose_stamped.pose.orientation.x = 0.0
+            pose_stamped.pose.orientation.y = 0.0
+            pose_stamped.pose.orientation.z = math.sin(yaw / 2.0)
+            pose_stamped.pose.orientation.w = math.cos(yaw / 2.0)
 
             poses.append(pose_stamped)
-            logger.info(f"[WAYPOINT] Added {wp_name}: x={pose_stamped.pose.position.x:.3f}, y={pose_stamped.pose.position.y:.3f}")
+            logger.info(f"[WAYPOINT] Added {wp_name}: x={x:.3f}, y={y:.3f}, yaw={math.degrees(yaw):.1f}deg")
 
         if not poses:
             logger.error(f"No valid waypoints to follow for {robot_id}")
@@ -1218,13 +1244,13 @@ class FMSNode(Node):
         )
 
     def _follow_waypoints_feedback(self, robot_id: str, feedback_msg):
-        """Handle FollowWaypoints feedback"""
+        """FollowWaypoints feedback 처리"""
         feedback = feedback_msg.feedback
         current_idx = feedback.current_waypoint
         logger.info(f"[WAYPOINT] {robot_id} navigating to waypoint {current_idx + 1}")
 
     def _follow_waypoints_goal_response(self, robot_id: str, future, waypoints: List[str]):
-        """Handle FollowWaypoints goal response"""
+        """FollowWaypoints goal 응답 처리"""
         goal_handle = future.result()
         if not goal_handle.accepted:
             logger.error(f"[WAYPOINT] FollowWaypoints goal rejected for {robot_id}")
@@ -1239,7 +1265,7 @@ class FMSNode(Node):
         )
 
     def _follow_waypoints_result(self, robot_id: str, future, waypoints: List[str]):
-        """Handle FollowWaypoints result"""
+        """FollowWaypoints 결과 처리"""
         result = future.result().result
         missed_waypoints = result.missed_waypoints
 
@@ -1277,7 +1303,7 @@ class FMSNode(Node):
             logger.error(f"Unknown robot {robot_id} for SSH navigation")
             return
 
-        # Build waypoints JSON
+        # Build waypoints JSON with positions
         waypoint_positions = []
         for wp_name in waypoints:
             pose = self.map_positions.get(wp_name)
@@ -1291,10 +1317,23 @@ class FMSNode(Node):
             logger.error(f"No valid waypoints for SSH navigation: {waypoints}")
             return
 
-        # Build ROS2 message for FollowWaypoints
+        # Build ROS2 message for FollowWaypoints with orientation towards next waypoint
         poses_str_list = []
-        for wp in waypoint_positions:
-            pose_str = f'{{header: {{frame_id: "map"}}, pose: {{position: {{x: {wp["x"]:.3f}, y: {wp["y"]:.3f}, z: 0.0}}, orientation: {{w: 1.0}}}}}}'
+        for i, wp in enumerate(waypoint_positions):
+            # Calculate orientation towards next waypoint
+            if i < len(waypoint_positions) - 1:
+                # For non-final waypoints: orient towards the next waypoint
+                next_wp = waypoint_positions[i + 1]
+                yaw = math.atan2(next_wp['y'] - wp['y'], next_wp['x'] - wp['x'])
+            else:
+                # For final waypoint (pickup_spot): face +x direction for robot arm loading
+                yaw = 0.0
+
+            # Convert yaw to quaternion
+            qz = math.sin(yaw / 2.0)
+            qw = math.cos(yaw / 2.0)
+
+            pose_str = f'{{header: {{frame_id: "map"}}, pose: {{position: {{x: {wp["x"]:.3f}, y: {wp["y"]:.3f}, z: 0.0}}, orientation: {{x: 0.0, y: 0.0, z: {qz:.6f}, w: {qw:.6f}}}}}}}'
             poses_str_list.append(pose_str)
         poses_str = '[' + ', '.join(poses_str_list) + ']'
 
@@ -1334,7 +1373,7 @@ class FMSNode(Node):
             logger.error(f"[SSH-NAV] Failed to send navigation to {robot_id}: {e}")
 
     def _check_ssh_nav_completion(self, robot_id: str):
-        """Check if SSH-based navigation completed"""
+        """SSH 기반 navigation 완료 확인"""
         if not hasattr(self, '_ssh_nav_processes') or robot_id not in self._ssh_nav_processes:
             return
 
@@ -1720,7 +1759,7 @@ class FMSNode(Node):
     # ========================================
 
     def publish_fleet_status(self):
-        """Publish fleet status"""
+        """fleet 상태 발행"""
         fleet_status = FleetStatus()
 
         # Get all robots
@@ -1763,7 +1802,7 @@ class FMSNode(Node):
             logger.debug(f"Scheduler Status: {scheduler_status}")
 
     def _datetime_to_ros_time(self, dt: datetime) -> Time:
-        """Convert Python datetime to ROS Time message"""
+        """Python datetime을 ROS Time 메시지로 변환"""
         timestamp = dt.timestamp()
         time_msg = Time()
         time_msg.sec = int(timestamp)
@@ -1974,7 +2013,7 @@ class FMSNode(Node):
     # ========================================
 
     def _register_recovery_callbacks(self):
-        """Register callbacks for operator commands"""
+        """운영자 명령용 callback 등록"""
         self.error_recovery_handler.register_action_callback(
             OperatorCommand.RETRY,
             self._handle_retry_command
@@ -2436,7 +2475,7 @@ class FMSNode(Node):
 
 
 def main():
-    """Entry point for FMS Node"""
+    """FMS Node 진입점"""
     rclpy.init()
 
     try:

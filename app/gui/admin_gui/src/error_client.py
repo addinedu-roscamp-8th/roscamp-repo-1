@@ -18,11 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 class ErrorClient:
-    """TCP client for error handling"""
+    """에러 처리용 TCP client"""
 
     def __init__(self, host: str = 'localhost', port: int = 9999):
         """
-        Initialize error client
+        error client 초기화
 
         Args:
             host: Server host address
@@ -44,10 +44,10 @@ class ErrorClient:
 
     def connect(self) -> bool:
         """
-        Connect to server
+        server에 연결
 
         Returns:
-            True if connection successful, False otherwise
+            연결 성공 시 True, 실패 시 False
         """
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -72,7 +72,7 @@ class ErrorClient:
             return False
 
     def disconnect(self):
-        """Disconnect from server"""
+        """server 연결 해제"""
         self.running = False
 
         if self.socket:
@@ -91,16 +91,16 @@ class ErrorClient:
     def send_operator_command(self, robot_id: str, command: str, order_id: str = None,
                              reason: str = None) -> bool:
         """
-        Send operator command to server
+        server로 운영자 명령 전송
 
         Args:
-            robot_id: Target robot ID
-            command: Operator command (RETRY, RETURN_HOME, EMERGENCY_STOP, CLEAR_ERROR)
-            order_id: Associated order ID (optional)
-            reason: Reason for command
+            robot_id: 대상 robot ID
+            command: 운영자 명령 (RETRY, RETURN_HOME, EMERGENCY_STOP, CLEAR_ERROR)
+            order_id: 관련 order ID (선택사항)
+            reason: 명령 사유
 
         Returns:
-            True if sent successfully, False otherwise
+            전송 성공 시 True, 실패 시 False
         """
         if not self.connected:
             logger.warning("Not connected to error server")
@@ -130,7 +130,7 @@ class ErrorClient:
             return False
 
     def _receive_loop(self):
-        """Receive messages from server (runs in separate thread)"""
+        """server로부터 메시지 수신 (별도 thread에서 실행)"""
         buffer = ""
 
         while self.running:
@@ -161,10 +161,10 @@ class ErrorClient:
 
     def _process_message(self, message_str: str):
         """
-        Process received message
+        수신된 메시지 처리
 
         Args:
-            message_str: JSON message string
+            message_str: JSON 메시지 문자열
         """
         try:
             message = json.loads(message_str)
@@ -182,10 +182,10 @@ class ErrorClient:
 
     def _handle_error_alert(self, data: Dict):
         """
-        Handle error alert message
+        에러 alert 메시지 처리
 
         Args:
-            data: Error alert data
+            data: 에러 alert 데이터
         """
         robot_id = data.get('robot_id', '')
         error_type = data.get('error_type', '')
@@ -200,10 +200,10 @@ class ErrorClient:
 
 
 class MockErrorClient:
-    """Mock error client for testing without server"""
+    """server 없이 테스트용 Mock error client"""
 
     def __init__(self, host: str = 'localhost', port: int = 9999):
-        """Initialize mock error client"""
+        """Mock error client 초기화"""
         self.host = host
         self.port = port
         self.connected = False
@@ -215,7 +215,7 @@ class MockErrorClient:
         logger.info("MockErrorClient initialized (testing mode)")
 
     def connect(self) -> bool:
-        """Connect (mock)"""
+        """연결 (mock)"""
         self.connected = True
         if self.on_connected:
             self.on_connected()
@@ -223,7 +223,7 @@ class MockErrorClient:
         return True
 
     def disconnect(self):
-        """Disconnect (mock)"""
+        """연결 해제 (mock)"""
         self.connected = False
         if self.on_disconnected:
             self.on_disconnected()
@@ -231,20 +231,20 @@ class MockErrorClient:
 
     def send_operator_command(self, robot_id: str, command: str, order_id: str = None,
                              reason: str = None) -> bool:
-        """Send operator command (mock)"""
+        """운영자 명령 전송 (mock)"""
         logger.info(f"[MOCK] Operator command: {robot_id} - {command}")
         return True
 
     def simulate_error(self, robot_id: str, error_type: str, message: str,
                       battery: float = 0.0, pose: Dict = None):
         """
-        Simulate error alert for testing
+        테스트용 에러 alert 시뮬레이션
 
         Args:
             robot_id: Robot ID
-            error_type: Error type
-            message: Error message
-            battery: Battery voltage
+            error_type: 에러 타입
+            message: 에러 메시지
+            battery: Battery 전압
             pose: Robot pose
         """
         logger.info(f"[MOCK] Simulating error: {robot_id} - {error_type}")

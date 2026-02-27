@@ -78,6 +78,7 @@ class RecipeExecutorNode(Node):
       "<job_id>|RESUME"
       "<job_id>|PAUSE"
       "<job_id>|CANCEL"
+      "<job_id>|RESET"  # Force reset - clears stuck task regardless of job_id
 
     /arm_a/status:
       "<job_id>|RUNNING|recipe=..."
@@ -85,6 +86,7 @@ class RecipeExecutorNode(Node):
       "<job_id>|DONE"
       "<job_id>|FAIL|reason=..."
       "<job_id>|PROGRESS|step=..|item=.."
+      "<job_id>|RESET_OK"  # Reset completed successfully
     """
 
     def __init__(self):
@@ -260,6 +262,10 @@ class RecipeExecutorNode(Node):
             self._resume_internal(job_id)
             return
 
+        if op == "RESET":
+            self._reset_internal(job_id)
+            return
+
         self._publish_status(job_id, "FAIL", reason=f"unknown_op:{op}")
 
     # ActionServer callbacks
@@ -416,6 +422,40 @@ class RecipeExecutorNode(Node):
 
         fut.cancel()
         self._publish_status(job_id, "FAIL", reason="canceling")
+
+    def _reset_internal(self, job_id: str) -> None:
+        """
+        Force reset: 현재 작업과 관계없이 강제로 상태를 초기화합니다.
+        stuck된 작업을 정리할 때 사용합니다.
+        """
+        with self._state_lock:
+            active = self._active_job_id
+            fut = self._run_task
+
+        # Cancel any running task regardless of job_id
+        if fut is not None and not fut.done():
+            try:
+                if self._loop:
+                    asyncio.run_coroutine_threadsafe(self._cancel_sub_goals(), self._loop)
+            except Exception:
+                pass
+
+            if self._loop and self._pause_event and self._sauce_event:
+                self._loop.call_soon_threadsafe(self._pause_event.set)
+                self._loop.call_soon_threadsafe(self._sauce_event.set)
+
+            fut.cancel()
+
+        # Clear state
+        with self._state_lock:
+            self._run_task = None
+            self._active_job_id = None
+            self._current_recipe = None
+            self._waiting_for_sauce = False
+            self._active_goal_handle = None
+
+        self.get_logger().info(f"RESET: Cleared stuck task (was: {active})")
+        self._publish_status(job_id, "RESET_OK")
 
     def _pause_internal(self, job_id: str) -> None:
         with self._state_lock:

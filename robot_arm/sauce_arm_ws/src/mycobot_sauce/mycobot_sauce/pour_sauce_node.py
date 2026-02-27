@@ -89,6 +89,7 @@ class PourSauceNode(Node):
         "<job_id>|POUR|sauce=<key>"
         "<job_id>|PASS"
         "<job_id>|CANCEL"
+        "<job_id>|RESET"  # Force reset - clears stuck state regardless of job_id
       /arm_b/status:
         "<job_id>|STATE|k=v..."
 
@@ -210,6 +211,15 @@ class PourSauceNode(Node):
             self._cancel_pass_timer(job_id)
             return
 
+        # RESET - Force clear stuck state (regardless of job_id)
+        if op == "RESET":
+            old_job = self._job_id
+            self._job_id = None
+            self._cancel_flag = True
+            self.get_logger().info(f"RESET: Cleared stuck state (was: {old_job})")
+            self._pub_b_status(job_id, "RESET_OK")
+            return
+
         sauce = kv.get("sauce", "").strip()
 
         # PASS
@@ -272,7 +282,16 @@ class PourSauceNode(Node):
         if s in sauce_map:
             return s
 
-        alias = {"mustard": "sauce1", "ketchup": "sauce2", "mayonnaise": "sauce3"}
+        # Alias mapping: short names -> actual keys in poses_sauce.yaml
+        alias = {
+            "mayo": "mayonnaise",
+            "마요": "mayonnaise",
+            "마요네즈": "mayonnaise",
+            "must": "mustard",
+            "머스타드": "mustard",
+            "ketch": "ketchup",
+            "케첩": "ketchup",
+        }
         if s in alias and alias[s] in sauce_map:
             return alias[s]
 

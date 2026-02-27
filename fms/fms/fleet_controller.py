@@ -1,6 +1,6 @@
 """
-Fleet Controller for Fleet Management System
-Manages serving robot fleet (3 robots) and their status
+Fleet Management System용 Fleet Controller
+서빙 로봇 함대(3대)와 그들의 상태를 관리합니다
 """
 
 import logging
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 class RobotState:
     """
-    Represents the state of a serving robot
+    서빙 로봇의 상태를 나타냅니다
     """
 
     # Robot status states
@@ -39,41 +39,41 @@ class RobotState:
         self.last_update = datetime.utcnow()
 
     def update_pose(self, pose: Pose):
-        """Update robot pose"""
+        """로봇 pose를 업데이트합니다"""
         self.current_pose = pose
         self.last_update = datetime.utcnow()
 
     def update_battery(self, voltage: float, present: bool):
-        """Update battery status"""
+        """배터리 상태를 업데이트합니다"""
         self.battery_voltage = voltage
         self.battery_present = present
         self.last_update = datetime.utcnow()
 
     def update_status(self, status: str):
-        """Update robot status"""
+        """로봇 상태를 업데이트합니다"""
         self.status = status
         self.last_update = datetime.utcnow()
         logger.debug(f"Robot {self.robot_id} status updated to {status}")
 
     def assign_task(self, task_id: str, order_id: str):
-        """Assign task to robot"""
+        """로봇에 task를 할당합니다"""
         self.current_task_id = task_id
         self.current_order_id = order_id
         logger.info(f"Robot {self.robot_id} assigned task {task_id}")
 
     def clear_task(self):
-        """Clear current task"""
+        """현재 task를 클리어합니다"""
         self.current_task_id = None
         self.current_order_id = None
         self.target_location = None
 
     def is_available(self) -> bool:
-        """Check if robot is available for new task
+        """로봇이 새로운 task를 수행할 수 있는지 확인합니다
 
-        A robot is available when:
-        - status is IDLE (not in error or busy state)
-        - no current task assigned
-        - no current order assigned
+        로봇이 가용한 조건:
+        - 상태가 IDLE (오류 또는 작업 중 상태가 아님)
+        - 현재 할당된 task가 없음
+        - 현재 할당된 order가 없음
         """
         if self.status == self.STATUS_ERROR:
             return False
@@ -86,11 +86,11 @@ class RobotState:
         return True
 
     def is_low_battery(self, threshold: float = 0.0) -> bool:
-        """Check if battery is low"""
+        """배터리가 낮은지 확인합니다"""
         return self.battery_present and self.battery_voltage < threshold
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert robot state to dictionary"""
+        """로봇 상태를 dictionary로 변환합니다"""
         return {
             'robot_id': self.robot_id,
             'domain_id': self.domain_id,
@@ -119,21 +119,21 @@ class RobotState:
 
 class FleetController:
     """
-    Manages serving robot fleet
+    서빙 로봇 함대를 관리합니다
 
-    Responsibilities:
-    - Track status of 3 serving robots (pinky1, pinky2, pinky3)
-    - Select best robot for task assignment
-    - Monitor robot health (battery, connectivity)
-    - Handle robot errors and recovery
+    책임:
+    - 3대의 서빙 로봇 (pinky1, pinky2, pinky3) 상태 추적
+    - task 할당을 위한 최적 로봇 선택
+    - 로봇 상태 모니터링 (배터리, 연결성)
+    - 로봇 오류 처리 및 복구
     """
 
     def __init__(self, robot_configs: List[Dict]):
         """
-        Initialize fleet controller
+        Fleet controller를 초기화합니다
 
         Args:
-            robot_configs: List of robot configurations
+            robot_configs: 로봇 설정 목록
                 [{
                     'robot_id': 'pinky1',
                     'domain_id': 11
@@ -167,7 +167,7 @@ class FleetController:
 
     def update_robot_pose(self, robot_id: str, pose: Pose):
         """
-        Update robot pose
+        로봇 pose를 업데이트합니다
 
         Args:
             robot_id: Robot ID
@@ -181,12 +181,12 @@ class FleetController:
 
     def update_robot_battery(self, robot_id: str, voltage: float, present: bool):
         """
-        Update robot battery status
+        로봇 배터리 상태를 업데이트합니다
 
         Args:
             robot_id: Robot ID
-            voltage: Battery voltage
-            present: Battery present flag
+            voltage: 배터리 전압
+            present: 배터리 존재 여부 flag
         """
         robot = self.robots.get(robot_id)
         if robot:
@@ -200,11 +200,11 @@ class FleetController:
 
     def update_robot_status(self, robot_id: str, status: str):
         """
-        Update robot status
+        로봇 상태를 업데이트합니다
 
         Args:
             robot_id: Robot ID
-            status: Robot status
+            status: 로봇 상태
         """
         robot = self.robots.get(robot_id)
         if robot:
@@ -214,17 +214,17 @@ class FleetController:
 
     def get_available_robots(self) -> List[RobotState]:
         """
-        Get list of all available robots
+        모든 가용 로봇 목록을 가져옵니다
 
-        Availability criteria:
+        가용성 기준:
         - status == STATUS_IDLE
-        - current_task_id is None
-        - current_order_id is None
-        - not in error state
-        - battery not low (optional threshold)
+        - current_task_id가 None
+        - current_order_id가 None
+        - 오류 상태가 아님
+        - 배터리가 충분함 (선택적 threshold)
 
         Returns:
-            List of available RobotState objects
+            가용한 RobotState 객체 목록
         """
         available = []
         for robot in self.robots.values():
@@ -236,13 +236,13 @@ class FleetController:
 
     def _is_robot_available(self, robot: RobotState) -> bool:
         """
-        Check if a specific robot is available for new task assignment
+        특정 로봇이 새로운 task 할당을 받을 수 있는지 확인합니다
 
         Args:
-            robot: RobotState object to check
+            robot: 확인할 RobotState 객체
 
         Returns:
-            True if robot can accept new tasks, False otherwise
+            로봇이 새로운 task를 받을 수 있으면 True, 아니면 False
         """
         # Check basic availability (status and task assignment)
         if not robot.is_available():
@@ -257,15 +257,15 @@ class FleetController:
 
     def get_available_robot(self) -> Optional[RobotState]:
         """
-        Get best available robot for task assignment
+        task 할당을 위한 최적의 가용 로봇을 가져옵니다
 
-        Selection criteria (in priority order):
-        1. Robot must be IDLE and have no current task
-        2. Robot must not have low battery
-        3. Prefer robot closest to pickup spot (TODO: implement distance calculation)
+        선택 기준 (우선순위 순):
+        1. 로봇이 IDLE 상태이고 현재 task가 없어야 함
+        2. 배터리가 충분해야 함
+        3. pickup spot에 가장 가까운 로봇 우선 (TODO: 거리 계산 구현)
 
         Returns:
-            RobotState object if available, None otherwise
+            가용한 경우 RobotState 객체, 아니면 None
         """
         available_robots = self.get_available_robots()
 
@@ -281,7 +281,7 @@ class FleetController:
 
     def assign_task_to_robot(self, robot_id: str, task_id: str, order_id: str) -> bool:
         """
-        Assign task to specific robot
+        특정 로봇에 task를 할당합니다
 
         Args:
             robot_id: Robot ID
@@ -289,7 +289,7 @@ class FleetController:
             order_id: Order ID
 
         Returns:
-            True if assignment successful, False otherwise
+            할당 성공 시 True, 실패 시 False
         """
         robot = self.robots.get(robot_id)
         if robot and self._is_robot_available(robot):
@@ -304,14 +304,14 @@ class FleetController:
 
     def mark_robot_busy(self, robot_id: str, status: str = None) -> bool:
         """
-        Mark robot as busy (in use)
+        로봇을 사용 중으로 표시합니다
 
         Args:
             robot_id: Robot ID
-            status: Optional specific status to set (defaults to STATUS_MOVING_TO_PICKUP)
+            status: 선택적 특정 상태 (기본값: STATUS_MOVING_TO_PICKUP)
 
         Returns:
-            True if successful, False if robot not found
+            성공 시 True, 로봇을 찾지 못한 경우 False
         """
         robot = self.robots.get(robot_id)
         if robot:
@@ -325,15 +325,15 @@ class FleetController:
 
     def mark_robot_available(self, robot_id: str) -> bool:
         """
-        Mark robot as available (idle)
+        로봇을 가용(idle) 상태로 표시합니다
 
-        This clears the current task and sets status to IDLE.
+        현재 task를 클리어하고 상태를 IDLE로 설정합니다.
 
         Args:
             robot_id: Robot ID
 
         Returns:
-            True if successful, False if robot not found
+            성공 시 True, 로봇을 찾지 못한 경우 False
         """
         robot = self.robots.get(robot_id)
         if robot:
@@ -347,7 +347,7 @@ class FleetController:
 
     def robot_reached_pickup(self, robot_id: str):
         """
-        Mark that robot reached pickup spot
+        로봇이 pickup spot에 도달했음을 표시합니다
 
         Args:
             robot_id: Robot ID
@@ -359,11 +359,11 @@ class FleetController:
 
     def robot_start_delivery(self, robot_id: str, table_number: str):
         """
-        Mark that robot started delivery to table
+        로봇이 테이블로 배달을 시작했음을 표시합니다
 
         Args:
             robot_id: Robot ID
-            table_number: Target table number (T01-T08)
+            table_number: 목표 테이블 번호 (T01-T08)
         """
         robot = self.robots.get(robot_id)
         if robot:
@@ -373,7 +373,7 @@ class FleetController:
 
     def robot_reached_table(self, robot_id: str):
         """
-        Mark that robot reached table
+        로봇이 테이블에 도달했음을 표시합니다
 
         Args:
             robot_id: Robot ID
@@ -400,19 +400,19 @@ class FleetController:
 
     def get_home_location(self, robot_id: str) -> str:
         """
-        Get home (parking) location for robot
+        로봇의 home (parking) 위치를 가져옵니다
 
         Args:
             robot_id: Robot ID
 
         Returns:
-            Home location name (e.g., 'pinky1_spot')
+            Home 위치 이름 (예: 'pinky1_spot')
         """
         return self.parking_spots.get(robot_id, f"{robot_id}_spot")
 
     def robot_returned_home(self, robot_id: str):
         """
-        Mark that robot returned to parking spot
+        로봇이 parking spot으로 복귀했음을 표시합니다
 
         Args:
             robot_id: Robot ID
@@ -425,11 +425,11 @@ class FleetController:
 
     def robot_error(self, robot_id: str, error_message: str = None):
         """
-        Handle robot error
+        로봇 오류를 처리합니다
 
         Args:
             robot_id: Robot ID
-            error_message: Error message
+            error_message: 오류 메시지
         """
         robot = self.robots.get(robot_id)
         if robot:
@@ -438,31 +438,31 @@ class FleetController:
 
     def get_robot(self, robot_id: str) -> Optional[RobotState]:
         """
-        Get robot state by ID
+        ID로 로봇 상태를 가져옵니다
 
         Args:
             robot_id: Robot ID
 
         Returns:
-            RobotState object if found, None otherwise
+            찾으면 RobotState 객체, 아니면 None
         """
         return self.robots.get(robot_id)
 
     def get_all_robots(self) -> List[RobotState]:
         """
-        Get all robot states
+        모든 로봇 상태를 가져옵니다
 
         Returns:
-            List of RobotState objects
+            RobotState 객체 목록
         """
         return list(self.robots.values())
 
     def get_fleet_status_summary(self) -> Dict[str, Any]:
         """
-        Get fleet status summary
+        함대 상태 요약을 가져옵니다
 
         Returns:
-            Dictionary with fleet status information
+            함대 상태 정보를 담은 dictionary
         """
         return {
             'total_robots': len(self.robots),
@@ -475,14 +475,14 @@ class FleetController:
 
     def calculate_distance(self, pose1: Pose, pose2: Pose) -> float:
         """
-        Calculate Euclidean distance between two poses
+        두 pose 간의 유클리드 거리를 계산합니다
 
         Args:
-            pose1: First pose
-            pose2: Second pose
+            pose1: 첫 번째 pose
+            pose2: 두 번째 pose
 
         Returns:
-            Distance in meters
+            미터 단위 거리
         """
         dx = pose2.position.x - pose1.position.x
         dy = pose2.position.y - pose1.position.y

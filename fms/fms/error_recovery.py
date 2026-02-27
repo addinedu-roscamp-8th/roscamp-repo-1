@@ -1,12 +1,12 @@
 """
-Error Recovery Handler for FMS
-Handles operator commands and executes recovery actions
+FMS용 Error Recovery Handler
+운영자 명령을 처리하고 복구 작업을 실행합니다
 
-Recovery Actions:
-- RETRY: Retry the failed navigation task
-- RETURN_HOME: Force robot to return to parking spot
-- EMERGENCY_STOP: Stop robot immediately (safety)
-- CLEAR_ERROR: Manually clear error state
+복구 작업:
+- RETRY: 실패한 네비게이션 task를 재시도
+- RETURN_HOME: 로봇을 parking spot으로 강제 복귀
+- EMERGENCY_STOP: 로봇을 즉시 정지 (안전)
+- CLEAR_ERROR: 오류 상태를 수동으로 클리어
 """
 
 import logging
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class OperatorCommand(Enum):
-    """Operator commands for error recovery"""
+    """오류 복구를 위한 운영자 명령"""
     RETRY = 'RETRY'                    # Retry current task
     RETURN_HOME = 'RETURN_HOME'        # Return to parking spot
     EMERGENCY_STOP = 'EMERGENCY_STOP'  # Emergency stop
@@ -26,18 +26,18 @@ class OperatorCommand(Enum):
 
 
 class OperatorAction:
-    """Represents an operator command for error recovery"""
+    """오류 복구를 위한 운영자 명령을 나타냅니다"""
 
     def __init__(self, robot_id: str, command: OperatorCommand, order_id: str = None,
                  reason: str = None):
         """
-        Initialize operator action
+        운영자 작업을 초기화합니다
 
         Args:
-            robot_id: Target robot ID
-            command: Type of operator command
-            order_id: Associated order ID (optional)
-            reason: Reason for command (operator note)
+            robot_id: 대상 Robot ID
+            command: 운영자 명령 타입
+            order_id: 연관된 Order ID (선택사항)
+            reason: 명령 사유 (운영자 메모)
         """
         self.robot_id = robot_id
         self.command = command
@@ -48,12 +48,12 @@ class OperatorAction:
         self.execution_time = None
 
     def mark_executed(self):
-        """Mark action as executed"""
+        """작업을 실행됨으로 표시합니다"""
         self.executed = True
         self.execution_time = datetime.utcnow()
 
     def to_dict(self):
-        """Convert to dictionary"""
+        """dictionary로 변환합니다"""
         return {
             'robot_id': self.robot_id,
             'command': self.command.value,
@@ -67,17 +67,17 @@ class OperatorAction:
 
 class ErrorRecoveryHandler:
     """
-    Handles error recovery and operator commands
+    오류 복구와 운영자 명령을 처리합니다
 
-    Responsibilities:
-    - Receive operator commands from Admin GUI
-    - Execute recovery actions
-    - Coordinate with FMS for navigation and robot control
-    - Track recovery attempt history
+    책임:
+    - Admin GUI로부터 운영자 명령 수신
+    - 복구 작업 실행
+    - 네비게이션과 로봇 제어를 위한 FMS 조정
+    - 복구 시도 이력 추적
     """
 
     def __init__(self):
-        """Initialize error recovery handler"""
+        """오류 복구 handler를 초기화합니다"""
         self.pending_actions: Dict[str, OperatorAction] = {}  # {robot_id: OperatorAction}
         self.completed_actions: list = []  # History of completed actions
         self.action_callbacks: Dict[OperatorCommand, Callable] = {}  # Command callbacks
@@ -86,12 +86,12 @@ class ErrorRecoveryHandler:
 
     def register_action_callback(self, command: OperatorCommand, callback: Callable):
         """
-        Register callback for operator command
+        운영자 명령에 대한 callback을 등록합니다
 
         Args:
-            command: OperatorCommand enum value
-            callback: Function to execute for this command
-                     Should accept (robot_id, order_id, reason) as parameters
+            command: OperatorCommand enum 값
+            callback: 이 명령을 위해 실행할 함수
+                     (robot_id, order_id, reason)를 파라미터로 받아야 합니다
         """
         self.action_callbacks[command] = callback
         logger.debug(f"Registered callback for {command.value}")

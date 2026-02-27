@@ -47,7 +47,7 @@ class DashboardWidget(QWidget):
         self.load_orders()
 
     def setup_ui(self):
-        """UI 초기화"""
+        """UI를 초기화합니다."""
         # UI 파일 로드
         ui_path = os.path.join(os.path.dirname(__file__), '..', 'ui', 'dashboard.ui')
         loadUi(ui_path, self)
@@ -61,7 +61,7 @@ class DashboardWidget(QWidget):
         self.table_orders.setColumnWidth(5, 120)  # 금액
 
     def connect_signals(self):
-        """시그널 연결"""
+        """시그널을 연결합니다."""
         # 필터 버튼
         self.btn_filter_all.clicked.connect(lambda: self.set_filter(None))
         self.btn_filter_pending.clicked.connect(lambda: self.set_filter('pending'))
@@ -86,14 +86,14 @@ class DashboardWidget(QWidget):
         self.client.error_signal.connect(self.on_error)
 
     def connect_to_server(self):
-        """서버 연결"""
+        """서버에 연결합니다."""
         if self.client.connect():
             print('[Dashboard] 서버 연결 성공')
         else:
             print('[Dashboard] 서버 연결 실패')
 
     def set_filter(self, status):
-        """필터 설정"""
+        """필터를 설정합니다."""
         self.current_filter = status
 
         # 버튼 체크 상태 업데이트
@@ -106,13 +106,13 @@ class DashboardWidget(QWidget):
         self.load_orders()
 
     def load_orders(self):
-        """주문 목록 로드"""
+        """주문 목록을 로드합니다."""
         orders = self.client.get_orders(status=self.current_filter)
         self.orders_data = orders
         self.display_orders(orders)
 
     def display_orders(self, orders):
-        """주문 목록 표시"""
+        """주문 목록을 표시합니다."""
         self.table_orders.setRowCount(0)
 
         for order in orders:
@@ -170,7 +170,7 @@ class DashboardWidget(QWidget):
         self.label_order_count.setText(f'주문: {len(orders)}건')
 
     def get_status_text(self, status):
-        """상태 코드를 한글 텍스트로 변환"""
+        """상태 코드를 한글 텍스트로 변환합니다."""
         status_map = {
             'pending': '대기중',
             'confirmed': '확인됨',
@@ -186,7 +186,7 @@ class DashboardWidget(QWidget):
         return status_map.get(status, status)
 
     def on_selection_changed(self):
-        """테이블 선택 변경 시"""
+        """테이블 선택 변경 시 호출됩니다."""
         selected_rows = self.table_orders.selectedItems()
         if selected_rows:
             row = selected_rows[0].row()
@@ -207,7 +207,7 @@ class DashboardWidget(QWidget):
             self.btn_cancel.setEnabled(False)
 
     def view_order_detail(self):
-        """주문 상세보기"""
+        """주문 상세보기를 표시합니다."""
         if not self.selected_order_id:
             return
 
@@ -239,7 +239,7 @@ class DashboardWidget(QWidget):
         QMessageBox.information(self, '주문 상세', detail_text)
 
     def update_order_status(self):
-        """주문 상태 변경"""
+        """주문 상태를 변경합니다."""
         if not self.selected_order_id:
             return
 
@@ -263,7 +263,7 @@ class DashboardWidget(QWidget):
                 QMessageBox.warning(self, '실패', '주문 상태 변경에 실패했습니다.')
 
     def halt_order(self):
-        """주문 일시중지"""
+        """주문을 일시중지합니다."""
         if not self.selected_order_id:
             return
 
@@ -280,7 +280,7 @@ class DashboardWidget(QWidget):
                 QMessageBox.warning(self, '실패', '주문 일시중지에 실패했습니다.')
 
     def cancel_order(self):
-        """주문 취소"""
+        """주문을 취소합니다."""
         if not self.selected_order_id:
             return
 
@@ -302,16 +302,16 @@ class DashboardWidget(QWidget):
                     QMessageBox.warning(self, '실패', '주문 취소에 실패했습니다.')
 
     def on_order_updated(self, order):
-        """주문 업데이트 알림"""
+        """주문 업데이트 알림을 처리합니다."""
         print(f'[Dashboard] 주문 업데이트: {order.get("order_id")} -> {order.get("status")}')
         # 자동으로 목록 새로고침은 타이머가 처리함
 
     def on_error(self, error_msg):
-        """에러 발생 시"""
+        """에러 발생 시 호출됩니다."""
         print(f'[Dashboard] 에러: {error_msg}')
 
     def closeEvent(self, event):
-        """위젯 종료 시"""
+        """위젯 종료 시 호출됩니다."""
         self.refresh_timer.stop()
         self.client.disconnect()
         event.accept()

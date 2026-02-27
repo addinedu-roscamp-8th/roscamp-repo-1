@@ -1,5 +1,5 @@
 """
-Launch file for Kitchmatic Fleet Management System (FMS)
+Kitchmatic Fleet Management System (FMS)용 Launch 파일
 """
 
 from launch import LaunchDescription
@@ -13,9 +13,9 @@ import os
 
 def generate_launch_description():
     """
-    Generate launch description for FMS
+    FMS용 launch description을 생성합니다
 
-    This launches:
+    실행 항목:
     - FMS Node (Fleet Management System)
     """
 

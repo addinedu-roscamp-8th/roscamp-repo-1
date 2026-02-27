@@ -1,0 +1,52 @@
+# ==============================================================================
+# Working Domain Bridge Configuration for Kitchmatics FMS
+# ==============================================================================
+#
+# This is a WORKING configuration tested on 2026-02-26
+# Uses 'remap:' field for topic remapping (supported by domain_bridge)
+#
+# Robot Configuration:
+#   - pinky1 (Mobile Robot): DOMAIN_ID=11 (IP: 192.168.1.7)
+#   - pinky2 (Mobile Robot): DOMAIN_ID=12 (IP: 192.168.1.6)
+#   - pinky3 (Mobile Robot): DOMAIN_ID=13 (Disabled)
+#   - jetcobot1 (Robot Arm A): DOMAIN_ID=20 (IP: 192.168.1.4)
+#   - jetcobot2 (Robot Arm B): DOMAIN_ID=21 (IP: 192.168.1.10)
+#   - Main PC: DOMAIN_ID=25
+#
+# Topic Mapping:
+#   Robot Domain -> FMS Domain:
+#     /amcl_pose -> /pinky1/amcl_pose (domain 11 -> 25)
+#     /amcl_pose -> /pinky2/amcl_pose (domain 12 -> 25)
+#     /arm_a/status -> /arm_a/status (domain 20 -> 25)
+#     /arm_b/status -> /arm_b/status (domain 21 -> 25)
+#
+#   FMS Domain -> Robot Domain:
+#     /pinky1/initialpose -> /initialpose (domain 25 -> 11)
+#     /pinky2/initialpose -> /initialpose (domain 25 -> 12)
+#     /arm_a/cmd -> /arm_a/cmd (domain 25 -> 20)
+#     /arm_b/cmd -> /arm_b/cmd (domain 25 -> 21)
+#
+# Usage:
+#   This file should be run as MULTIPLE domain_bridge instances:
+#
+#   # Pinky1 bridge
+#   ros2 run domain_bridge domain_bridge config/bridge_pinky1.yaml
+#
+#   # Pinky2 bridge
+#   ros2 run domain_bridge domain_bridge config/bridge_pinky2.yaml
+#
+#   Or use the launch script:
+#   ./fms/scripts/start_all_bridges.sh
+#
+# ==============================================================================
+
+# NOTE: domain_bridge runs ONE config file at a time.
+# This file is for documentation - see individual bridge YAML files below.
+
+# Individual bridge configs are stored in:
+#   /tmp/bridge_pinky1.yaml
+#   /tmp/bridge_pinky2.yaml
+#   /tmp/bridge_arms.yaml
+#   /tmp/bridge_arms_b.yaml
+#   /tmp/bridge_arms_cmd.yaml
+#   /tmp/bridge_arms_b_cmd.yaml

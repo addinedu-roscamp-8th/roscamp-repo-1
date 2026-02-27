@@ -4,7 +4,7 @@
 Kitchmatics FMS - TCP Communication Module
 Based on: /home/gw/Downloads/통신/TCP_Server.py, TCP_Client.py
 
-Closed Network TCP Server/Client for Fleet Management System
+Fleet Management System을 위한 폐쇄형 네트워크 TCP Server/Client
 WiFi: kitchmatics
 """
 
@@ -29,7 +29,7 @@ logger = logging.getLogger("FMS_TCP")
 
 
 class MessageType(Enum):
-    """TCP Message Types for FMS Communication"""
+    """FMS 통신을 위한 TCP Message 타입"""
     # Connection Management
     CONNECT = "connect"
     DISCONNECT = "disconnect"
@@ -65,7 +65,7 @@ class MessageType(Enum):
 
 @dataclass
 class TCPMessage:
-    """TCP Message Structure"""
+    """TCP 메시지 구조"""
     msg_type: str
     data: Dict[str, Any]
     timestamp: float = field(default_factory=time.time)
@@ -95,7 +95,7 @@ class TCPMessage:
 
 @dataclass
 class RobotConnection:
-    """Robot Connection Info"""
+    """Robot 연결 정보"""
     robot_id: str
     ip_address: str
     port: int
@@ -108,7 +108,7 @@ class RobotConnection:
 class FMSTCPServer:
     """
     FMS TCP Server - Master Control Station
-    Handles connections from multiple robots
+    여러 robot의 연결을 처리
     """
 
     def __init__(self, host: str = "0.0.0.0", port: int = 9000,
@@ -132,14 +132,14 @@ class FMSTCPServer:
         self._register_default_handlers()
 
     def _load_config(self, config_path: Optional[str]) -> dict:
-        """Load network configuration"""
+        """네트워크 설정 로드"""
         if config_path and os.path.exists(config_path):
             with open(config_path, 'r') as f:
                 return yaml.safe_load(f)
         return {}
 
     def _register_default_handlers(self):
-        """Register default message handlers"""
+        """기본 메시지 handler 등록"""
         self.register_handler(MessageType.CONNECT.value, self._handle_connect)
         self.register_handler(MessageType.DISCONNECT.value, self._handle_disconnect)
         self.register_handler(MessageType.HEARTBEAT.value, self._handle_heartbeat)
@@ -149,12 +149,12 @@ class FMSTCPServer:
         self.register_handler(MessageType.ERROR.value, self._handle_error)
 
     def register_handler(self, msg_type: str, handler: Callable):
-        """Register a message handler"""
+        """메시지 handler 등록"""
         self.handlers[msg_type] = handler
         logger.info(f"Registered handler for: {msg_type}")
 
     def start(self):
-        """Start TCP server"""
+        """TCP server 시작"""
         try:
             self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -177,7 +177,7 @@ class FMSTCPServer:
             raise
 
     def stop(self):
-        """Stop TCP server"""
+        """TCP server 중지"""
         self.running = False
 
         # Close all client connections
@@ -197,7 +197,7 @@ class FMSTCPServer:
         logger.info("FMS TCP Server stopped")
 
     def _accept_connections(self):
-        """Accept incoming connections"""
+        """들어오는 연결 수락"""
         while self.running:
             try:
                 self.server_socket.settimeout(1.0)
@@ -219,7 +219,7 @@ class FMSTCPServer:
                     logger.error(f"Accept error: {e}")
 
     def _handle_client(self, client_socket: socket.socket, addr):
-        """Handle client connection"""
+        """client 연결 처리"""
         robot_id = None
         file_wrapper = client_socket.makefile("rwb")
 
@@ -273,7 +273,7 @@ class FMSTCPServer:
             logger.info(f"Connection closed: {addr}")
 
     def _send_message(self, client_socket: socket.socket, message: TCPMessage):
-        """Send message to client"""
+        """client에 메시지 전송"""
         try:
             msg_bytes = (message.to_json() + "\n").encode('utf-8')
             client_socket.sendall(msg_bytes)
@@ -281,7 +281,7 @@ class FMSTCPServer:
             logger.error(f"Send error: {e}")
 
     def broadcast(self, message: TCPMessage):
-        """Broadcast message to all connected clients"""
+        """연결된 모든 client에 메시지 broadcast"""
         with self.lock:
             for robot_id, conn in self.clients.items():
                 if conn.connected and conn.client_socket:
@@ -291,7 +291,7 @@ class FMSTCPServer:
                         logger.error(f"Broadcast to {robot_id} failed: {e}")
 
     def send_to_robot(self, robot_id: str, message: TCPMessage):
-        """Send message to specific robot"""
+        """특정 robot에 메시지 전송"""
         with self.lock:
             if robot_id in self.clients:
                 conn = self.clients[robot_id]
@@ -301,7 +301,7 @@ class FMSTCPServer:
         return False
 
     def _monitor_heartbeats(self):
-        """Monitor heartbeats and detect disconnections"""
+        """heartbeat 모니터링 및 연결 끊김 감지"""
         heartbeat_timeout = self.config.get('network', {}).get('heartbeat_interval', 1.0) * 3
 
         while self.running:
@@ -324,7 +324,7 @@ class FMSTCPServer:
 
     # Default message handlers
     def _handle_connect(self, message: TCPMessage, client_socket: socket.socket) -> TCPMessage:
-        """Handle robot connection"""
+        """robot 연결 처리"""
         robot_id = message.data.get("robot_id", "")
         robot_type = message.data.get("robot_type", "")
         ip_address = message.data.get("ip_address", "")
@@ -348,7 +348,7 @@ class FMSTCPServer:
         )
 
     def _handle_disconnect(self, message: TCPMessage, client_socket: socket.socket) -> Optional[TCPMessage]:
-        """Handle robot disconnection"""
+        """robot 연결 해제 처리"""
         robot_id = message.sender_id
 
         with self.lock:
@@ -359,7 +359,7 @@ class FMSTCPServer:
         return None
 
     def _handle_heartbeat(self, message: TCPMessage, client_socket: socket.socket) -> TCPMessage:
-        """Handle heartbeat"""
+        """heartbeat 처리"""
         return TCPMessage(
             msg_type=MessageType.ACK.value,
             data={"status": "alive"},
@@ -367,36 +367,36 @@ class FMSTCPServer:
         )
 
     def _handle_robot_status(self, message: TCPMessage, client_socket: socket.socket) -> None:
-        """Handle robot status update"""
+        """robot 상태 업데이트 처리"""
         robot_id = message.sender_id
         logger.debug(f"Robot status from {robot_id}: {message.data}")
         return None
 
     def _handle_pose_update(self, message: TCPMessage, client_socket: socket.socket) -> None:
-        """Handle pose update"""
+        """pose 업데이트 처리"""
         robot_id = message.sender_id
         logger.debug(f"Pose update from {robot_id}: {message.data}")
         return None
 
     def _handle_nav_status(self, message: TCPMessage, client_socket: socket.socket) -> None:
-        """Handle navigation status"""
+        """navigation 상태 처리"""
         robot_id = message.sender_id
         logger.debug(f"Nav status from {robot_id}: {message.data}")
         return None
 
     def _handle_error(self, message: TCPMessage, client_socket: socket.socket) -> None:
-        """Handle error message"""
+        """에러 메시지 처리"""
         robot_id = message.sender_id
         logger.error(f"Error from {robot_id}: {message.data}")
         return None
 
     def get_connected_robots(self) -> List[str]:
-        """Get list of connected robots"""
+        """연결된 robot 목록 반환"""
         with self.lock:
             return [rid for rid, conn in self.clients.items() if conn.connected]
 
     def get_fleet_status(self) -> Dict[str, Any]:
-        """Get fleet status summary"""
+        """fleet 상태 요약 반환"""
         with self.lock:
             return {
                 "total_robots": len(self.clients),
@@ -415,8 +415,8 @@ class FMSTCPServer:
 
 class FMSTCPClient:
     """
-    FMS TCP Client - Robot Side
-    Connects to master control station
+    FMS TCP Client - Robot 측
+    master control station에 연결
     """
 
     def __init__(self, robot_id: str, server_host: str, server_port: int = 9000,
@@ -437,7 +437,7 @@ class FMSTCPClient:
         self.max_reconnect_attempts = 10
 
     def connect(self) -> bool:
-        """Connect to FMS server"""
+        """FMS server에 연결"""
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.settimeout(5.0)
@@ -474,7 +474,7 @@ class FMSTCPClient:
             return False
 
     def disconnect(self):
-        """Disconnect from FMS server"""
+        """FMS server 연결 해제"""
         self.running = False
 
         if self.connected:
@@ -496,7 +496,7 @@ class FMSTCPClient:
         logger.info("Disconnected from FMS server")
 
     def send_message(self, message: TCPMessage) -> bool:
-        """Send message to server"""
+        """server에 메시지 전송"""
         if not self.connected or not self.socket:
             return False
 
@@ -512,11 +512,11 @@ class FMSTCPClient:
             return False
 
     def register_handler(self, msg_type: str, handler: Callable):
-        """Register message handler"""
+        """메시지 handler 등록"""
         self.handlers[msg_type] = handler
 
     def _receive_loop(self):
-        """Receive messages from server"""
+        """server로부터 메시지 수신"""
         file_wrapper = self.socket.makefile("rwb")
 
         try:
@@ -553,7 +553,7 @@ class FMSTCPClient:
                 self._reconnect()
 
     def _heartbeat_loop(self):
-        """Send periodic heartbeats"""
+        """주기적으로 heartbeat 전송"""
         while self.running:
             if self.connected:
                 heartbeat_msg = TCPMessage(
@@ -565,7 +565,7 @@ class FMSTCPClient:
             time.sleep(1.0)
 
     def _reconnect(self):
-        """Attempt to reconnect to server"""
+        """server 재연결 시도"""
         attempt = 0
         while self.running and attempt < self.max_reconnect_attempts:
             attempt += 1
@@ -579,13 +579,13 @@ class FMSTCPClient:
         logger.error("Max reconnection attempts reached")
 
     def _next_sequence(self) -> int:
-        """Get next sequence number"""
+        """다음 sequence 번호 반환"""
         with self.lock:
             self.sequence += 1
             return self.sequence
 
     def _get_local_ip(self) -> str:
-        """Get local IP address"""
+        """로컬 IP 주소 반환"""
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect((self.server_host, self.server_port))
@@ -598,7 +598,7 @@ class FMSTCPClient:
     # Convenience methods for sending specific messages
     def send_status(self, status: str, battery: float = 0.0,
                     pose: Optional[Dict] = None):
-        """Send robot status update"""
+        """robot 상태 업데이트 전송"""
         msg = TCPMessage(
             msg_type=MessageType.ROBOT_STATUS.value,
             data={
@@ -611,7 +611,7 @@ class FMSTCPClient:
         return self.send_message(msg)
 
     def send_pose(self, x: float, y: float, theta: float):
-        """Send pose update"""
+        """pose 업데이트 전송"""
         msg = TCPMessage(
             msg_type=MessageType.POSE_UPDATE.value,
             data={"x": x, "y": y, "theta": theta},
@@ -620,7 +620,7 @@ class FMSTCPClient:
         return self.send_message(msg)
 
     def send_nav_status(self, status: str, goal: Optional[Dict] = None):
-        """Send navigation status"""
+        """navigation 상태 전송"""
         msg = TCPMessage(
             msg_type=MessageType.NAV_STATUS.value,
             data={"status": status, "goal": goal or {}},
@@ -629,7 +629,7 @@ class FMSTCPClient:
         return self.send_message(msg)
 
     def send_task_complete(self, task_id: str, success: bool, message: str = ""):
-        """Send task completion"""
+        """task 완료 전송"""
         msg = TCPMessage(
             msg_type=MessageType.TASK_COMPLETE.value,
             data={"task_id": task_id, "success": success, "message": message},
@@ -638,7 +638,7 @@ class FMSTCPClient:
         return self.send_message(msg)
 
     def send_error(self, error_code: str, error_message: str):
-        """Send error message"""
+        """에러 메시지 전송"""
         msg = TCPMessage(
             msg_type=MessageType.ERROR.value,
             data={"code": error_code, "message": error_message},

@@ -36,7 +36,7 @@ class FMSTCPClient:
         self.on_message_received: Optional[Callable] = None
 
     def connect(self) -> bool:
-        """FMS 서버에 연결"""
+        """FMS 서버에 연결합니다."""
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.settimeout(5.0)
@@ -54,7 +54,7 @@ class FMSTCPClient:
             return False
 
     def disconnect(self):
-        """연결 종료"""
+        """연결을 종료합니다."""
         self.running = False
 
         if self.listener_thread and self.listener_thread.is_alive():
@@ -71,7 +71,7 @@ class FMSTCPClient:
                 print('[FMSClient] FMS 연결 종료')
 
     def send_message(self, message: dict) -> bool:
-        """메시지 전송 (4-byte length header + JSON)"""
+        """메시지를 전송합니다 (4-byte length header + JSON)."""
         if not self.is_connected or not self.socket:
             print('[FMSClient] 오류: FMS 연결되지 않음')
             return False
@@ -95,14 +95,14 @@ class FMSTCPClient:
             return False
 
     def _start_listener(self):
-        """메시지 리스너 스레드 시작"""
+        """메시지 리스너 스레드를 시작합니다."""
         self.running = True
         self.listener_thread = threading.Thread(target=self._listen_messages, daemon=True)
         self.listener_thread.start()
         print('[FMSClient] 메시지 리스너 시작')
 
     def _listen_messages(self):
-        """메시지 수신 루프 (백그라운드 스레드)"""
+        """메시지 수신 루프를 실행합니다 (백그라운드 스레드)."""
         while self.running and self.is_connected:
             try:
                 message = self._receive_message()
@@ -119,7 +119,7 @@ class FMSTCPClient:
         print('[FMSClient] 메시지 리스너 종료')
 
     def _receive_message(self) -> Optional[dict]:
-        """메시지 수신 (4-byte length header + JSON)"""
+        """메시지를 수신합니다 (4-byte length header + JSON)."""
         if not self.is_connected or not self.socket:
             return None
 
@@ -178,7 +178,7 @@ class FMSOrderServiceClient(QObject):
         self.client.on_message_received = self._handle_message
 
     def connect(self) -> bool:
-        """FMS에 연결"""
+        """FMS에 연결합니다."""
         success = self.client.connect()
         if success:
             self.connected_signal.emit()
@@ -187,9 +187,20 @@ class FMSOrderServiceClient(QObject):
         return success
 
     def disconnect(self):
-        """연결 종료"""
+        """연결을 종료합니다."""
         self.client.disconnect()
         self.disconnected_signal.emit()
+
+    def _convert_sauce(self, sauce: str) -> str:
+        """소스 이름을 영문으로 변환합니다."""
+        sauce_map = {
+            '마요네즈': 'mayonnaise',
+            '케찹': 'ketchup',
+            '머스타드': 'mustard',
+            '소스선택x': '',
+            '': ''
+        }
+        return sauce_map.get(sauce, sauce) if sauce else ''
 
     def submit_order(self, order: Order) -> Optional[str]:
         """
@@ -221,7 +232,8 @@ class FMSOrderServiceClient(QObject):
                         'menu_id': item.menu_item.menu_id,
                         'name': item.menu_item.name,
                         'quantity': item.quantity,
-                        'price': item.menu_item.price
+                        'price': item.menu_item.price,
+                        'sauce': self._convert_sauce(item.sauce)
                     }
                     for item in order.items
                 ],
@@ -310,20 +322,20 @@ class MockFMSOrderServiceClient(QObject):
         self.is_connected = False
 
     def connect(self) -> bool:
-        """가상 연결"""
+        """가상으로 연결합니다."""
         print('[MockFMS] Mock FMS 연결 성공')
         self.is_connected = True
         self.connected_signal.emit()
         return True
 
     def disconnect(self):
-        """가상 연결 종료"""
+        """가상 연결을 종료합니다."""
         print('[MockFMS] Mock FMS 연결 종료')
         self.is_connected = False
         self.disconnected_signal.emit()
 
     def submit_order(self, order: Order) -> Optional[str]:
-        """가상 주문 전송"""
+        """가상 주문을 전송합니다."""
         order_id = f'ORD-{int(time.time())}'
         order.order_id = order_id
         print(f'[MockFMS] Mock 주문 전송 성공 - 주문 {order_id}')
@@ -338,13 +350,13 @@ class MockFMSOrderServiceClient(QObject):
         return order_id
 
     def confirm_delivery(self, order_id: str, table_number: int) -> bool:
-        """가상 수령 확인"""
+        """가상으로 수령을 확인합니다."""
         print(f'[MockFMS] Mock 수령 확인 - 주문 {order_id}')
         return True
 
 
 def main():
-    """테스트 실행"""
+    """테스트를 실행합니다."""
     from PyQt5.QtWidgets import QApplication
 
     app = QApplication(sys.argv)

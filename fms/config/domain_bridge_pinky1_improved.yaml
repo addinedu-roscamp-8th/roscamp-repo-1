@@ -1,0 +1,127 @@
+# Domain Bridge Configuration for pinky1 - Improved Version
+# pinky1 (DOMAIN_ID=11) <-> Main PC (DOMAIN_ID=25)
+#
+# Strategy: No namespace on robot side, namespace added by bridge on Main PC side
+#
+# Usage:
+#   ROS_DOMAIN_ID=25 ros2 run domain_bridge domain_bridge fms/config/domain_bridge_pinky1_improved.yaml
+
+name: pinky1_bridge
+from_domain: 11
+to_domain: 25
+
+topics:
+  # ============================================
+  # Robot → Main PC: Sensor and Status Topics
+  # ============================================
+
+  # AMCL Localization: Robot pose estimate with covariance
+  amcl_pose:
+    type: geometry_msgs/msg/PoseWithCovarianceStamped
+    remap: pinky1/amcl_pose
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 10
+
+  # Odometry: Wheel encoder data (high frequency)
+  odom:
+    type: nav_msgs/msg/Odometry
+    remap: pinky1/odom
+    qos:
+      reliability: best_effort
+      durability: volatile
+      history: keep_last
+      depth: 5
+
+  # LiDAR Scan: Laser scanner data (very high frequency)
+  scan:
+    type: sensor_msgs/msg/LaserScan
+    remap: pinky1/scan
+    qos:
+      reliability: best_effort
+      durability: volatile
+      history: keep_last
+      depth: 2
+
+  # Battery Voltage: Critical status information
+  battery/voltage:
+    type: std_msgs/msg/Float32
+    remap: pinky1/battery/voltage
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 10
+
+  # Battery Present: Battery connection status
+  battery/present:
+    type: std_msgs/msg/Bool
+    remap: pinky1/battery/present
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 5
+
+  # NOTE: TF is NOT bridged to avoid frame conflicts
+  # Main PC uses /pinky1/amcl_pose for robot position tracking
+  # If TF bridging is needed, consider using tf_prefix on robot side
+
+  # ============================================
+  # Main PC → Robot: Control Command Topics
+  # ============================================
+
+  # Initial Pose: Set robot starting position for AMCL
+  pinky1/initialpose:
+    type: geometry_msgs/msg/PoseWithCovarianceStamped
+    remap: initialpose
+    reversed: true
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 5
+
+  # Velocity Command: Direct robot control (teleop/manual)
+  pinky1/cmd_vel:
+    type: geometry_msgs/msg/Twist
+    remap: cmd_vel
+    reversed: true
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 10
+
+  # Goal Pose: Navigation destination
+  pinky1/goal_pose:
+    type: geometry_msgs/msg/PoseStamped
+    remap: goal_pose
+    reversed: true
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 5
+
+services:
+  # Nav2 Lifecycle Manager: Check navigation stack status
+  pinky1/lifecycle_manager_navigation/get_state:
+    type: lifecycle_msgs/srv/GetState
+    remap: lifecycle_manager_navigation/get_state
+    reversed: true
+
+actions:
+  # Follow Waypoints: Navigate through multiple waypoints
+  pinky1/follow_waypoints:
+    type: nav2_msgs/action/FollowWaypoints
+    remap: follow_waypoints
+    reversed: true
+
+  # Navigate to Pose: Navigate to single goal pose
+  pinky1/navigate_to_pose:
+    type: nav2_msgs/action/NavigateToPose
+    remap: navigate_to_pose
+    reversed: true

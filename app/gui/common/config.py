@@ -21,7 +21,7 @@ NETWORK_CONFIG_PATH = PROJECT_ROOT / "fms" / "config" / "network_config.yaml"
 
 
 def load_network_config() -> dict:
-    """Load network configuration from YAML"""
+    """YAML에서 네트워크 설정을 로드합니다."""
     if NETWORK_CONFIG_PATH.exists():
         with open(NETWORK_CONFIG_PATH, 'r') as f:
             return yaml.safe_load(f)
@@ -82,17 +82,17 @@ class Config:
 
     @classmethod
     def get_mobile_robots(cls) -> Dict[str, dict]:
-        """Get all mobile robot configurations"""
+        """모든 mobile robot 설정을 가져옵니다."""
         return cls._network_config.get('mobile_robots', {})
 
     @classmethod
     def get_cobot_arms(cls) -> Dict[str, dict]:
-        """Get all cobot arm configurations"""
+        """모든 cobot arm 설정을 가져옵니다."""
         return cls._network_config.get('cobot_arms', {})
 
     @classmethod
     def get_enabled_robots(cls) -> List[dict]:
-        """Get list of enabled robots"""
+        """활성화된 로봇 목록을 가져옵니다."""
         robots = []
         for name, cfg in cls.get_mobile_robots().items():
             if cfg.get('enabled', False):
@@ -106,7 +106,7 @@ class Config:
 
     @classmethod
     def get_robot_by_id(cls, robot_id: str) -> Optional[dict]:
-        """Get robot config by robot_id"""
+        """robot_id로 로봇 설정을 가져옵니다."""
         for name, cfg in cls.get_mobile_robots().items():
             if cfg.get('robot_id') == robot_id:
                 cfg['name'] = name
@@ -119,7 +119,7 @@ class Config:
 
     @classmethod
     def reload_config(cls):
-        """Reload network configuration"""
+        """네트워크 설정을 다시 로드합니다."""
         cls._network_config = load_network_config()
         cls.FMS_HOST = cls._network_config.get('master', {}).get('host', '192.168.1.3')
         cls.FMS_PORT = cls._network_config.get('master', {}).get('tcp_port', 9000)

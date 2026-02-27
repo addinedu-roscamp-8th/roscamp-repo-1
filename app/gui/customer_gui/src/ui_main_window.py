@@ -26,7 +26,7 @@ class MainWindow(QMainWindow):
         self.connect_signals()
 
     def setup_ui(self):
-        """UI 설정"""
+        """UI를 설정합니다."""
         # .ui 파일 로드
         ui_path = os.path.join(
             os.path.dirname(__file__),
@@ -63,19 +63,19 @@ class MainWindow(QMainWindow):
         layout.insertWidget(3, table_row)
 
     def connect_signals(self):
-        """시그널 연결"""
+        """시그널을 연결합니다."""
         self.btn_start_order.clicked.connect(self.on_start_order)
         self.combo_table.currentIndexChanged.connect(self.on_table_changed)
 
     def on_table_changed(self, index: int):
-        """테이블 번호 변경 시 Config 반영 및 라벨 갱신."""
+        """테이블 번호 변경 시 Config 반영 및 라벨을 갱신합니다."""
         table_num = index + 1
         Config.TABLE_NUMBER = table_num
         self.label_table.setText(f'테이블 번호: {table_num}')
         print(f'[MainWindow] 테이블 번호 변경: {table_num}')
 
     def on_start_order(self):
-        """주문 시작 버튼 클릭"""
+        """주문 시작 버튼 클릭을 처리합니다."""
         # 콤보에서 선택된 값으로 동기화
         Config.TABLE_NUMBER = self.combo_table.currentIndex() + 1
         self.label_table.setText(f'테이블 번호: {Config.TABLE_NUMBER}')
@@ -84,7 +84,7 @@ class MainWindow(QMainWindow):
 
 
 def main():
-    """테스트 실행"""
+    """테스트를 실행합니다."""
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()

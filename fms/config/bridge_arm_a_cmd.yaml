@@ -1,0 +1,7 @@
+# Arm A Command Bridge: Domain 25 -> Domain 20
+name: bridge_arm_a_cmd
+from_domain: 25
+to_domain: 20
+topics:
+  arm_a/cmd:
+    type: std_msgs/msg/String

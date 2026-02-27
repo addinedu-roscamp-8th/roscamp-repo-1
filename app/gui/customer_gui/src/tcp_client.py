@@ -22,7 +22,7 @@ class MessageListenerThread(threading.Thread):
         self.running = True
 
     def run(self):
-        """스레드 실행: 계속해서 메시지 수신"""
+        """스레드를 실행하여 계속해서 메시지를 수신합니다."""
         print('[MessageListener] 리스너 스레드 시작')
         while self.running and self.tcp_client.is_connected:
             try:
@@ -41,7 +41,7 @@ class MessageListenerThread(threading.Thread):
                 break
 
     def stop(self):
-        """스레드 종료"""
+        """스레드를 종료합니다."""
         self.running = False
 
 
@@ -65,7 +65,7 @@ class TCPClient(QObject):
         self.listener_lock = threading.Lock()
 
     def connect(self) -> bool:
-        """서버에 연결"""
+        """서버에 연결합니다."""
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.settimeout(5.0)  # 5초 타임아웃
@@ -85,7 +85,7 @@ class TCPClient(QObject):
             return False
 
     def disconnect(self):
-        """연결 종료"""
+        """연결을 종료합니다."""
         # 리스너 스레드 종료
         self._stop_listener()
 
@@ -101,7 +101,7 @@ class TCPClient(QObject):
                 print('[TCPClient] 연결 종료')
 
     def send_data(self, data: dict) -> bool:
-        """데이터 전송"""
+        """데이터를 전송합니다."""
         if not self.is_connected or not self.socket:
             self.error_signal.emit('서버에 연결되지 않음')
             return False
@@ -124,7 +124,7 @@ class TCPClient(QObject):
             return False
 
     def _start_listener(self):
-        """메시지 리스너 스레드 시작"""
+        """메시지 리스너 스레드를 시작합니다."""
         with self.listener_lock:
             if self.listener_thread is None or not self.listener_thread.is_alive():
                 self.listener_thread = MessageListenerThread(self)
@@ -132,7 +132,7 @@ class TCPClient(QObject):
                 print('[TCPClient] 메시지 리스너 스레드 시작됨')
 
     def _stop_listener(self):
-        """메시지 리스너 스레드 종료"""
+        """메시지 리스너 스레드를 종료합니다."""
         with self.listener_lock:
             if self.listener_thread and self.listener_thread.is_alive():
                 self.listener_thread.stop()
@@ -141,7 +141,7 @@ class TCPClient(QObject):
                 print('[TCPClient] 메시지 리스너 스레드 종료됨')
 
     def _receive_data_internal(self) -> Optional[dict]:
-        """내부용 데이터 수신 (리스너 스레드용)"""
+        """내부용 데이터를 수신합니다 (리스너 스레드용)."""
         if not self.is_connected or not self.socket:
             return None
 
@@ -178,7 +178,7 @@ class TCPClient(QObject):
             return None
 
     def receive_data(self) -> Optional[dict]:
-        """데이터 수신 (요청-응답용)"""
+        """데이터를 수신합니다 (요청-응답용)."""
         return self._receive_data_internal()
 
 
@@ -198,11 +198,11 @@ class OrderServiceClient(QObject):
         self.client.delivery_notification_signal.connect(self.delivery_notification_signal)
 
     def connect(self) -> bool:
-        """주문 MS에 연결"""
+        """주문 MS에 연결합니다."""
         return self.client.connect()
 
     def disconnect(self):
-        """연결 종료"""
+        """연결을 종료합니다."""
         self.client.disconnect()
 
     def fetch_menus(self) -> List[MenuItem]:
@@ -297,22 +297,22 @@ class MockOrderServiceClient(QObject):
     error_signal = pyqtSignal(str)
 
     def __init__(self):
-        """Mock 클라이언트 초기화 (실제 TCP 클라이언트 없이)"""
+        """Mock 클라이언트를 초기화합니다 (실제 TCP 클라이언트 없이)."""
         super().__init__()
         self.client = None
         self.mock_timer = None
 
     def connect(self) -> bool:
-        """가상 연결"""
+        """가상으로 연결합니다."""
         print('[MockOrderService] Mock 연결 성공')
         return True
 
     def disconnect(self):
-        """가상 연결 종료"""
+        """가상 연결을 종료합니다."""
         print('[MockOrderService] Mock 연결 종료')
 
     def fetch_menus(self) -> List[MenuItem]:
-        """가상 메뉴 데이터 반환"""
+        """가상 메뉴 데이터를 반환합니다."""
         print('[MockOrderService] Mock 메뉴 리스트 반환')
 
         mock_menus = [
@@ -325,7 +325,7 @@ class MockOrderServiceClient(QObject):
         return mock_menus
 
     def submit_order(self, order: Order) -> Optional[str]:
-        """가상 주문 전송"""
+        """가상 주문을 전송합니다."""
         import time
         order_id = f'ORD-{int(time.time())}'
         print(f'[MockOrderService] Mock 주문 전송 성공 - 주문 번호: {order_id}')
@@ -339,13 +339,13 @@ class MockOrderServiceClient(QObject):
         return order_id
 
     def confirm_delivery(self, order_id: str) -> bool:
-        """가상 수령 확인"""
+        """가상으로 수령을 확인합니다."""
         print(f'[MockOrderService] Mock 수령 확인 - 주문 {order_id}')
         return True
 
 
 def main():
-    """테스트 실행"""
+    """테스트를 실행합니다."""
     from PyQt5.QtWidgets import QApplication
 
     app = QApplication(sys.argv)

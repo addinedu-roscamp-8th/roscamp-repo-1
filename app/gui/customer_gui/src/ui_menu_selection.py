@@ -101,11 +101,11 @@ class MenuItemDialog(QDialog):
         self.setLayout(layout)
 
     def get_quantity(self):
-        """선택된 수량 반환"""
+        """선택된 수량을 반환합니다."""
         return self.spin_quantity.value()
 
     def get_sauce(self):
-        """선택된 소스 반환"""
+        """선택된 소스를 반환합니다."""
         sauces = ["소스선택x", "마요네즈", "케찹", "머스타드"]
         selected_id = self.sauce_group.checkedId()
         return sauces[selected_id] if selected_id >= 0 else "소스선택x"
@@ -126,7 +126,7 @@ class MenuSelectionWidget(QWidget):
         self.connect_signals()
 
     def setup_ui(self):
-        """UI 설정"""
+        """UI를 설정합니다."""
         ui_path = os.path.join(
             os.path.dirname(__file__),
             '..',
@@ -142,19 +142,19 @@ class MenuSelectionWidget(QWidget):
             self.resize(Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT)
 
     def connect_signals(self):
-        """시그널 연결"""
+        """시그널을 연결합니다."""
         self.list_menu.itemDoubleClicked.connect(self.on_menu_item_clicked)
         self.list_cart.itemDoubleClicked.connect(self.on_cart_item_clicked)
         self.btn_confirm_order.clicked.connect(self.on_confirm_order)
         self.btn_cancel.clicked.connect(self.on_cancel)
 
     def set_menu_items(self, menu_items: list):
-        """메뉴 리스트 설정"""
+        """메뉴 리스트를 설정합니다."""
         self.menu_items = menu_items
         self.update_menu_list()
 
     def update_menu_list(self):
-        """메뉴 리스트 업데이트"""
+        """메뉴 리스트를 업데이트합니다."""
         self.list_menu.clear()
 
         for menu_item in self.menu_items:
@@ -173,7 +173,7 @@ class MenuSelectionWidget(QWidget):
             self.list_menu.addItem(list_item)
 
     def update_cart_list(self):
-        """장바구니 리스트 업데이트"""
+        """장바구니 리스트를 업데이트합니다."""
         self.list_cart.clear()
 
         for order_item in self.order.items:
@@ -191,7 +191,7 @@ class MenuSelectionWidget(QWidget):
         self.label_total.setText(f'합계: {self.order.total_price:,}원')
 
     def on_menu_item_clicked(self, item):
-        """메뉴 아이템 클릭"""
+        """메뉴 아이템 클릭을 처리합니다."""
         menu_item = item.data(Qt.UserRole)
 
         # SR-04: 무효 주문 차단 - 품절 메뉴 선택 시 경고
@@ -230,7 +230,7 @@ class MenuSelectionWidget(QWidget):
             print(f'[MenuSelection] 메뉴 추가: {menu_item.name} x {quantity}, 소스: {sauce}')
 
     def on_cart_item_clicked(self, item):
-        """장바구니 아이템 클릭 - 수량 변경 또는 삭제"""
+        """장바구니 아이템 클릭을 처리합니다 - 수량 변경 또는 삭제."""
         order_item = item.data(Qt.UserRole)
 
         # 수량 변경 다이얼로그
@@ -287,7 +287,7 @@ class MenuSelectionWidget(QWidget):
             print(f'[MenuSelection] 수량 변경: {order_item.menu_item.name} -> {new_quantity}')
 
     def on_confirm_order(self):
-        """주문 확인 버튼 클릭"""
+        """주문 확인 버튼 클릭을 처리합니다."""
         if len(self.order.items) == 0:
             QMessageBox.warning(
                 self,
@@ -301,7 +301,7 @@ class MenuSelectionWidget(QWidget):
         self.order_confirmed_signal.emit(self.order)
 
     def on_cancel(self):
-        """취소 버튼 클릭"""
+        """취소 버튼 클릭을 처리합니다."""
         reply = QMessageBox.question(
             self,
             '주문 취소',
@@ -318,7 +318,7 @@ class MenuSelectionWidget(QWidget):
 
 
 def main():
-    """테스트 실행"""
+    """테스트를 실행합니다."""
     app = QApplication(sys.argv)
 
     # 테스트 메뉴 데이터

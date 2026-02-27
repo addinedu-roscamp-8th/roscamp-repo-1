@@ -35,14 +35,14 @@ test_results = {
 
 
 def log_step(step_num: int, description: str, passed: bool):
-    """Log test step result"""
+    """테스트 단계 결과 로깅"""
     status = "OK" if passed else "FAIL"
     print(f"[STEP {step_num}] {description}... [{status}]")
     return passed
 
 
 def log_scenario_result(scenario_name: str, passed: bool):
-    """Log scenario result"""
+    """시나리오 결과 로깅"""
     result = "PASS" if passed else "FAIL"
     print(f"[RESULT] Scenario {result}")
     print()
@@ -62,7 +62,7 @@ def log_scenario_result(scenario_name: str, passed: bool):
 # ==============================================================================
 
 class MockPose:
-    """Mock geometry_msgs/Pose"""
+    """Mock geometry_msgs/Pose 메시지"""
     class Position:
         def __init__(self):
             self.x = 0.0
@@ -302,7 +302,7 @@ class MockOrderHandler:
             }
 
     def _execute_order_workflow(self, workflow: MockOrderWorkflow, robot_id: Optional[str] = None):
-        """Execute order workflow"""
+        """주문 workflow 실행"""
         # Step 1: Send cooking command
         if self.send_cooking_command_callback:
             cooking_command = {
@@ -328,7 +328,7 @@ class MockOrderHandler:
             raise RuntimeError("Navigate robot callback not registered")
 
     def queue_order(self, workflow: MockOrderWorkflow) -> bool:
-        """Add order to pending queue"""
+        """대기 queue에 주문 추가"""
         workflow.transition_to(MockOrderWorkflow.STATE_QUEUED)
         self.pending_order_queue.append(workflow)
 
@@ -941,7 +941,7 @@ def test_scenario_4_callback_registration():
 # ==============================================================================
 
 def print_summary():
-    """Print final test summary"""
+    """최종 테스트 요약 출력"""
     print()
     print("=" * 60)
     print("=== Integration Test Summary ===")
@@ -966,7 +966,7 @@ def print_summary():
 
 
 def main():
-    """Run all integration scenarios"""
+    """모든 통합 시나리오 실행"""
     print()
     print("=" * 60)
     print("FMS Integration Scenario Tests (E2E Validation)")

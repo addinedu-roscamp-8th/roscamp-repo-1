@@ -48,7 +48,7 @@ class GUITCPServer:
         logger.info(f"Registered handler for message type: {message_type}")
 
     def start(self):
-        """Start TCP server"""
+        """TCP server 시작"""
         try:
             self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -68,7 +68,7 @@ class GUITCPServer:
             return False
 
     def stop(self):
-        """Stop TCP server"""
+        """TCP server 중지"""
         self.running = False
 
         # Close all client connections
@@ -90,7 +90,7 @@ class GUITCPServer:
         logger.info("GUI TCP Server stopped")
 
     def _accept_clients(self):
-        """Accept incoming client connections"""
+        """들어오는 client 연결 수락"""
         while self.running:
             try:
                 self.server_socket.settimeout(1.0)
@@ -111,7 +111,7 @@ class GUITCPServer:
                     logger.error(f"Error accepting client: {e}")
 
     def _recv_exact(self, client_socket: socket.socket, num_bytes: int) -> bytes:
-        """Receive exactly num_bytes from socket"""
+        """socket으로부터 정확히 num_bytes만큼 수신"""
         data = b''
         while len(data) < num_bytes:
             chunk = client_socket.recv(num_bytes - len(data))
@@ -121,13 +121,13 @@ class GUITCPServer:
         return data
 
     def _send_with_header(self, client_socket: socket.socket, message: dict):
-        """Send message with 4-byte length header"""
+        """4-byte 길이 header와 함께 메시지 전송"""
         json_data = json.dumps(message, ensure_ascii=False).encode('utf-8')
         length_header = len(json_data).to_bytes(4, byteorder='big')
         client_socket.sendall(length_header + json_data)
 
     def _handle_client(self, client_socket: socket.socket, client_address):
-        """Handle individual client connection"""
+        """개별 client 연결 처리"""
         client_id = f"{client_address[0]}:{client_address[1]}"
 
         # Add to clients dict
@@ -290,7 +290,7 @@ class GUITCPServer:
                 return False
 
     def get_connected_clients(self) -> List[str]:
-        """Get list of connected client IDs"""
+        """연결된 client ID 목록 반환"""
         with self.client_lock:
             return list(self.clients.keys())
 
