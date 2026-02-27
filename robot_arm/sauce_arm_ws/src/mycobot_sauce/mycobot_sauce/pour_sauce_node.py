@@ -282,7 +282,16 @@ class PourSauceNode(Node):
         if s in sauce_map:
             return s
 
-        alias = {"mustard": "sauce1", "ketchup": "sauce2", "mayonnaise": "sauce3"}
+        # Alias mapping: short names -> actual keys in poses_sauce.yaml
+        alias = {
+            "mayo": "mayonnaise",
+            "마요": "mayonnaise",
+            "마요네즈": "mayonnaise",
+            "must": "mustard",
+            "머스타드": "mustard",
+            "ketch": "ketchup",
+            "케첩": "ketchup",
+        }
         if s in alias and alias[s] in sauce_map:
             return alias[s]
 
