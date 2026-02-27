@@ -134,6 +134,10 @@ wait_for_publisher: true
 topics:
   arm_a/status:
     type: std_msgs/msg/String
+  cooking/status:
+    type: std_msgs/msg/String
+  cooking/loading_complete:
+    type: fleet_interfaces/msg/LoadingComplete
 EOF
 
 cat > $CONFIG_DIR/fms_to_arm_a.yaml << 'EOF'
@@ -143,6 +147,12 @@ to_domain: 20
 topics:
   arm_a/cmd:
     type: std_msgs/msg/String
+  cooking/command:
+    type: std_msgs/msg/String
+  cooking/order:
+    type: fleet_interfaces/msg/CookingOrder
+  fms/pickup_arrival:
+    type: fleet_interfaces/msg/PickupArrival
 EOF
 
 cat > $CONFIG_DIR/arm_b_to_fms.yaml << 'EOF'

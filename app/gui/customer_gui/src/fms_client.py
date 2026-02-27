@@ -194,7 +194,7 @@ class FMSOrderServiceClient(QObject):
     def _convert_sauce(self, sauce: str) -> str:
         """소스 이름을 영문으로 변환합니다."""
         sauce_map = {
-            '마요네즈': 'mayo',
+            '마요네즈': 'mayonnaise',
             '케찹': 'ketchup',
             '머스타드': 'mustard',
             '소스선택x': '',
