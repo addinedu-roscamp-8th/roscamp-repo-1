@@ -1177,28 +1177,49 @@ class FMSNode(Node):
             self._follow_waypoints_via_ssh(robot_id, waypoints)
             return
 
-        # Build waypoint poses
-        poses = []
+        # Build waypoint poses with orientation towards next waypoint
+        # First, collect all waypoint positions
+        waypoint_positions = []
+        waypoint_names = []
         for wp_name in waypoints:
             pose = self.map_positions.get(wp_name)
             if not pose:
                 logger.warning(f"Waypoint {wp_name} not found, skipping")
                 continue
 
+            if hasattr(pose, 'position'):
+                waypoint_positions.append((pose.position.x, pose.position.y))
+            else:
+                waypoint_positions.append((pose['x'], pose['y']))
+            waypoint_names.append(wp_name)
+
+        # Build poses with calculated orientations
+        poses = []
+        for i, (wp_name, (x, y)) in enumerate(zip(waypoint_names, waypoint_positions)):
             pose_stamped = PoseStamped()
             pose_stamped.header.frame_id = 'map'
             pose_stamped.header.stamp = self.get_clock().now().to_msg()
+            pose_stamped.pose.position.x = x
+            pose_stamped.pose.position.y = y
+            pose_stamped.pose.position.z = 0.0
 
-            if hasattr(pose, 'position'):
-                pose_stamped.pose = pose
+            # Calculate orientation towards next waypoint
+            if i < len(waypoint_positions) - 1:
+                # For non-final waypoints: orient towards the next waypoint
+                next_x, next_y = waypoint_positions[i + 1]
+                yaw = math.atan2(next_y - y, next_x - x)
             else:
-                pose_stamped.pose.position.x = pose['x']
-                pose_stamped.pose.position.y = pose['y']
-                pose_stamped.pose.position.z = 0.0
-                pose_stamped.pose.orientation.w = 1.0
+                # For final waypoint (pickup_spot): face +x direction for robot arm loading
+                yaw = 0.0
+
+            # Convert yaw to quaternion (rotation around z-axis only)
+            pose_stamped.pose.orientation.x = 0.0
+            pose_stamped.pose.orientation.y = 0.0
+            pose_stamped.pose.orientation.z = math.sin(yaw / 2.0)
+            pose_stamped.pose.orientation.w = math.cos(yaw / 2.0)
 
             poses.append(pose_stamped)
-            logger.info(f"[WAYPOINT] Added {wp_name}: x={pose_stamped.pose.position.x:.3f}, y={pose_stamped.pose.position.y:.3f}")
+            logger.info(f"[WAYPOINT] Added {wp_name}: x={x:.3f}, y={y:.3f}, yaw={math.degrees(yaw):.1f}deg")
 
         if not poses:
             logger.error(f"No valid waypoints to follow for {robot_id}")
@@ -1279,7 +1300,7 @@ class FMSNode(Node):
             logger.error(f"Unknown robot {robot_id} for SSH navigation")
             return
 
-        # Build waypoints JSON
+        # Build waypoints JSON with positions
         waypoint_positions = []
         for wp_name in waypoints:
             pose = self.map_positions.get(wp_name)
@@ -1293,10 +1314,23 @@ class FMSNode(Node):
             logger.error(f"No valid waypoints for SSH navigation: {waypoints}")
             return
 
-        # Build ROS2 message for FollowWaypoints
+        # Build ROS2 message for FollowWaypoints with orientation towards next waypoint
         poses_str_list = []
-        for wp in waypoint_positions:
-            pose_str = f'{{header: {{frame_id: "map"}}, pose: {{position: {{x: {wp["x"]:.3f}, y: {wp["y"]:.3f}, z: 0.0}}, orientation: {{w: 1.0}}}}}}'
+        for i, wp in enumerate(waypoint_positions):
+            # Calculate orientation towards next waypoint
+            if i < len(waypoint_positions) - 1:
+                # For non-final waypoints: orient towards the next waypoint
+                next_wp = waypoint_positions[i + 1]
+                yaw = math.atan2(next_wp['y'] - wp['y'], next_wp['x'] - wp['x'])
+            else:
+                # For final waypoint (pickup_spot): face +x direction for robot arm loading
+                yaw = 0.0
+
+            # Convert yaw to quaternion
+            qz = math.sin(yaw / 2.0)
+            qw = math.cos(yaw / 2.0)
+
+            pose_str = f'{{header: {{frame_id: "map"}}, pose: {{position: {{x: {wp["x"]:.3f}, y: {wp["y"]:.3f}, z: 0.0}}, orientation: {{x: 0.0, y: 0.0, z: {qz:.6f}, w: {qw:.6f}}}}}}}'
             poses_str_list.append(pose_str)
         poses_str = '[' + ', '.join(poses_str_list) + ']'
 
