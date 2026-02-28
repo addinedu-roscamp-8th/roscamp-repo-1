@@ -502,48 +502,31 @@ class CoordinatorNode(Node):
             self._publish(self.pub_verify, build_msg(job_id, "CANCEL"))
             return False
 
-        # verify 분석 트리거 (verify 노드가 이 op를 받는 형태로 맞춰라)
-        # 예: verify 노드가 "ANALYZE"를 받도록 구현되어 있어야 함.
-        self.get_logger().info(f"request VERIFY analyze job={job_id}")
-        self._publish(self.pub_verify, build_msg(job_id, "ANALYZE"))
+        # ✅ Skip ANALYZE step - verify node doesn't support it
+        # Verify node has skip_verify=True, so we go directly to HANDOFF_PINKY
+        self.get_logger().info(f"[STEP 5] TRANSPORT_TO_VERIFY done, skipping ANALYZE (always OK) job={job_id}")
 
-        # verify 결과 대기: OK 또는 DEFECT (너 verify 노드 출력에 맞춰 변경)
-        ok_ok, _ = self.wait_for(job_id, "V", "OK", order.timeout_verify_sec)
-        if ok_ok:
-            self.get_logger().info(f"VERIFY OK -> waiting for pinky arrival job={job_id}")
-
-            # Wait for pinky arrival before handoff (only in production mode with order_id)
-            if order_id:
-                pinky_arrived = self.wait_for_pinky_arrival(order_id, timeout_sec=order.timeout_handoff_sec)
-                if not pinky_arrived:
-                    self.get_logger().error(f"Pinky did not arrive in time for order {order_id}")
-                    self._publish(self.pub_b, build_msg(job_id, "CANCEL"))
-                    return False
-            else:
-                self.get_logger().info(f"Test mode: skipping pinky arrival check for job={job_id}")
-
-            self.get_logger().info(f"Pinky ready -> HANDOFF_PINKY job={job_id}")
-            self._publish(self.pub_verify, build_msg(job_id, "HANDOFF_PINKY"))
-            # ✅ Fixed: Use "V" (verify/status) instead of "B" (arm_b/status)
-            ok2, msg2 = self.wait_for(job_id, "V", "DONE", order.timeout_handoff_sec)
-            if not ok2:
-                self.get_logger().error(f"V handoff failed: {msg2}")
+        # Wait for pinky arrival before handoff (only in production mode with order_id)
+        if order_id:
+            self.get_logger().info(f"[STEP 6] Waiting for pinky arrival job={job_id}")
+            pinky_arrived = self.wait_for_pinky_arrival(order_id, timeout_sec=order.timeout_handoff_sec)
+            if not pinky_arrived:
+                self.get_logger().error(f"Pinky did not arrive in time for order {order_id}")
                 self._publish(self.pub_verify, build_msg(job_id, "CANCEL"))
                 return False
         else:
-            ok_ng, _ = self.wait_for(job_id, "V", "DEFECT", 0.1)  # 이미 timeout 후면 store에 있을 수도 있어서 짧게 한번 더
-            if ok_ng:
-                self.get_logger().info(f"VERIFY DEFECT -> DISCARD job={job_id}")
-            else:
-                self.get_logger().warn(f"VERIFY not OK within timeout -> treat as DEFECT job={job_id}")
+            self.get_logger().info(f"Test mode: skipping pinky arrival check for job={job_id}")
 
-            self._publish(self.pub_verify, build_msg(job_id, "DISCARD"))
-            # ✅ Fixed: Use "V" (verify/status) instead of "B" (arm_b/status)
-            ok2, msg2 = self.wait_for(job_id, "V", "DONE", order.timeout_handoff_sec)
-            if not ok2:
-                self.get_logger().error(f"V discard failed: {msg2}")
-                self._publish(self.pub_verify, build_msg(job_id, "CANCEL"))
-                return False
+        # Clear v_status before HANDOFF_PINKY to avoid stale DONE from TRANSPORT_TO_VERIFY
+        self.v_status.pop(job_id, None)
+
+        self.get_logger().info(f"[STEP 7] Pinky ready -> HANDOFF_PINKY job={job_id}")
+        self._publish(self.pub_verify, build_msg(job_id, "HANDOFF_PINKY"))
+        ok2, msg2 = self.wait_for(job_id, "V", "DONE", order.timeout_handoff_sec)
+        if not ok2:
+            self.get_logger().error(f"V handoff failed: {msg2}")
+            self._publish(self.pub_verify, build_msg(job_id, "CANCEL"))
+            return False
 
         self.get_logger().info(f"job {job_id} DONE (stack + verify + branch)")
         return True
