@@ -11,6 +11,7 @@ from queue import Queue
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 from std_msgs.msg import String
 from fleet_interfaces.msg import CookingOrder, LoadingComplete, PickupArrival
 from builtin_interfaces.msg import Time
@@ -96,12 +97,20 @@ class CoordinatorNode(Node):
         self.sub_verify = self.create_subscription(String, "/verify/status", self._on_verify_status, 10)
 
         # CookingOrder subscriber - receive orders from FMS
+        # Use explicit QoS to ensure compatibility with FMS publisher
+        cooking_order_qos = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10
+        )
         self.cooking_order_sub = self.create_subscription(
             CookingOrder,
             '/cooking/order',
             self._on_cooking_order,
-            10
+            cooking_order_qos
         )
+        self.get_logger().info("Subscribed to /cooking/order with RELIABLE QoS")
 
         # PickupArrival subscriber - receive pinky arrival notifications from FMS
         self.pickup_arrival_sub = self.create_subscription(
