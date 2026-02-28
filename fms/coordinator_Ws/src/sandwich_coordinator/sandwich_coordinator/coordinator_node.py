@@ -476,12 +476,12 @@ class CoordinatorNode(Node):
             self.get_logger().info(f"[STEP 2.5] B DONE, sending RESUME to A")
             self._publish(self.pub_a, build_msg(job_id, "RESUME"))
 
-        # 3) wait A FOOD_READY (샌드위치 쌓기 완료, refill은 별도로 진행)
-        self.get_logger().info(f"[STEP 3] Waiting for A FOOD_READY (timeout={order.timeout_finish_a_sec}s)")
-        # ✅ Changed: Wait for FOOD_READY instead of DONE so B can start immediately
-        ok, msg = self.wait_for(job_id, "A", "FOOD_READY", order.timeout_finish_a_sec)
+        # 3) wait A DONE (샌드위치 조립 완료)
+        self.get_logger().info(f"[STEP 3] Waiting for A DONE (timeout={order.timeout_finish_a_sec}s)")
+        # ✅ Fixed: Wait for DONE (arm A sends DONE when recipe is complete)
+        ok, msg = self.wait_for(job_id, "A", "DONE", order.timeout_finish_a_sec)
         if not ok:
-            self.get_logger().error(f"A FOOD_READY failed: {msg}")
+            self.get_logger().error(f"A DONE failed: {msg}")
             self._publish(self.pub_a, build_msg(job_id, "CANCEL"))
             if sauce != "":
                 self._publish(self.pub_b, build_msg(job_id, "CANCEL"))
@@ -489,10 +489,10 @@ class CoordinatorNode(Node):
 
         # -----------------------------
         # 4) NEW: B가 verify로 운반 + verify 분석 + 결과 따라 분기
-        # ✅ B starts immediately after A's FOOD_READY (A can refill in parallel)
+        # ✅ B starts immediately after A's DONE
         # -----------------------------
-        self.get_logger().info(f"[STEP 4] A FOOD_READY received! Now sending TRANSPORT_TO_VERIFY to verify node")
-        self.get_logger().info(f"A FOOD_READY -> B TRANSPORT_TO_VERIFY job={job_id}")
+        self.get_logger().info(f"[STEP 4] A DONE received! Now sending TRANSPORT_TO_VERIFY to verify node")
+        self.get_logger().info(f"A DONE -> B TRANSPORT_TO_VERIFY job={job_id}")
         self._publish(self.pub_verify, build_msg(job_id, "TRANSPORT_TO_VERIFY", sauce=sauce if sauce else "none"))
 
         # ✅ Fixed: Use "V" (verify/status) instead of "B" (arm_b/status)
