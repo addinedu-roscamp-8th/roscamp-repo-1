@@ -446,6 +446,7 @@ class CoordinatorNode(Node):
         self.wait_subscribers(timeout_sec=order.discovery_wait_sec, need_a=1, need_b=max(need_b, 1), need_v=1)
 
         # 1) A START
+        self.get_logger().info(f"[STEP 1] Sending START to A: recipe={order.recipe}, sauce={sauce}")
         self._publish(
             self.pub_a,
             build_msg(job_id, "START", recipe=order.recipe, pause_before_last=str(order.pause_before_last), sauce=sauce),
@@ -453,6 +454,7 @@ class CoordinatorNode(Node):
 
         # 2) sauce 있으면 B pour flow
         if sauce != "":
+            self.get_logger().info(f"[STEP 2] Sauce flow starting: sauce={sauce}")
             self._publish(self.pub_b, build_msg(job_id, "PREPARE", sauce=sauce))
 
             ok_a, msg_a2 = self.wait_for(job_id, "A", "WAIT_FOR_SAUCE", order.timeout_wait_a_sec)
@@ -471,9 +473,11 @@ class CoordinatorNode(Node):
                 self._publish(self.pub_b, build_msg(job_id, "CANCEL"))
                 return False
 
+            self.get_logger().info(f"[STEP 2.5] B DONE, sending RESUME to A")
             self._publish(self.pub_a, build_msg(job_id, "RESUME"))
 
         # 3) wait A FOOD_READY (샌드위치 쌓기 완료, refill은 별도로 진행)
+        self.get_logger().info(f"[STEP 3] Waiting for A FOOD_READY (timeout={order.timeout_finish_a_sec}s)")
         # ✅ Changed: Wait for FOOD_READY instead of DONE so B can start immediately
         ok, msg = self.wait_for(job_id, "A", "FOOD_READY", order.timeout_finish_a_sec)
         if not ok:
@@ -487,6 +491,7 @@ class CoordinatorNode(Node):
         # 4) NEW: B가 verify로 운반 + verify 분석 + 결과 따라 분기
         # ✅ B starts immediately after A's FOOD_READY (A can refill in parallel)
         # -----------------------------
+        self.get_logger().info(f"[STEP 4] A FOOD_READY received! Now sending TRANSPORT_TO_VERIFY to verify node")
         self.get_logger().info(f"A FOOD_READY -> B TRANSPORT_TO_VERIFY job={job_id}")
         self._publish(self.pub_verify, build_msg(job_id, "TRANSPORT_TO_VERIFY", sauce=sauce if sauce else "none"))
 
