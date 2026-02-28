@@ -221,3 +221,32 @@ topics:
       durability: volatile
       history: keep_last
       depth: 10
+
+  # ============================================
+  # Inventory Reset (FMS → Robot Arms)
+  # ============================================
+
+  # Inventory Reset: FMS → armA (Domain 20)
+  # Resets all inventory to full capacity on FMS startup
+  inventory_reset_20:
+    topic: inventory/reset_all
+    type: std_msgs/msg/Empty
+    from_domain: 25
+    to_domain: 20
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 1
+
+  # Inventory Reset: FMS → armB (Domain 21)
+  inventory_reset_21:
+    topic: inventory/reset_all
+    type: std_msgs/msg/Empty
+    from_domain: 25
+    to_domain: 21
+    qos:
+      reliability: reliable
+      durability: volatile
+      history: keep_last
+      depth: 1

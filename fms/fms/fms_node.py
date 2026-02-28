@@ -22,7 +22,7 @@ from fleet_interfaces.msg import (
     ErrorAlert,
     OperatorCommand as OperatorCommandMsg
 )
-from std_msgs.msg import Float32, Bool, String
+from std_msgs.msg import Float32, Bool, String, Empty
 from builtin_interfaces.msg import Time
 import logging
 import math
@@ -215,6 +215,14 @@ class FMSNode(Node):
             10
         )
 
+        # Inventory reset publisher - reset robot arm inventory on FMS startup
+        # Topic: /inventory/reset_all (Domain Bridge forwards to armA/armB)
+        self.inventory_reset_pub = self.create_publisher(
+            Empty,
+            '/inventory/reset_all',
+            10
+        )
+
         # Cooking status subscriber - receive cooking status from robot arm
         self.cooking_status_sub = self.create_subscription(
             String,
@@ -313,6 +321,10 @@ class FMSNode(Node):
         if self.auto_set_initial_pose:
             logger.info("Auto-setting initial poses for all robots...")
             self.create_timer(1.0, self._set_all_initial_poses_once)
+
+        # Reset inventory on FMS startup (wait 2 seconds for domain bridge)
+        logger.info("Will reset robot arm inventory in 2 seconds...")
+        self.create_timer(2.0, self._reset_inventory_once)
 
         logger.info("Fleet Management System initialized successfully")
 
@@ -544,6 +556,22 @@ class FMSNode(Node):
 
         logger.info("Initial poses set for all robots")
         self._initial_poses_set = True
+
+    def _reset_inventory_once(self):
+        """
+        Reset robot arm inventory to full capacity (one-time timer callback)
+
+        This is called once after FMS starts to ensure inventory is reset.
+        Domain Bridge forwards this to armA (Domain 20) and armB (Domain 21).
+        """
+        # Prevent repeated execution
+        if hasattr(self, '_inventory_reset_done'):
+            return
+
+        # Publish empty message to trigger inventory reset
+        self.inventory_reset_pub.publish(Empty())
+        logger.info("[INVENTORY] Reset command sent to robot arms - all items reset to full capacity")
+        self._inventory_reset_done = True
 
     # Callbacks
     # ========================================

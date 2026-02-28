@@ -6,6 +6,7 @@ from typing import Dict
 import rclpy
 from rclpy.node import Node
 
+from std_msgs.msg import Empty
 from mycobot_kitchen_msgs.srv import GetInventory, ConsumeInventory, SetInventory
 
 
@@ -38,6 +39,9 @@ class InventoryManagerNode(Node):
         self.create_service(GetInventory, "inventory/get", self.on_get)
         self.create_service(ConsumeInventory, "inventory/consume", self.on_consume)
         self.create_service(SetInventory, "inventory/set", self.on_set)
+
+        # Reset all inventory to capacity (triggered by FMS on startup)
+        self.create_subscription(Empty, "inventory/reset_all", self.on_reset_all, 10)
 
         self.get_logger().info(f"Loaded inventory from {inv_path}: {self.remaining}")
 
@@ -104,6 +108,12 @@ class InventoryManagerNode(Node):
         res.ok = True
         res.message = "ok"
         return res
+
+    def on_reset_all(self, msg: Empty):
+        """Reset all inventory to full capacity (triggered by FMS on startup)"""
+        for k in self.capacity:
+            self.remaining[k] = self.capacity[k]
+        self.get_logger().info(f"[RESET] All inventory reset to capacity: {self.remaining}")
 
 
 def main():

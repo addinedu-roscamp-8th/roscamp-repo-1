@@ -172,6 +172,9 @@ class BTrayOrchestratorNode(Node):
         self.declare_parameter("release_at_pinky", True)
         self.declare_parameter("release_at_trash", True)
 
+        # Skip YOLO verification - always pass as HANDOFF_PINKY
+        self.declare_parameter("skip_verify", True)  # True = skip camera/YOLO, assume OK
+
         self.poses = load_yaml(self.get_parameter("poses_yaml").value)
 
         # topic interface - /verify/cmd 사용 (TRANSPORT_TO_VERIFY, HANDOFF_PINKY 등)
@@ -584,6 +587,13 @@ class BTrayOrchestratorNode(Node):
         if not ok:
             raise RuntimeError(f"gripper_open:{msg}")
         await asyncio.sleep(m.settle)
+
+        # Skip YOLO verification if enabled - directly proceed to handoff
+        skip_verify = bool(self.get_parameter("skip_verify").value)
+        if skip_verify:
+            self.get_logger().info("[SKIP_VERIFY] Skipping YOLO analysis, assuming OK -> HANDOFF_PINKY")
+            await self._run_handoff_pinky(job_id)
+            return
 
         # 이미지 분석 API 호출 (서버가 /arm_b/cmd 로도 발행하므로, 여기서는 응답만 사용해 다음 동작을 결정)
         data = await asyncio.to_thread(call_analyze_arm_cmd)
