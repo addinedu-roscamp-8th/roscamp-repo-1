@@ -293,7 +293,7 @@ class CoordinatorNode(Node):
         m = String()
         m.data = text
         pub.publish(m)
-        rclpy.spin_once(self, timeout_sec=0.01)
+        # Note: spin_once removed - executor handles callbacks in production mode
         time.sleep(float(settle_sec))
 
     def wait_subscribers(self, timeout_sec: float = 8.0, need_a: int = 1, need_b: int = 1, need_v: int = 0) -> bool:
@@ -313,7 +313,7 @@ class CoordinatorNode(Node):
                 self.get_logger().info(f"subscribers ready: A={a} B={b} V={v}")
                 return True
 
-            rclpy.spin_once(self, timeout_sec=0.1)
+            time.sleep(0.1)  # Wait without spin_once - executor handles callbacks
 
         self.get_logger().warn(
             f"subscribers NOT ready (timeout): "
@@ -327,7 +327,7 @@ class CoordinatorNode(Node):
         """
         t0 = time.time()
         while (time.time() - t0) < float(timeout_sec) and rclpy.ok():
-            rclpy.spin_once(self, timeout_sec=0.05)
+            time.sleep(0.05)  # Wait without spin_once - executor handles callbacks
 
             if who == "A":
                 store = self.a_status
@@ -615,7 +615,6 @@ def main():
         node.get_logger().info("=" * 50)
 
         # Use MultiThreadedExecutor to allow concurrent callback processing
-        # This fixes the threading bug where spin_once() in background threads doesn't work
         executor = MultiThreadedExecutor(num_threads=4)
         executor.add_node(node)
 
@@ -624,6 +623,7 @@ def main():
         except KeyboardInterrupt:
             node.get_logger().info("Shutting down Sandwich Coordinator...")
         finally:
+            executor.shutdown()
             node.destroy_node()
             rclpy.shutdown()
 
