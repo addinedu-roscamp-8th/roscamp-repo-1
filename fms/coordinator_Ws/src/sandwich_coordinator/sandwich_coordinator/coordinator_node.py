@@ -128,6 +128,28 @@ class CoordinatorNode(Node):
 
         self.get_logger().info("CoordinatorNode ready. Listening for orders on /cooking/order")
 
+        # Send RESET to all arms on startup (one-shot timer after brief delay for publisher setup)
+        self._startup_reset_timer = self.create_timer(2.0, self._send_startup_reset)
+
+    def _send_startup_reset(self):
+        """Send RESET commands to all robot arms on coordinator startup"""
+        # Cancel timer so it only fires once
+        self._startup_reset_timer.cancel()
+
+        reset_job_id = "startup_reset"
+        reset_msg = build_msg(reset_job_id, "RESET")
+
+        self.get_logger().info("========== STARTUP RESET ==========")
+        self.get_logger().info(f"Sending RESET to all arms: {reset_msg}")
+
+        # Send RESET to all arms
+        self._publish(self.pub_a, reset_msg)
+        self._publish(self.pub_b, reset_msg)
+        self._publish(self.pub_verify, reset_msg)
+
+        self.get_logger().info("RESET commands sent to arm_a, arm_b, verify")
+        self.get_logger().info("=====================================")
+
     def _on_cooking_order(self, msg: CookingOrder):
         """
         Handle incoming cooking order from FMS
