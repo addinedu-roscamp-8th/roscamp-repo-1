@@ -815,6 +815,11 @@ class RecipeExecutorNode(Node):
 
                 layer_idx += 1
 
+            # ✅ Publish FOOD_READY immediately after stacking is complete
+            # This allows B to start transport while A does refill_at_end
+            self._publish_status(job_id, "FOOD_READY", recipe=recipe_name)
+            self.get_logger().info(f"[{job_id}] FOOD_READY published - stacking complete, B can start")
+
             if bool(self.get_parameter("refill_at_end").value):
                 threshold = int(self.get_parameter("refill_threshold").value)
                 for k in sorted(used_items):

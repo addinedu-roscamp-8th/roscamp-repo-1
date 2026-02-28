@@ -389,10 +389,11 @@ class CoordinatorNode(Node):
 
             self._publish(self.pub_a, build_msg(job_id, "RESUME"))
 
-        # 3) finish A (샌드위치 쌓기 완료)
-        ok, msg = self.wait_for(job_id, "A", "DONE", order.timeout_finish_a_sec)
+        # 3) wait A FOOD_READY (샌드위치 쌓기 완료, refill은 별도로 진행)
+        # ✅ Changed: Wait for FOOD_READY instead of DONE so B can start immediately
+        ok, msg = self.wait_for(job_id, "A", "FOOD_READY", order.timeout_finish_a_sec)
         if not ok:
-            self.get_logger().error(f"A finish failed: {msg}")
+            self.get_logger().error(f"A FOOD_READY failed: {msg}")
             self._publish(self.pub_a, build_msg(job_id, "CANCEL"))
             if sauce != "":
                 self._publish(self.pub_b, build_msg(job_id, "CANCEL"))
@@ -400,14 +401,16 @@ class CoordinatorNode(Node):
 
         # -----------------------------
         # 4) NEW: B가 verify로 운반 + verify 분석 + 결과 따라 분기
+        # ✅ B starts immediately after A's FOOD_READY (A can refill in parallel)
         # -----------------------------
-        self.get_logger().info(f"A stacked DONE -> B TRANSPORT_TO_VERIFY job={job_id}")
+        self.get_logger().info(f"A FOOD_READY -> B TRANSPORT_TO_VERIFY job={job_id}")
         self._publish(self.pub_verify, build_msg(job_id, "TRANSPORT_TO_VERIFY", sauce=sauce if sauce else "none"))
 
-        ok, msg = self.wait_for(job_id, "B", "DONE", order.timeout_transport_verify_sec)
+        # ✅ Fixed: Use "V" (verify/status) instead of "B" (arm_b/status)
+        ok, msg = self.wait_for(job_id, "V", "DONE", order.timeout_transport_verify_sec)
         if not ok:
-            self.get_logger().error(f"B transport_to_verify failed: {msg}")
-            self._publish(self.pub_b, build_msg(job_id, "CANCEL"))
+            self.get_logger().error(f"V transport_to_verify failed: {msg}")
+            self._publish(self.pub_verify, build_msg(job_id, "CANCEL"))
             return False
 
         # verify 분석 트리거 (verify 노드가 이 op를 받는 형태로 맞춰라)
@@ -432,10 +435,11 @@ class CoordinatorNode(Node):
 
             self.get_logger().info(f"Pinky ready -> HANDOFF_PINKY job={job_id}")
             self._publish(self.pub_verify, build_msg(job_id, "HANDOFF_PINKY"))
-            ok2, msg2 = self.wait_for(job_id, "B", "DONE", order.timeout_handoff_sec)
+            # ✅ Fixed: Use "V" (verify/status) instead of "B" (arm_b/status)
+            ok2, msg2 = self.wait_for(job_id, "V", "DONE", order.timeout_handoff_sec)
             if not ok2:
-                self.get_logger().error(f"B handoff failed: {msg2}")
-                self._publish(self.pub_b, build_msg(job_id, "CANCEL"))
+                self.get_logger().error(f"V handoff failed: {msg2}")
+                self._publish(self.pub_verify, build_msg(job_id, "CANCEL"))
                 return False
         else:
             ok_ng, _ = self.wait_for(job_id, "V", "DEFECT", 0.1)  # 이미 timeout 후면 store에 있을 수도 있어서 짧게 한번 더
@@ -445,10 +449,11 @@ class CoordinatorNode(Node):
                 self.get_logger().warn(f"VERIFY not OK within timeout -> treat as DEFECT job={job_id}")
 
             self._publish(self.pub_verify, build_msg(job_id, "DISCARD"))
-            ok2, msg2 = self.wait_for(job_id, "B", "DONE", order.timeout_handoff_sec)
+            # ✅ Fixed: Use "V" (verify/status) instead of "B" (arm_b/status)
+            ok2, msg2 = self.wait_for(job_id, "V", "DONE", order.timeout_handoff_sec)
             if not ok2:
-                self.get_logger().error(f"B discard failed: {msg2}")
-                self._publish(self.pub_b, build_msg(job_id, "CANCEL"))
+                self.get_logger().error(f"V discard failed: {msg2}")
+                self._publish(self.pub_verify, build_msg(job_id, "CANCEL"))
                 return False
 
         self.get_logger().info(f"job {job_id} DONE (stack + verify + branch)")

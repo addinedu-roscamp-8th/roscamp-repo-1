@@ -308,8 +308,21 @@ class BTrayOrchestratorNode(Node):
             "TRANSPORT_VERIFY", "TRANSPORT_TO_VERIFY",
             "HANDOFF_PINKY", "PLACE_PINKY",
             "DISCARD", "TRASH",
+            "ANALYZE",  # ✅ Added: Support ANALYZE command for verify flow
         ):
             self._publish_status(job_id, "FAIL", reason=f"unknown_op:{op}")
+            return
+
+        # ✅ Handle ANALYZE: When skip_verify=True, immediately respond with OK
+        if op == "ANALYZE":
+            skip_verify = bool(self.get_parameter("skip_verify").value)
+            if skip_verify:
+                self.get_logger().info(f"[SKIP_VERIFY] ANALYZE received, responding with OK immediately")
+                self._publish_status(job_id, "OK")
+            else:
+                # TODO: Implement actual YOLO verification if needed
+                self.get_logger().warn(f"ANALYZE not implemented for real verification, defaulting to OK")
+                self._publish_status(job_id, "OK")
             return
 
         ok = self._start_internal(job_id, op)
@@ -588,12 +601,13 @@ class BTrayOrchestratorNode(Node):
             raise RuntimeError(f"gripper_open:{msg}")
         await asyncio.sleep(m.settle)
 
-        # Skip YOLO verification if enabled - directly proceed to handoff
+        # ✅ Fixed: When skip_verify=True, just complete TRANSPORT_TO_VERIFY
+        # The coordinator will send ANALYZE (which responds with OK) and then HANDOFF_PINKY
+        # This prevents double-handoff issue
         skip_verify = bool(self.get_parameter("skip_verify").value)
         if skip_verify:
-            self.get_logger().info("[SKIP_VERIFY] Skipping YOLO analysis, assuming OK -> HANDOFF_PINKY")
-            await self._run_handoff_pinky(job_id)
-            return
+            self.get_logger().info("[SKIP_VERIFY] TRANSPORT_TO_VERIFY complete, waiting for coordinator to send ANALYZE/HANDOFF_PINKY")
+            return  # DONE will be published by _done_cb in _start_internal
 
         # 이미지 분석 API 호출 (서버가 /arm_b/cmd 로도 발행하므로, 여기서는 응답만 사용해 다음 동작을 결정)
         data = await asyncio.to_thread(call_analyze_arm_cmd)

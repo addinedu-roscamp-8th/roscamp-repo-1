@@ -1131,7 +1131,21 @@ class FMSNode(Node):
                     current_waypoint = own_spot
                     logger.info(f"Robot {robot_id} is near its own spot ({dist_to_own_spot:.3f}m), using {own_spot}")
 
-            # If not near own spot, find nearest waypoint
+            # Also check if robot is near pickup_spot or point13 (common pickup area)
+            if not current_waypoint:
+                for check_spot in ['pickup_spot', 'point13']:
+                    spot_pos = self.path_planner.graph.get_position(check_spot)
+                    if spot_pos:
+                        dist_to_spot = math.sqrt(
+                            (robot.current_pose.position.x - spot_pos[0])**2 +
+                            (robot.current_pose.position.y - spot_pos[1])**2
+                        )
+                        if dist_to_spot < 0.3:  # Within 0.3m of pickup area
+                            current_waypoint = check_spot
+                            logger.info(f"Robot {robot_id} is near {check_spot} ({dist_to_spot:.3f}m), using as start")
+                            break
+
+            # If not near any known spot, find nearest waypoint
             if not current_waypoint:
                 current_waypoint = self.path_planner.graph.get_nearest_waypoint(
                     robot.current_pose.position.x,

@@ -229,7 +229,7 @@ topics:
   # Inventory Reset: FMS → armA (Domain 20)
   # Resets all inventory to full capacity on FMS startup
   inventory_reset_20:
-    topic: inventory/reset_all
+    topic: /inventory/reset_all
     type: std_msgs/msg/Empty
     from_domain: 25
     to_domain: 20
@@ -241,7 +241,7 @@ topics:
 
   # Inventory Reset: FMS → armB (Domain 21)
   inventory_reset_21:
-    topic: inventory/reset_all
+    topic: /inventory/reset_all
     type: std_msgs/msg/Empty
     from_domain: 25
     to_domain: 21
