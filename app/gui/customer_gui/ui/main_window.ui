@@ -38,7 +38,7 @@
       </property>
       <property name="font">
        <font>
-        <pointsize>48</pointsize>
+        <pointsize>64</pointsize>
         <weight>75</weight>
         <bold>true</bold>
        </font>
@@ -55,7 +55,9 @@
       </property>
       <property name="font">
        <font>
-        <pointsize>24</pointsize>
+        <pointsize>42</pointsize>
+        <weight>75</weight>
+        <bold>true</bold>
        </font>
       </property>
      </widget>

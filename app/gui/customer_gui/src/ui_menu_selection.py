@@ -30,27 +30,33 @@ class MenuItemDialog(QDialog):
     def setup_ui(self):
         """UI 설정"""
         self.setWindowTitle('메뉴 선택')
-        self.setMinimumSize(500, 450)
+        self.setMinimumSize(780, 930)  # 세로 1.3배 추가
 
         layout = QVBoxLayout()
+        layout.setSpacing(15)
+        layout.setContentsMargins(25, 25, 25, 25)
 
-        # 메뉴 정보
-        label_name = QLabel(f'<h2>{self.menu_item.name}</h2>')
+        # 메뉴 정보 - 큰 글씨
+        label_name = QLabel(self.menu_item.name)
+        label_name.setStyleSheet('font-size: 36px; font-weight: bold; color: #333; padding: 10px; background-color: #87CEEB; border-radius: 8px;')
         layout.addWidget(label_name)
 
         label_price = QLabel(f'가격: {self.menu_item.price:,}원')
-        label_price.setStyleSheet('font-size: 18px;')
+        label_price.setStyleSheet('font-size: 28px; font-weight: bold; color: #4CAF50; padding: 10px;')
         layout.addWidget(label_price)
 
         if self.menu_item.description:
             label_desc = QLabel(self.menu_item.description)
             label_desc.setWordWrap(True)
+            label_desc.setStyleSheet('font-size: 20px; color: #666; padding: 10px;')
             layout.addWidget(label_desc)
 
         layout.addWidget(QLabel(''))  # 빈 줄
 
-        # 소스 선택
-        layout.addWidget(QLabel('<b>소스 선택 (무료)</b>'))
+        # 소스 선택 - 큰 글씨
+        sauce_title = QLabel('소스 선택 (무료)')
+        sauce_title.setStyleSheet('font-size: 26px; font-weight: bold; color: #333; padding: 10px;')
+        layout.addWidget(sauce_title)
 
         from PyQt5.QtWidgets import QRadioButton, QButtonGroup
         self.sauce_group = QButtonGroup()
@@ -60,21 +66,23 @@ class MenuItemDialog(QDialog):
             radio = QRadioButton(sauce)
             if i == 0:
                 radio.setChecked(True)
-            radio.setStyleSheet('font-size: 16px; padding: 5px;')
+            radio.setStyleSheet('font-size: 24px; padding: 12px; spacing: 15px;')
             self.sauce_group.addButton(radio, i)
             layout.addWidget(radio)
 
         layout.addWidget(QLabel(''))  # 빈 줄
 
-        # 수량 선택
+        # 수량 선택 - 큰 글씨
         quantity_layout = QHBoxLayout()
-        quantity_layout.addWidget(QLabel('수량:'))
+        qty_label = QLabel('수량:')
+        qty_label.setStyleSheet('font-size: 26px; font-weight: bold;')
+        quantity_layout.addWidget(qty_label)
 
         self.spin_quantity = QSpinBox()
         self.spin_quantity.setMinimum(1)
         self.spin_quantity.setMaximum(99)
         self.spin_quantity.setValue(1)
-        self.spin_quantity.setStyleSheet('font-size: 18px; padding: 5px;')
+        self.spin_quantity.setStyleSheet('font-size: 28px; padding: 12px; min-width: 120px; min-height: 50px;')
         quantity_layout.addWidget(self.spin_quantity)
         quantity_layout.addStretch()
 
@@ -82,17 +90,19 @@ class MenuItemDialog(QDialog):
 
         layout.addStretch()
 
-        # 버튼
+        # 버튼 - 큰 글씨
         button_layout = QHBoxLayout()
+        button_layout.setSpacing(20)
 
         btn_add = QPushButton('장바구니에 추가')
-        btn_add.setMinimumHeight(50)
-        btn_add.setStyleSheet('font-size: 16px; font-weight: bold;')
+        btn_add.setMinimumHeight(70)
+        btn_add.setStyleSheet('font-size: 24px; font-weight: bold; background-color: #4CAF50; color: white; border-radius: 12px; padding: 15px;')
         btn_add.clicked.connect(self.accept)
         button_layout.addWidget(btn_add)
 
         btn_cancel = QPushButton('취소')
-        btn_cancel.setMinimumHeight(50)
+        btn_cancel.setMinimumHeight(70)
+        btn_cancel.setStyleSheet('font-size: 22px; font-weight: bold; background-color: #f44336; color: white; border-radius: 12px; padding: 15px;')
         btn_cancel.clicked.connect(self.reject)
         button_layout.addWidget(btn_cancel)
 
@@ -236,44 +246,51 @@ class MenuSelectionWidget(QWidget):
         # 수량 변경 다이얼로그
         dialog = QDialog(self)
         dialog.setWindowTitle('수량 변경')
-        dialog.setMinimumSize(300, 200)
+        dialog.setMinimumSize(450, 350)
 
         layout = QVBoxLayout()
+        layout.setSpacing(15)
+        layout.setContentsMargins(25, 25, 25, 25)
 
         label = QLabel(f'{order_item.menu_item.name}')
-        label.setStyleSheet('font-size: 18px; font-weight: bold;')
+        label.setStyleSheet('font-size: 28px; font-weight: bold; color: #333; padding: 10px; background-color: #87CEEB; border-radius: 8px;')
         layout.addWidget(label)
 
         # 수량 선택
         quantity_layout = QHBoxLayout()
-        quantity_layout.addWidget(QLabel('수량:'))
+        qty_label = QLabel('수량:')
+        qty_label.setStyleSheet('font-size: 26px; font-weight: bold;')
+        quantity_layout.addWidget(qty_label)
 
         spin_quantity = QSpinBox()
         spin_quantity.setMinimum(0)  # 0으로 설정하면 삭제
         spin_quantity.setMaximum(99)
         spin_quantity.setValue(order_item.quantity)
-        spin_quantity.setStyleSheet('font-size: 18px; padding: 5px;')
+        spin_quantity.setStyleSheet('font-size: 28px; padding: 12px; min-width: 120px; min-height: 50px;')
         quantity_layout.addWidget(spin_quantity)
         quantity_layout.addStretch()
 
         layout.addLayout(quantity_layout)
 
         hint_label = QLabel('* 수량을 0으로 설정하면 삭제됩니다')
-        hint_label.setStyleSheet('color: gray;')
+        hint_label.setStyleSheet('color: #888; font-size: 18px; padding: 10px;')
         layout.addWidget(hint_label)
 
         layout.addStretch()
 
         # 버튼
         button_layout = QHBoxLayout()
+        button_layout.setSpacing(20)
 
         btn_ok = QPushButton('확인')
-        btn_ok.setMinimumHeight(50)
+        btn_ok.setMinimumHeight(60)
+        btn_ok.setStyleSheet('font-size: 22px; font-weight: bold; background-color: #4CAF50; color: white; border-radius: 10px; padding: 12px;')
         btn_ok.clicked.connect(dialog.accept)
         button_layout.addWidget(btn_ok)
 
         btn_cancel = QPushButton('취소')
-        btn_cancel.setMinimumHeight(50)
+        btn_cancel.setMinimumHeight(60)
+        btn_cancel.setStyleSheet('font-size: 22px; font-weight: bold; background-color: #f44336; color: white; border-radius: 10px; padding: 12px;')
         btn_cancel.clicked.connect(dialog.reject)
         button_layout.addWidget(btn_cancel)
 

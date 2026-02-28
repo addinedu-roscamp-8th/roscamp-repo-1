@@ -26,6 +26,7 @@ from ui_order_confirmation import OrderConfirmationWidget
 from ui_delivery_notification import DeliveryNotificationWidget
 from voice_feedback_widget import VoiceFeedbackWidget
 from fms_client import FMSOrderServiceClient, MockFMSOrderServiceClient
+from styles import MAIN_STYLESHEET, SCREEN_WIDTH, SCREEN_HEIGHT
 
 
 # Mock 메뉴 데이터 (테스트용)
@@ -80,7 +81,8 @@ class CustomerGUIApp(QStackedWidget):
         if Config.FULLSCREEN:
             self.showFullScreen()
         else:
-            self.resize(Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT)
+            # 38cm x 23cm 화면에 최적화된 크기 사용
+            self.resize(SCREEN_WIDTH, SCREEN_HEIGHT)
 
         # 화면 위젯 생성 및 추가
         self.main_window = MainWindow()
@@ -98,8 +100,8 @@ class CustomerGUIApp(QStackedWidget):
         # 음성 피드백 위젯 (오버레이)
         self.voice_feedback = VoiceFeedbackWidget(self)
         self.voice_feedback.setGeometry(
-            (Config.SCREEN_WIDTH - 500) // 2,
-            Config.SCREEN_HEIGHT - 350,
+            (SCREEN_WIDTH - 500) // 2,
+            SCREEN_HEIGHT - 350,
             500,
             300
         )
@@ -346,6 +348,9 @@ def main():
     # 애플리케이션 설정
     app.setApplicationName(f'주문 키오스크 (테이블 {args.table})')
     app.setOrganizationName('Kitchmatics')
+
+    # 스타일시트 적용 (하늘색 헤더, 연노란 배경)
+    app.setStyleSheet(MAIN_STYLESHEET)
 
     # 메인 윈도우 생성 및 표시
     window = CustomerGUIApp(use_mock=args.mock)

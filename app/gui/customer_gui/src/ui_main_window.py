@@ -46,16 +46,20 @@ class MainWindow(QMainWindow):
         # 테이블 번호 표시
         self.label_table.setText(f'테이블 번호: {Config.TABLE_NUMBER}')
 
-        # 테이블 선택 UI (1~4)
+        # 테이블 선택 UI (1~4) - 큰 글씨
         table_row = QWidget()
         table_layout = QHBoxLayout(table_row)
-        table_layout.setContentsMargins(0, 0, 0, 0)
-        table_layout.addWidget(QLabel('테이블 선택:'))
+        table_layout.setContentsMargins(20, 10, 20, 10)
+        table_label = QLabel('테이블 선택:')
+        table_label.setStyleSheet('font-size: 32px; font-weight: bold;')
+        table_layout.addWidget(table_label)
         self.combo_table = QComboBox()
         self.combo_table.addItems(['1', '2', '3', '4'])
         idx = max(0, min(Config.TABLE_NUMBER - 1, 3))
         self.combo_table.setCurrentIndex(idx)
-        self.combo_table.setMinimumWidth(80)
+        self.combo_table.setMinimumWidth(120)
+        self.combo_table.setMinimumHeight(50)
+        self.combo_table.setStyleSheet('font-size: 28px; padding: 10px;')
         table_layout.addWidget(self.combo_table)
         table_layout.addStretch()
         # verticalLayout에 label_table 다음에 테이블 선택 행 삽입
