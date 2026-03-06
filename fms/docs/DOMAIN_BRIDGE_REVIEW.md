@@ -1,4 +1,4 @@
-# Domain Bridge Configuration Review (ROS2 Multi-Robot Communication)
+# Domain Bridge 설정 검토 (ROS2 다중 로봇 통신)
 
 **작성일**: 2026-02-25
 **검토 대상**: `/fms/config/domain_bridge.yaml`
@@ -200,7 +200,7 @@ Main PC에서 접근 불가 ✗
 ```bash
 # 로봇 측 (launch 파일)
 ros2 launch tf_broadcaster.py  # TF 프레임 발행
-  # frame naming: pinky1_map -> pinky1_odom -> pinky1_base_link
+  # 프레임 네이밍: pinky1_map -> pinky1_odom -> pinky1_base_link
 ```
 
 ---
@@ -385,7 +385,7 @@ for robot_id, domain_info in self.robot_domains.items():
 Option A: Fast-DDS ROS_DOMAIN_ID 기반 통신 (현재 접근법)
 
 ```bash
-# Robot: DOMAIN_ID=11
+# 로봇: DOMAIN_ID=11
 export ROS_DOMAIN_ID=11
 ros2 launch pinky_navigation nav2_bringup.launch.xml
 
@@ -450,8 +450,8 @@ ros2 action list -t  # 모든 domain 액션 보임
 ```python
 # fms_node.py _navigate_robot() 수정
 def _navigate_robot(self, robot_id: str, goal_pose: Pose):
-    """Send navigation goal to robot"""
-    # Bridge되는 action 경로 사용
+    """로봇에 내비게이션 목표 전송"""
+    # 브릿징되는 action 경로 사용
     domain_info = self.robot_domains.get(robot_id)
     if not domain_info:
         logger.error(f"Robot {robot_id} not configured")
@@ -462,21 +462,21 @@ def _navigate_robot(self, robot_id: str, goal_pose: Pose):
     # namespace로 로봇 구분
     action_name = f"/{robot_id}/navigate_to_pose"
 
-    # Action client가 없으면 생성 (lazy initialization)
+    # Action client가 없으면 생성 (지연 초기화)
     if robot_id not in self.nav_clients:
         logger.info(f"Creating action client for {robot_id}: {action_name}")
         self.nav_clients[robot_id] = ActionClient(self, NavigateToPose, action_name)
 
     nav_client = self.nav_clients[robot_id]
 
-    # Create goal
+    # 목표 생성
     goal_msg = NavigateToPose.Goal()
     goal_msg.pose = PoseStamped()
     goal_msg.pose.header.frame_id = 'map'
     goal_msg.pose.header.stamp = self.get_clock().now().to_msg()
     goal_msg.pose.pose = goal_pose
 
-    # Send with timeout
+    # 타임아웃을 포함한 전송
     try:
         future = nav_client.send_goal_async(goal_msg)
         future.add_done_callback(
@@ -487,7 +487,7 @@ def _navigate_robot(self, robot_id: str, goal_pose: Pose):
         logger.error(f"Failed to send navigation goal: {e}")
 
 def _nav_goal_callback(self, robot_id: str, future):
-    """Handle navigation goal response"""
+    """내비게이션 목표 응답 처리"""
     try:
         goal_handle = future.result()
         if not goal_handle.accepted:
@@ -495,7 +495,7 @@ def _nav_goal_callback(self, robot_id: str, future):
             return
         logger.info(f"Navigation goal accepted for {robot_id}")
 
-        # Subscribe to result
+        # 결과 구독
         result_future = goal_handle.get_result_async()
         result_future.add_done_callback(
             lambda f: self._nav_result_callback(robot_id, f)
@@ -504,7 +504,7 @@ def _nav_goal_callback(self, robot_id: str, future):
         logger.error(f"Navigation goal error for {robot_id}: {e}")
 
 def _nav_result_callback(self, robot_id: str, future):
-    """Handle navigation result"""
+    """내비게이션 결과 처리"""
     try:
         result = future.result()
         if result.result.status == GoalStatus.STATUS_SUCCEEDED:
@@ -520,16 +520,16 @@ def _nav_result_callback(self, robot_id: str, future):
 ## 6. 전체 개선된 domain_bridge.yaml
 
 ```yaml
-# Domain Bridge Configuration for Kitchmatics FMS (IMPROVED)
+# Kitchmatics FMS용 Domain Bridge 설정 (개선 버전)
 # Main PC (DOMAIN_ID=0) <-> pinky1 (DOMAIN_ID=11), pinky3 (DOMAIN_ID=13)
 
 # ====== PINKY1 (DOMAIN_ID=11) ======
 
-# pinky1 -> Main PC: Sensor and Status Topics
+# pinky1 -> Main PC: 센서 및 상태 토픽
 - from_domain: 11
   to_domain: 0
   topics:
-    # Localization
+    # 로컬라이제이션
     /pinky1/amcl_pose:
       type: geometry_msgs/msg/PoseWithCovarianceStamped
       qos:
@@ -537,7 +537,7 @@ def _nav_result_callback(self, robot_id: str, future):
         history: "KEEP_LAST"
         depth: 10
 
-    # Odometry
+    # 오도메트리
     /pinky1/odom:
       type: nav_msgs/msg/Odometry
       qos:
@@ -545,7 +545,7 @@ def _nav_result_callback(self, robot_id: str, future):
         history: "KEEP_LAST"
         depth: 5
 
-    # LiDAR Scan
+    # LiDAR 스캔
     /pinky1/scan:
       type: sensor_msgs/msg/LaserScan
       qos:
@@ -553,7 +553,7 @@ def _nav_result_callback(self, robot_id: str, future):
         history: "KEEP_LAST"
         depth: 2
 
-    # Battery Status
+    # 배터리 상태
     /pinky1/battery/voltage:
       type: std_msgs/msg/Float32
       qos:
@@ -568,7 +568,7 @@ def _nav_result_callback(self, robot_id: str, future):
         history: "KEEP_LAST"
         depth: 5
 
-    # Transform frames (TF)
+    # 좌표 변환 프레임 (TF)
     /tf:
       type: tf2_msgs/msg/TFMessage
       qos:
@@ -583,7 +583,7 @@ def _nav_result_callback(self, robot_id: str, future):
         history: "KEEP_LAST"
         depth: 10
 
-# Main PC -> pinky1: Control Commands
+# Main PC -> pinky1: 제어 명령
 - from_domain: 0
   to_domain: 11
   topics:
@@ -602,7 +602,7 @@ def _nav_result_callback(self, robot_id: str, future):
         depth: 5
 
   services:
-    # Navigation Action Services
+    # 내비게이션 Action 서비스
     /pinky1/navigate_to_pose/_action/send_goal:
       type: nav2_msgs/action/NavigateToPose
 
@@ -614,11 +614,11 @@ def _nav_result_callback(self, robot_id: str, future):
 
 # ====== PINKY3 (DOMAIN_ID=13) ======
 
-# pinky3 -> Main PC: Sensor and Status Topics
+# pinky3 -> Main PC: 센서 및 상태 토픽
 - from_domain: 13
   to_domain: 0
   topics:
-    # Localization
+    # 로컬라이제이션
     /pinky3/amcl_pose:
       type: geometry_msgs/msg/PoseWithCovarianceStamped
       qos:
@@ -626,7 +626,7 @@ def _nav_result_callback(self, robot_id: str, future):
         history: "KEEP_LAST"
         depth: 10
 
-    # Odometry
+    # 오도메트리
     /pinky3/odom:
       type: nav_msgs/msg/Odometry
       qos:
@@ -634,7 +634,7 @@ def _nav_result_callback(self, robot_id: str, future):
         history: "KEEP_LAST"
         depth: 5
 
-    # LiDAR Scan
+    # LiDAR 스캔
     /pinky3/scan:
       type: sensor_msgs/msg/LaserScan
       qos:
@@ -642,7 +642,7 @@ def _nav_result_callback(self, robot_id: str, future):
         history: "KEEP_LAST"
         depth: 2
 
-    # Battery Status
+    # 배터리 상태
     /pinky3/battery/voltage:
       type: std_msgs/msg/Float32
       qos:
@@ -657,7 +657,7 @@ def _nav_result_callback(self, robot_id: str, future):
         history: "KEEP_LAST"
         depth: 5
 
-    # Transform frames (TF)
+    # 좌표 변환 프레임 (TF)
     /tf:
       type: tf2_msgs/msg/TFMessage
       qos:
@@ -672,7 +672,7 @@ def _nav_result_callback(self, robot_id: str, future):
         history: "KEEP_LAST"
         depth: 10
 
-# Main PC -> pinky3: Control Commands
+# Main PC -> pinky3: 제어 명령
 - from_domain: 0
   to_domain: 13
   topics:
@@ -691,7 +691,7 @@ def _nav_result_callback(self, robot_id: str, future):
         depth: 5
 
   services:
-    # Navigation Action Services
+    # 내비게이션 Action 서비스
     /pinky3/navigate_to_pose/_action/send_goal:
       type: nav2_msgs/action/NavigateToPose
 
@@ -758,14 +758,14 @@ def _nav_result_callback(self, robot_id: str, future):
 
 #### 3-1. 모니터링 및 디버깅 도구
 ```
-추가: domain bridge 상태 모니터 script
+추가: Domain Bridge 상태 모니터 스크립트
 내용: 활성 브릿지, 토픽 통계, 에러율
 추정시간: 3시간
 ```
 
 #### 3-2. 로깅 강화
 ```
-domain_bridge 버전 확인
+Domain Bridge 버전 확인
 상세 통신 로그 추가
 추정시간: 2시간
 ```
@@ -840,7 +840,7 @@ ros2 topic hz /pinky3/amcl_pose
 - [ROS2 Domain Bridge 문서](https://github.com/ros2/domain_bridge)
 - [Fast-DDS 멀티 도메인 설정](https://fast-dds.docs.eprosima.com/)
 
-### Nav2 Communication
+### Nav2 통신
 - [Nav2 네트워킹 가이드](https://navigation.ros.org/)
 - [ROS2 QoS 정책](https://docs.ros.org/en/humble/Concepts/Intermediate/About-Quality-of-Service-Settings.html)
 
@@ -848,4 +848,3 @@ ros2 topic hz /pinky3/amcl_pose
 - 멀티 로봇 좌표계: TF 프레임 namespace 필요
 - 네트워크 지연: QoS reliability 설정 필수
 - 액션 타임아웃: 비동기 핸들러 구현
-

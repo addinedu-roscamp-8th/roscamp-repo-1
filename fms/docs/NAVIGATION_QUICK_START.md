@@ -1,83 +1,83 @@
-# Navigation System - Quick Start Guide
+# 내비게이션 시스템 - 빠른 시작 가이드
 
-## Problem Summary
+## 문제 요약
 
-The Kitchmatics FMS navigation system has **critical issues**:
-- Nav2 stack NOT running on Pinky robots
-- No AMCL localization active
-- Domain bridge not forwarding navigation topics
-- FMS cannot send navigation goals
+Kitchmatics FMS 내비게이션 시스템에 **치명적인 문제**가 있습니다:
+- Pinky 로봇에서 Nav2 스택이 실행되지 않음
+- AMCL 위치 추정이 활성화되지 않음
+- Domain Bridge가 내비게이션 토픽을 전달하지 않음
+- FMS가 내비게이션 목표를 전송할 수 없음
 
-**Fix Time**: ~30 minutes per robot
+**수정 소요 시간**: 로봇당 약 30분
 
 ---
 
-## Quick Diagnosis
+## 빠른 진단
 
 ```bash
-# Check system status
+# 시스템 상태 확인
 bash /home/gw/kitchmatics/roscamp-repo-1/fms/scripts/diagnose_navigation.sh
 ```
 
 ---
 
-## Quick Fix (30 minutes)
+## 빠른 수정 (30분)
 
-### 1. Setup Navigation on Pinky1 and Pinky2
+### 1. Pinky1과 Pinky2에 내비게이션 설정
 
 ```bash
-# From main PC
+# 메인 PC에서 실행
 cd /home/gw/kitchmatics/roscamp-repo-1
 bash fms/scripts/setup_pinky_navigation.sh all
 
-# This will:
-# ✓ Check connectivity to both robots
-# ✓ Copy map files
-# ✓ Build navigation packages
-# ✓ Create startup scripts
+# 이 스크립트는 다음을 수행합니다:
+# ✓ 두 로봇의 연결 상태 확인
+# ✓ 맵 파일 복사
+# ✓ 내비게이션 패키지 빌드
+# ✓ 시작 스크립트 생성
 ```
 
-### 2. Start Navigation on Each Robot
+### 2. 각 로봇에서 내비게이션 시작
 
 ```bash
-# SSH to Pinky1
+# Pinky1에 SSH 접속
 ssh pinky@192.168.1.7
 /home/pinky/start_navigation.sh
 
-# In another terminal, SSH to Pinky2
+# 다른 터미널에서 Pinky2에 SSH 접속
 ssh pinky@192.168.1.6
 /home/pinky/start_navigation.sh
 
-# Wait 5-10 seconds for Nav2 to fully initialize
+# Nav2가 완전히 초기화될 때까지 5~10초 대기
 ```
 
-### 3. Verify Navigation is Running
+### 3. 내비게이션 실행 확인
 
 ```bash
 export ROS_DOMAIN_ID=25
 source /opt/ros/jazzy/setup.bash
 source /home/gw/kitchmatics/roscamp-repo-1/install/setup.bash
 
-# Check nodes appeared
+# 노드가 나타나는지 확인
 ros2 node list | grep -E "pinky|amcl|planner"
 
-# Check topics appeared
+# 토픽이 나타나는지 확인
 ros2 topic list | grep pinky1 | head -5
 
-# Expected output:
+# 예상 출력:
 # /pinky1/amcl_pose
 # /pinky1/scan
 # /pinky1/odom
-# etc.
+# 등
 ```
 
-### 4. Initialize Robot Localization
+### 4. 로봇 위치 추정 초기화
 
 ```bash
 export ROS_DOMAIN_ID=25
 source /opt/ros/jazzy/setup.bash
 
-# Set initial pose for Pinky1
+# Pinky1 초기 자세 설정
 ros2 topic pub /pinky1/initialpose geometry_msgs/PoseWithCovarianceStamped '{
   header: {frame_id: "map"},
   pose: {
@@ -86,7 +86,7 @@ ros2 topic pub /pinky1/initialpose geometry_msgs/PoseWithCovarianceStamped '{
   }
 }' --once
 
-# Set initial pose for Pinky2
+# Pinky2 초기 자세 설정
 ros2 topic pub /pinky2/initialpose geometry_msgs/PoseWithCovarianceStamped '{
   header: {frame_id: "map"},
   pose: {
@@ -96,13 +96,13 @@ ros2 topic pub /pinky2/initialpose geometry_msgs/PoseWithCovarianceStamped '{
 }' --once
 ```
 
-### 5. Test Navigation Goal
+### 5. 내비게이션 목표 테스트
 
 ```bash
 export ROS_DOMAIN_ID=25
 source /opt/ros/jazzy/setup.bash
 
-# Send navigation goal to table1
+# table1로 내비게이션 목표 전송
 ros2 action send_goal /pinky1/navigate_to_pose nav2_msgs/action/NavigateToPose '{
   pose: {
     header: {frame_id: "map"},
@@ -110,50 +110,50 @@ ros2 action send_goal /pinky1/navigate_to_pose nav2_msgs/action/NavigateToPose '
   }
 }'
 
-# Robot should move toward table1
-# Watch progress:
+# 로봇이 table1을 향해 이동해야 합니다
+# 진행 상황 확인:
 # ros2 topic echo /pinky1/amcl_pose
 ```
 
-### 6. Verify in FMS
+### 6. FMS에서 확인
 
 ```bash
 export ROS_DOMAIN_ID=25
 source /opt/ros/jazzy/setup.bash
 
-# Check FMS sees robot positions
+# FMS가 로봇 위치를 인식하는지 확인
 ros2 topic echo /fms/fleet_status --once | head -20
 
-# Should show actual coordinates, not (0, 0, 0)
+# (0, 0, 0)이 아닌 실제 좌표가 표시되어야 합니다
 ```
 
 ---
 
-## Success Indicators
+## 성공 지표
 
-After completing the quick fix:
+빠른 수정 완료 후:
 
-- [ ] `diagnose_navigation.sh` shows all GREEN
-- [ ] `/pinky1/amcl_pose` and `/pinky2/amcl_pose` publish on domain 25
-- [ ] `/pinky1/navigate_to_pose` action server available
-- [ ] FMS fleet status shows actual robot positions
-- [ ] Can send navigation goals and robots move
-- [ ] Both Pinky1 and Pinky2 can operate simultaneously
+- [ ] `diagnose_navigation.sh`에서 모두 초록색(GREEN)으로 표시
+- [ ] `/pinky1/amcl_pose`와 `/pinky2/amcl_pose`가 도메인 25에서 발행됨
+- [ ] `/pinky1/navigate_to_pose` 액션 서버 사용 가능
+- [ ] FMS 플릿 상태에서 실제 로봇 위치가 표시됨
+- [ ] 내비게이션 목표를 전송하면 로봇이 이동함
+- [ ] Pinky1과 Pinky2가 동시에 작동 가능
 
 ---
 
-## Troubleshooting
+## 문제 해결
 
-### Nav2 Not Starting
+### Nav2가 시작되지 않는 경우
 
-**Check the startup script**:
+**시작 스크립트 확인**:
 ```bash
 ssh pinky@192.168.1.7
 cat /home/pinky/start_navigation.sh
-# Should show ros2 launch pinky_navigation ...
+# ros2 launch pinky_navigation ...이 표시되어야 합니다
 ```
 
-**Manually test launch**:
+**수동으로 실행 테스트**:
 ```bash
 ssh pinky@192.168.1.7
 export ROS_DOMAIN_ID=11
@@ -161,18 +161,18 @@ source /opt/ros/jazzy/setup.bash
 cd /home/pinky/pinky_pro
 source install/setup.bash
 ros2 launch pinky_navigation bringup_launch.xml robot_name:=pinky_b4bc
-# Watch for errors
+# 오류 확인
 ```
 
-### Topics Not Appearing on Domain 25
+### 도메인 25에 토픽이 나타나지 않는 경우
 
-**Check domain bridge**:
+**Domain Bridge 확인**:
 ```bash
 ps aux | grep domain_bridge
-# Should show: ros2 run domain_bridge domain_bridge ...
+# 다음이 표시되어야 합니다: ros2 run domain_bridge domain_bridge ...
 ```
 
-**Restart bridge**:
+**브리지 재시작**:
 ```bash
 pkill -f domain_bridge
 sleep 2
@@ -180,51 +180,51 @@ ros2 run domain_bridge domain_bridge \
     /home/gw/kitchmatics/roscamp-repo-1/fms/config/domain_bridge_complete.yaml &
 ```
 
-### Pinky2 Unreachable
+### Pinky2에 접속할 수 없는 경우
 
-**Check network**:
+**네트워크 확인**:
 ```bash
 ping 192.168.1.6
-# If fails, check:
-# 1. Is Pinky2 powered on?
-# 2. Is Ethernet cable connected?
-# 3. Is IP correct?
-# 4. Router issue?
+# 실패하면 다음을 확인:
+# 1. Pinky2 전원이 켜져 있는가?
+# 2. 이더넷 케이블이 연결되어 있는가?
+# 3. IP 주소가 올바른가?
+# 4. 라우터 문제인가?
 ```
 
-### Robot Doesn't Move
+### 로봇이 움직이지 않는 경우
 
-**Check AMCL pose**:
+**AMCL 자세 확인**:
 ```bash
 ros2 topic echo /pinky1/amcl_pose --once
-# Should show position, not zeroes
+# 0이 아닌 위치 값이 표시되어야 합니다
 ```
 
-**Check costmap**:
+**코스트맵 확인**:
 ```bash
 ros2 topic echo /pinky1/local_costmap/costmap --once
-# Should show valid costmap
+# 유효한 코스트맵이 표시되어야 합니다
 ```
 
-**Check robot can move manually**:
-- Physically push robot
-- Check /pinky1/odom updates
-- Verify /tf frame transforms are published
+**로봇이 수동으로 움직이는지 확인**:
+- 로봇을 물리적으로 밀어봄
+- /pinky1/odom 값이 업데이트되는지 확인
+- /tf 프레임 변환이 발행되는지 확인
 
 ---
 
-## Reference Files
+## 참고 파일
 
 ```
-Configuration:
+설정 파일:
   /home/gw/kitchmatics/roscamp-repo-1/mobile_robot/params/nav2_params.yaml
   /home/gw/kitchmatics/roscamp-repo-1/fms/config/fms_config.yaml
 
-Diagnostic Tools:
+진단 도구:
   /home/gw/kitchmatics/roscamp-repo-1/fms/scripts/diagnose_navigation.sh
   /home/gw/kitchmatics/roscamp-repo-1/fms/scripts/setup_pinky_navigation.sh
 
-Documentation:
+문서:
   /home/gw/kitchmatics/roscamp-repo-1/fms/docs/NAVIGATION_VALIDATION_REPORT.md
   /home/gw/kitchmatics/roscamp-repo-1/fms/docs/NAVIGATION_SETUP_GUIDE.md
   /home/gw/kitchmatics/roscamp-repo-1/fms/docs/NAVIGATION_QUICK_START.md
@@ -232,41 +232,41 @@ Documentation:
 
 ---
 
-## Full Timeline
+## 전체 타임라인
 
 ```
-0:00   - Run setup script
-5:00   - Start navigation on both robots
-10:00  - Verify Nav2 nodes running
-15:00  - Set initial poses via /initialpose
-20:00  - Test single navigation goal
-25:00  - Test multi-robot goals
-30:00  - Verify FMS fleet coordination
+0:00   - 설정 스크립트 실행
+5:00   - 두 로봇에서 내비게이션 시작
+10:00  - Nav2 노드 실행 확인
+15:00  - /initialpose를 통해 초기 자세 설정
+20:00  - 단일 내비게이션 목표 테스트
+25:00  - 다중 로봇 목표 테스트
+30:00  - FMS 플릿 연동 확인
 ```
 
 ---
 
-## Commands Summary
+## 명령어 요약
 
 ```bash
-# Diagnose
+# 진단
 bash fms/scripts/diagnose_navigation.sh
 
-# Setup
+# 설정
 bash fms/scripts/setup_pinky_navigation.sh all
 
-# Check connectivity
+# 연결 확인
 export ROS_DOMAIN_ID=25
 source /opt/ros/jazzy/setup.bash
 ros2 topic list | grep pinky
 
-# Set pose
+# 자세 설정
 ros2 topic pub /pinky1/initialpose geometry_msgs/PoseWithCovarianceStamped '{...}' --once
 
-# Send goal
+# 목표 전송
 ros2 action send_goal /pinky1/navigate_to_pose nav2_msgs/action/NavigateToPose '{...}'
 
-# Monitor
+# 모니터링
 ros2 topic echo /pinky1/amcl_pose
 ros2 topic echo /pinky1/navigate_to_pose/_action/feedback
 ros2 topic echo /fms/fleet_status
@@ -274,10 +274,10 @@ ros2 topic echo /fms/fleet_status
 
 ---
 
-## Next Steps
+## 다음 단계
 
-1. **Today**: Run setup scripts and verify navigation works
-2. **Tomorrow**: Test multi-robot coordination
-3. **Later**: Optimize parameters for speed/precision
+1. **오늘**: 설정 스크립트를 실행하고 내비게이션 동작 확인
+2. **내일**: 다중 로봇 연동 테스트
+3. **추후**: 속도/정밀도 파라미터 최적화
 
-See `NAVIGATION_SETUP_GUIDE.md` for detailed instructions.
+자세한 내용은 `NAVIGATION_SETUP_GUIDE.md`를 참조하세요.

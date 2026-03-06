@@ -1,57 +1,57 @@
-# ROS2 DDS Discovery Troubleshooting Guide
+# ROS2 DDS 디스커버리 트러블슈팅 가이드
 
-## Problem Description
+## 문제 설명
 
-**Symptom**: Main PC cannot see ROS2 topics from robots even though SSH works fine.
+**증상**: 메인 PC에서 SSH는 정상 동작하지만 로봇의 ROS2 토픽을 볼 수 없음.
 
-**Root Cause**: WiFi networks often block multicast UDP packets, which ROS2 uses for node discovery by default.
+**근본 원인**: WiFi 네트워크에서 멀티캐스트 UDP 패킷을 차단하는 경우가 많으며, ROS2는 기본적으로 노드 디스커버리에 멀티캐스트를 사용함.
 
-**Solution**: Use **unicast peer discovery** with CycloneDDS.
+**해결책**: CycloneDDS를 사용한 **유니캐스트 피어 디스커버리** 적용.
 
 ---
 
-## Quick Fix (Step-by-Step)
+## 빠른 수정 (단계별)
 
-### Step 1: Deploy DDS Configuration to Robots
+### 1단계: 로봇에 DDS 설정 배포
 
 ```bash
-# On Main PC
+# 메인 PC에서 실행
 cd /home/gw/kitchmatics/roscamp-repo-1/fms/scripts
 ./deploy_dds_config.sh
 ```
 
-This will:
-- Copy CycloneDDS XML config to each robot
-- Create `~/setup_dds.sh` on each robot
-- Configure unicast peer discovery
+이 스크립트는 다음을 수행합니다:
+- 각 로봇에 CycloneDDS XML 설정 파일 복사
+- 각 로봇에 `~/setup_dds.sh` 생성
+- 유니캐스트 피어 디스커버리 설정
 
-### Step 2: Update Robot .bashrc
+### 2단계: 로봇 .bashrc 업데이트
 
-**On pinky1** (192.168.1.7):
+**pinky1** (192.168.1.7):
 ```bash
 ssh pinky@192.168.1.7
 echo 'source ~/setup_dds.sh' >> ~/.bashrc
 source ~/.bashrc
-# Restart Nav2 or any ROS2 nodes
+# Nav2 또는 실행 중인 ROS2 노드 재시작
 ```
 
-**On pinky2** (192.168.1.6):
+**pinky2** (192.168.1.6):
 ```bash
 ssh pinky@192.168.1.6
 echo 'source ~/setup_dds.sh' >> ~/.bashrc
 source ~/.bashrc
-# Restart Nav2 or any ROS2 nodes
+# Nav2 또는 실행 중인 ROS2 노드 재시작
 ```
 
-### Step 3: Test Connection from Main PC
+### 3단계: 메인 PC에서 연결 테스트
 
-**Test pinky1 (domain 11)**:
+**pinky1 테스트 (도메인 11)**:
 ```bash
-# Terminal 1 - On Main PC
+# 터미널 1 - 메인 PC에서
 source /home/gw/kitchmatics/roscamp-repo-1/fms/config/setup_dds_domain11.sh
 ros2 topic list
 
-# You should now see topics like:
+# 다음과 같은 토픽이 표시되어야 합니다:
 # /amcl_pose
 # /cmd_vel
 # /odom
@@ -60,44 +60,44 @@ ros2 topic list
 # /tf_static
 ```
 
-**Test pinky2 (domain 12)**:
+**pinky2 테스트 (도메인 12)**:
 ```bash
-# Terminal 2 - On Main PC
+# 터미널 2 - 메인 PC에서
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file:///home/gw/kitchmatics/roscamp-repo-1/fms/config/cyclonedds_main.xml
 export ROS_DOMAIN_ID=12
 ros2 topic list
 ```
 
-### Step 4: Run Domain Bridge
+### 4단계: Domain Bridge 실행
 
-Once discovery works, start the domain bridge:
+디스커버리가 정상 동작하면 Domain Bridge를 시작합니다:
 
 ```bash
-# On Main PC (domain 25)
+# 메인 PC에서 (도메인 25)
 source /home/gw/kitchmatics/roscamp-repo-1/fms/config/setup_dds_main.sh
 ros2 run domain_bridge domain_bridge /home/gw/kitchmatics/roscamp-repo-1/fms/config/domain_bridge_complete.yaml
 ```
 
 ---
 
-## Technical Details
+## 기술 상세
 
-### What Changed?
+### 변경 사항
 
-**Before** (Multicast Discovery):
-- ROS2 used multicast UDP (239.255.0.1) to find nodes
-- WiFi routers often drop multicast packets
-- Result: Nodes can't discover each other
+**변경 전** (멀티캐스트 디스커버리):
+- ROS2가 멀티캐스트 UDP (239.255.0.1)를 사용하여 노드 탐색
+- WiFi 라우터가 멀티캐스트 패킷을 드롭하는 경우가 많음
+- 결과: 노드 간 디스커버리 불가
 
-**After** (Unicast Discovery):
-- Each node explicitly knows peer IP addresses
-- Uses unicast UDP (direct IP-to-IP)
-- Works reliably on WiFi
+**변경 후** (유니캐스트 디스커버리):
+- 각 노드가 피어 IP 주소를 명시적으로 인식
+- 유니캐스트 UDP (직접 IP-to-IP) 사용
+- WiFi 환경에서 안정적으로 동작
 
-### Configuration Files
+### 설정 파일
 
-**Main PC**: `/home/gw/kitchmatics/roscamp-repo-1/fms/config/cyclonedds_main.xml`
+**메인 PC**: `/home/gw/kitchmatics/roscamp-repo-1/fms/config/cyclonedds_main.xml`
 ```xml
 <Peers>
   <Peer address="192.168.1.7"/>  <!-- pinky1 -->
@@ -105,23 +105,23 @@ ros2 run domain_bridge domain_bridge /home/gw/kitchmatics/roscamp-repo-1/fms/con
 </Peers>
 ```
 
-**Robot (pinky1)**: `~/cyclonedds.xml`
+**로봇 (pinky1)**: `~/cyclonedds.xml`
 ```xml
 <Peers>
-  <Peer address="192.168.1.3"/>  <!-- Main PC -->
+  <Peer address="192.168.1.3"/>  <!-- 메인 PC -->
 </Peers>
 ```
 
-### Environment Variables
+### 환경 변수
 
-**Main PC**:
+**메인 PC**:
 ```bash
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file:///home/gw/kitchmatics/roscamp-repo-1/fms/config/cyclonedds_main.xml
-export ROS_DOMAIN_ID=25  # or 11, 12, 13 for robot domains
+export ROS_DOMAIN_ID=25  # 또는 로봇 도메인용 11, 12, 13
 ```
 
-**Robot (pinky1)**:
+**로봇 (pinky1)**:
 ```bash
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file:///home/pinky/cyclonedds.xml
@@ -130,109 +130,109 @@ export ROS_DOMAIN_ID=11
 
 ---
 
-## Verification Commands
+## 검증 명령어
 
-### Check if CycloneDDS is loaded
+### CycloneDDS 로드 확인
 ```bash
 ros2 doctor --report | grep rmw
-# Should show: rmw_cyclonedds_cpp
+# rmw_cyclonedds_cpp가 표시되어야 합니다
 ```
 
-### Monitor DDS traffic
+### DDS 트래픽 모니터링
 ```bash
-# On Main PC
+# 메인 PC에서
 source setup_dds_domain11.sh
-ros2 topic hz /odom  # Should show message rate
+ros2 topic hz /odom  # 메시지 수신 빈도가 표시되어야 합니다
 ```
 
-### Check network connectivity
+### 네트워크 연결 확인
 ```bash
-# Test basic UDP connectivity
-nc -u -v 192.168.1.7 7400  # DDS default port range starts at 7400
+# 기본 UDP 연결 테스트
+nc -u -v 192.168.1.7 7400  # DDS 기본 포트 범위는 7400부터 시작
 ```
 
 ---
 
-## Common Issues
+## 자주 발생하는 문제
 
-### Issue 1: "rmw_cyclonedds_cpp not found"
+### 문제 1: "rmw_cyclonedds_cpp not found"
 
-**Solution**: Install CycloneDDS
+**해결**: CycloneDDS 설치
 ```bash
 sudo apt update
 sudo apt install ros-humble-rmw-cyclonedds-cpp
 ```
 
-### Issue 2: Still no topics visible
+### 문제 2: 여전히 토픽이 보이지 않음
 
-**Check**:
-1. Is the robot's ROS2 node actually running?
+**확인 사항**:
+1. 로봇의 ROS2 노드가 실제로 실행 중인가?
    ```bash
    ssh pinky@192.168.1.7
    ros2 node list
    ```
 
-2. Are environment variables set correctly?
+2. 환경 변수가 올바르게 설정되었는가?
    ```bash
    echo $RMW_IMPLEMENTATION
    echo $CYCLONEDDS_URI
    echo $ROS_DOMAIN_ID
    ```
 
-3. Is the XML file readable?
+3. XML 파일을 읽을 수 있는가?
    ```bash
    cat $CYCLONEDDS_URI
    ```
 
-### Issue 3: Topics appear then disappear
+### 문제 3: 토픽이 나타났다가 사라짐
 
-**Cause**: Firewall blocking UDP ports
+**원인**: 방화벽이 UDP 포트를 차단
 
-**Solution**: Allow DDS ports (7400-7999)
+**해결**: DDS 포트 허용 (7400-7999)
 ```bash
 sudo ufw allow 7400:7999/udp
 ```
 
 ---
 
-## Permanent Setup
+## 영구 설정
 
-Add to `~/.bashrc` on Main PC:
+메인 PC의 `~/.bashrc`에 추가:
 ```bash
-# ROS2 DDS Configuration for WiFi
+# WiFi용 ROS2 DDS 설정
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file:///home/gw/kitchmatics/roscamp-repo-1/fms/config/cyclonedds_main.xml
-export ROS_DOMAIN_ID=25  # Default to FMS domain
+export ROS_DOMAIN_ID=25  # FMS 도메인 기본값
 ```
 
-Add to `~/.bashrc` on each robot:
+각 로봇의 `~/.bashrc`에 추가:
 ```bash
 source ~/setup_dds.sh
 ```
 
 ---
 
-## Network Diagram
+## 네트워크 다이어그램
 
 ```
-Main PC (192.168.1.3, Domain 25)
+메인 PC (192.168.1.3, 도메인 25)
   │
-  ├─ CycloneDDS Peers: [192.168.1.7, 192.168.1.6, 192.168.1.11]
+  ├─ CycloneDDS 피어: [192.168.1.7, 192.168.1.6, 192.168.1.11]
   │
-  ├─ pinky1 (192.168.1.7, Domain 11)
-  │   └─ CycloneDDS Peer: [192.168.1.3]
+  ├─ pinky1 (192.168.1.7, 도메인 11)
+  │   └─ CycloneDDS 피어: [192.168.1.3]
   │
-  ├─ pinky2 (192.168.1.6, Domain 12)
-  │   └─ CycloneDDS Peer: [192.168.1.3]
+  ├─ pinky2 (192.168.1.6, 도메인 12)
+  │   └─ CycloneDDS 피어: [192.168.1.3]
   │
-  └─ pinky3 (192.168.1.11, Domain 13)
-      └─ CycloneDDS Peer: [192.168.1.3]
+  └─ pinky3 (192.168.1.11, 도메인 13)
+      └─ CycloneDDS 피어: [192.168.1.3]
 ```
 
 ---
 
-## References
+## 참고 자료
 
-- [CycloneDDS Configuration Guide](https://github.com/eclipse-cyclonedds/cyclonedds)
-- [ROS2 DDS Tuning](https://docs.ros.org/en/humble/How-To-Guides/DDS-tuning.html)
-- [WiFi Best Practices](https://docs.ros.org/en/humble/How-To-Guides/Installation-Troubleshooting.html#enable-multicast)
+- [CycloneDDS 설정 가이드](https://github.com/eclipse-cyclonedds/cyclonedds)
+- [ROS2 DDS 튜닝](https://docs.ros.org/en/humble/How-To-Guides/DDS-tuning.html)
+- [WiFi 모범 사례](https://docs.ros.org/en/humble/How-To-Guides/Installation-Troubleshooting.html#enable-multicast)

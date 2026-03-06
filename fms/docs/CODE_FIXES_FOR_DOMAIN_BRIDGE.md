@@ -1,6 +1,6 @@
-# FMS Node Code Fixes for Domain Bridge Integration
+# Domain Bridge 통합을 위한 FMS Node 코드 수정 사항
 
-이 문서는 domain bridge 개선사항을 적용하기 위한 FMS Node 코드 수정 방법을 설명합니다.
+이 문서는 Domain Bridge 개선사항을 적용하기 위한 FMS Node 코드 수정 방법을 설명합니다.
 
 **파일 경로**: `/fms/fms/fms_node.py`
 
@@ -13,7 +13,7 @@
 ```python
 def _setup_robot_monitoring(self, robot_configs: List[Dict]):
     """
-    Setup subscribers for monitoring robot status
+    로봇 상태 모니터링을 위한 구독자 설정
     """
     current_domain = int(os.environ.get('ROS_DOMAIN_ID', 0))
 
@@ -58,10 +58,10 @@ def _setup_robot_monitoring(self, robot_configs: List[Dict]):
 ```python
 def _setup_robot_monitoring(self, robot_configs: List[Dict]):
     """
-    Setup subscribers for monitoring robot status
+    로봇 상태 모니터링을 위한 구독자 설정
 
-    Namespace-based topic isolation to prevent collisions
-    Expected topics (from domain bridge):
+    충돌 방지를 위한 네임스페이스 기반 토픽 격리
+    예상 토픽 (Domain Bridge 경유):
     - /pinky1/amcl_pose
     - /pinky1/odom
     - /pinky1/battery/voltage
@@ -78,17 +78,17 @@ def _setup_robot_monitoring(self, robot_configs: List[Dict]):
         robot_id = config['robot_id']
         domain_id = config.get('domain_id', 0)
 
-        # Cross-domain robots will be monitored via domain bridge
-        # (topics will be bridged to current domain with namespace)
+        # 크로스 도메인 로봇은 Domain Bridge를 통해 모니터링
+        # (토픽이 네임스페이스와 함께 현재 도메인으로 브릿징됨)
         if domain_id != current_domain:
             logger.info(f"Robot {robot_id} on DOMAIN_ID={domain_id}, "
                        f"will monitor via domain bridge with namespace /{robot_id}/")
-            # Continue to subscribe - domain bridge will bridge with namespace
+            # 구독 계속 진행 - Domain Bridge가 네임스페이스를 포함하여 브릿징
 
-        # Create robot-specific namespace
+        # 로봇별 네임스페이스 생성
         robot_ns = f"/{robot_id}"
 
-        # Subscribe to AMCL pose (localization)
+        # AMCL 포즈 구독 (로컬라이제이션)
         self.create_subscription(
             PoseWithCovarianceStamped,
             f"{robot_ns}/amcl_pose",
@@ -101,7 +101,7 @@ def _setup_robot_monitoring(self, robot_configs: List[Dict]):
         )
         logger.debug(f"Subscribed to {robot_ns}/amcl_pose")
 
-        # Subscribe to odometry
+        # 오도메트리 구독
         self.create_subscription(
             Odometry,
             f"{robot_ns}/odom",
@@ -114,7 +114,7 @@ def _setup_robot_monitoring(self, robot_configs: List[Dict]):
         )
         logger.debug(f"Subscribed to {robot_ns}/odom")
 
-        # Subscribe to battery voltage
+        # 배터리 전압 구독
         self.create_subscription(
             Float32,
             f"{robot_ns}/battery/voltage",
@@ -127,7 +127,7 @@ def _setup_robot_monitoring(self, robot_configs: List[Dict]):
         )
         logger.debug(f"Subscribed to {robot_ns}/battery/voltage")
 
-        # Subscribe to battery present flag
+        # 배터리 존재 여부 플래그 구독
         self.create_subscription(
             Bool,
             f"{robot_ns}/battery/present",
@@ -165,25 +165,25 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 ```python
 def robot_amcl_pose_callback(self, robot_id: str, msg: PoseWithCovarianceStamped):
     """
-    Handle robot AMCL pose update (localization)
+    로봇 AMCL 포즈 업데이트 처리 (로컬라이제이션)
 
     Args:
-        robot_id: Robot ID
-        msg: PoseWithCovarianceStamped message from AMCL
+        robot_id: 로봇 ID
+        msg: AMCL에서 전송된 PoseWithCovarianceStamped 메시지
     """
-    # Register heartbeat for error detection
+    # 오류 감지를 위한 하트비트 등록
     self.error_detector.register_heartbeat(robot_id)
 
-    # Extract pose from message
+    # 메시지에서 포즈 추출
     pose = msg.pose.pose
 
-    # Update fleet controller
+    # 플릿 컨트롤러 업데이트
     self.fleet_controller.update_robot_pose(robot_id, pose)
 
-    # Update zone manager
+    # Zone Manager 업데이트
     self.zone_manager.update_robot_position(robot_id, pose)
 
-    # Check if robot reached destination
+    # 로봇이 목적지에 도달했는지 확인
     self._check_navigation_status(robot_id)
 
     logger.debug(f"Updated {robot_id} pose: x={pose.position.x:.2f}, "
@@ -195,19 +195,19 @@ def robot_amcl_pose_callback(self, robot_id: str, msg: PoseWithCovarianceStamped
 ```python
 def robot_odom_callback(self, robot_id: str, msg: Odometry):
     """
-    Handle robot odometry update
+    로봇 오도메트리 업데이트 처리
 
     Args:
-        robot_id: Robot ID
-        msg: Odometry message
+        robot_id: 로봇 ID
+        msg: Odometry 메시지
     """
-    # Register heartbeat
+    # 하트비트 등록
     self.error_detector.register_heartbeat(robot_id)
 
-    # Extract pose
+    # 포즈 추출
     pose = msg.pose.pose
 
-    # Update fleet controller with odometry
+    # 오도메트리로 플릿 컨트롤러 업데이트
     self.fleet_controller.update_robot_pose(robot_id, pose)
 
     logger.debug(f"Received odometry for {robot_id}: "
@@ -221,21 +221,21 @@ def robot_odom_callback(self, robot_id: str, msg: Odometry):
 ```python
 # 기존 코드 (제거 또는 주석 처리)
 def robot_pose_callback(self, robot_id: str, msg: Pose):
-    """Handle robot pose update - DEPRECATED
+    """로봇 포즈 업데이트 처리 - 더 이상 사용되지 않음
 
-    Use robot_amcl_pose_callback instead for localization data.
-    This function is kept for backward compatibility.
+    로컬라이제이션 데이터는 robot_amcl_pose_callback을 대신 사용하세요.
+    하위 호환성을 위해 이 함수를 유지합니다.
     """
-    # Register heartbeat for error detection
+    # 오류 감지를 위한 하트비트 등록
     self.error_detector.register_heartbeat(robot_id)
 
-    # Update fleet controller
+    # 플릿 컨트롤러 업데이트
     self.fleet_controller.update_robot_pose(robot_id, msg)
 
-    # Update zone manager
+    # Zone Manager 업데이트
     self.zone_manager.update_robot_position(robot_id, msg)
 
-    # Check if robot reached destination
+    # 로봇이 목적지에 도달했는지 확인
     self._check_navigation_status(robot_id)
 ```
 
@@ -246,7 +246,7 @@ def robot_pose_callback(self, robot_id: str, msg: Pose):
 ### 현재 코드 (fms_node.py 129-139)
 
 ```python
-# Initial pose publishers (for same domain only)
+# 초기 포즈 발행자 (같은 도메인만)
 self.initialpose_pubs = {}
 for robot_id, domain_info in self.robot_domains.items():
     if domain_info['domain_id'] == current_domain:
@@ -262,10 +262,10 @@ for robot_id, domain_info in self.robot_domains.items():
 ### 수정된 코드
 
 ```python
-# Initial pose publishers with namespaces
+# 네임스페이스를 포함한 초기 포즈 발행자
 self.initialpose_pubs = {}
 for robot_id, domain_info in self.robot_domains.items():
-    # All robots will be available via domain bridge
+    # 모든 로봇이 Domain Bridge를 통해 접근 가능
     robot_ns = f"/{robot_id}"
     topic_name = f"{robot_ns}/initialpose"  # 로봇별 격리된 토픽
 
@@ -284,12 +284,12 @@ for robot_id, domain_info in self.robot_domains.items():
 
 ---
 
-## 4. 네비게이션 클라이언트 업데이트 (__init__)
+## 4. 내비게이션 클라이언트 업데이트 (__init__)
 
 ### 현재 코드 (fms_node.py 113-127)
 
 ```python
-# Create action client for robots on same domain
+# 같은 도메인의 로봇에 대한 액션 클라이언트 생성
 for robot_id, domain_info in self.robot_domains.items():
     if domain_info['domain_id'] == current_domain:
         action_name = '/navigate_to_pose'  # 토픽 이름 동일 - 문제!
@@ -302,7 +302,7 @@ for robot_id, domain_info in self.robot_domains.items():
 ### 수정된 코드
 
 ```python
-# Create action clients for all robots (via domain bridge if needed)
+# 모든 로봇에 대한 액션 클라이언트 생성 (필요시 Domain Bridge 경유)
 for robot_id, domain_info in self.robot_domains.items():
     robot_ns = f"/{robot_id}"
     action_name = f"{robot_ns}/navigate_to_pose"  # 로봇별 격리된 액션
@@ -319,32 +319,32 @@ for robot_id, domain_info in self.robot_domains.items():
 
 ---
 
-## 5. 네비게이션 함수 개선 (_navigate_robot)
+## 5. 내비게이션 함수 개선 (_navigate_robot)
 
 ### 현재 코드 (fms_node.py 760-782)
 
 ```python
 def _navigate_robot(self, robot_id: str, goal_pose: Pose):
     """
-    Send navigation goal to robot
+    로봇에 내비게이션 목표 전송
 
     Args:
-        robot_id: Robot ID
-        goal_pose: Goal pose
+        robot_id: 로봇 ID
+        goal_pose: 목표 포즈
     """
     nav_client = self.nav_clients.get(robot_id)
     if not nav_client:
         logger.error(f"Navigation client not found for robot {robot_id}")
         return
 
-    # Create goal
+    # 목표 생성
     goal_msg = NavigateToPose.Goal()
     goal_msg.pose = PoseStamped()
     goal_msg.pose.header.frame_id = 'map'
     goal_msg.pose.header.stamp = self.get_clock().now().to_msg()
     goal_msg.pose.pose = goal_pose
 
-    # Send goal
+    # 목표 전송
     nav_client.send_goal_async(goal_msg)
     logger.debug(f"Sent navigation goal to robot {robot_id}")
 ```
@@ -354,11 +354,11 @@ def _navigate_robot(self, robot_id: str, goal_pose: Pose):
 ```python
 def _navigate_robot(self, robot_id: str, goal_pose: Pose):
     """
-    Send navigation goal to robot with error handling
+    오류 처리가 포함된 로봇 내비게이션 목표 전송
 
     Args:
-        robot_id: Robot ID
-        goal_pose: Goal pose (in 'map' frame)
+        robot_id: 로봇 ID
+        goal_pose: 목표 포즈 ('map' 프레임 기준)
     """
     nav_client = self.nav_clients.get(robot_id)
     if not nav_client:
@@ -374,14 +374,14 @@ def _navigate_robot(self, robot_id: str, goal_pose: Pose):
         )
         return
 
-    # Create goal message
+    # 목표 메시지 생성
     goal_msg = NavigateToPose.Goal()
     goal_msg.pose = PoseStamped()
     goal_msg.pose.header.frame_id = 'map'
     goal_msg.pose.header.stamp = self.get_clock().now().to_msg()
     goal_msg.pose.pose = goal_pose
 
-    # Send goal asynchronously with callback
+    # 콜백과 함께 비동기 목표 전송
     try:
         future = nav_client.send_goal_async(goal_msg)
         future.add_done_callback(
@@ -403,11 +403,11 @@ def _navigate_robot(self, robot_id: str, goal_pose: Pose):
 
 def _nav_goal_response_callback(self, robot_id: str, future):
     """
-    Handle navigation goal response
+    내비게이션 목표 응답 처리
 
     Args:
-        robot_id: Robot ID
-        future: Future object with goal handle
+        robot_id: 로봇 ID
+        future: 목표 핸들이 포함된 Future 객체
     """
     try:
         goal_handle = future.result()
@@ -417,7 +417,7 @@ def _nav_goal_response_callback(self, robot_id: str, future):
 
         logger.info(f"Navigation goal accepted for {robot_id}")
 
-        # Subscribe to result
+        # 결과 구독
         result_future = goal_handle.get_result_async()
         result_future.add_done_callback(
             lambda f: self._nav_result_callback(robot_id, f)
@@ -436,15 +436,15 @@ def _nav_goal_response_callback(self, robot_id: str, future):
 
 def _nav_result_callback(self, robot_id: str, future):
     """
-    Handle navigation result
+    내비게이션 결과 처리
 
     Args:
-        robot_id: Robot ID
-        future: Future object with result
+        robot_id: 로봇 ID
+        future: 결과가 포함된 Future 객체
     """
     try:
         result = future.result()
-        # NavigateToPose action returns empty result on success
+        # NavigateToPose 액션은 성공 시 빈 결과를 반환
         logger.info(f"Navigation completed for {robot_id}")
     except Exception as e:
         logger.warning(f"Navigation failed for {robot_id}: {e}")
@@ -468,20 +468,20 @@ def _nav_result_callback(self, robot_id: str, future):
 ```python
 def set_initial_pose(self, robot_id: str, pose: Pose):
     """
-    Set initial pose for a robot's AMCL localization
+    로봇의 AMCL 로컬라이제이션을 위한 초기 포즈 설정
     """
     publisher = self.initialpose_pubs.get(robot_id)
     if not publisher:
         logger.error(f"Initial pose publisher not found for robot {robot_id}")
         return
 
-    # Create PoseWithCovarianceStamped message
+    # PoseWithCovarianceStamped 메시지 생성
     msg = PoseWithCovarianceStamped()
     msg.header.frame_id = 'map'
     msg.header.stamp = self.get_clock().now().to_msg()
     msg.pose.pose = pose
 
-    # Set covariance matrix
+    # 공분산 행렬 설정
     msg.pose.covariance = [
         0.25, 0.0, 0.0, 0.0, 0.0, 0.0,
         0.0, 0.25, 0.0, 0.0, 0.0, 0.0,
@@ -491,7 +491,7 @@ def set_initial_pose(self, robot_id: str, pose: Pose):
         0.0, 0.0, 0.0, 0.0, 0.0, 0.06853892326654787
     ]
 
-    # Publish initial pose
+    # 초기 포즈 발행
     publisher.publish(msg)
     logger.info(f"Set initial pose for {robot_id}: x={pose.position.x:.3f}, y={pose.position.y:.3f}")
 ```
@@ -501,14 +501,14 @@ def set_initial_pose(self, robot_id: str, pose: Pose):
 ```python
 def set_initial_pose(self, robot_id: str, pose: Pose):
     """
-    Set initial pose for a robot's AMCL localization
+    로봇의 AMCL 로컬라이제이션을 위한 초기 포즈 설정
 
-    This publishes a PoseWithCovarianceStamped message to initialize
-    the robot's localization filter.
+    로봇의 로컬라이제이션 필터를 초기화하기 위해
+    PoseWithCovarianceStamped 메시지를 발행합니다.
 
     Args:
-        robot_id: Robot ID (e.g., 'pinky1', 'pinky3')
-        pose: Pose with position and orientation
+        robot_id: 로봇 ID (예: 'pinky1', 'pinky3')
+        pose: 위치와 방향이 포함된 포즈
     """
     publisher = self.initialpose_pubs.get(robot_id)
     if not publisher:
@@ -516,23 +516,23 @@ def set_initial_pose(self, robot_id: str, pose: Pose):
         logger.debug(f"Available publishers: {list(self.initialpose_pubs.keys())}")
         return
 
-    # Create PoseWithCovarianceStamped message
+    # PoseWithCovarianceStamped 메시지 생성
     msg = PoseWithCovarianceStamped()
     msg.header.frame_id = 'map'
     msg.header.stamp = self.get_clock().now().to_msg()
     msg.pose.pose = pose
 
-    # Set covariance matrix (standard AMCL initialization)
+    # 공분산 행렬 설정 (표준 AMCL 초기화)
     msg.pose.covariance = [
-        0.25, 0.0, 0.0, 0.0, 0.0, 0.0,      # x uncertainty
-        0.0, 0.25, 0.0, 0.0, 0.0, 0.0,      # y uncertainty
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,       # z (unused)
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,       # roll (unused)
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,       # pitch (unused)
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.06853892326654787  # theta uncertainty
+        0.25, 0.0, 0.0, 0.0, 0.0, 0.0,      # x 불확실성
+        0.0, 0.25, 0.0, 0.0, 0.0, 0.0,      # y 불확실성
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,       # z (미사용)
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,       # roll (미사용)
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,       # pitch (미사용)
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.06853892326654787  # theta 불확실성
     ]
 
-    # Publish initial pose
+    # 초기 포즈 발행
     publisher.publish(msg)
 
     theta = 2.0 * math.atan2(pose.orientation.z, pose.orientation.w)
@@ -550,9 +550,9 @@ def set_initial_pose(self, robot_id: str, pose: Pose):
 ```python
 #!/usr/bin/env python3
 """
-Monitor Domain Bridge Communication Status
+Domain Bridge 통신 상태 모니터링
 
-Usage:
+사용법:
     python3 monitor_domain_bridge.py
 """
 
@@ -564,14 +564,14 @@ from datetime import datetime
 
 
 class DomainBridgeMonitor(Node):
-    """Monitor domain bridge status and statistics"""
+    """Domain Bridge 상태 및 통계 모니터링"""
 
     def __init__(self):
         super().__init__('domain_bridge_monitor')
 
         self.logger.info("Starting Domain Bridge Monitor...")
 
-        # Statistics
+        # 통계
         self.stats = {
             'pinky1_amcl_pose': {'count': 0, 'last_ts': None},
             'pinky1_odom': {'count': 0, 'last_ts': None},
@@ -589,7 +589,7 @@ class DomainBridgeMonitor(Node):
             depth=2
         )
 
-        # Create subscribers for monitoring
+        # 모니터링용 구독자 생성
         for robot_id in ['pinky1', 'pinky3']:
             from geometry_msgs.msg import PoseWithCovarianceStamped
             from nav_msgs.msg import Odometry
@@ -623,7 +623,7 @@ class DomainBridgeMonitor(Node):
                 qos
             )
 
-        # Monitoring timer
+        # 모니터링 타이머
         self.create_timer(5.0, self._print_statistics)
 
     def _amcl_callback(self, robot_id, msg):
@@ -643,7 +643,7 @@ class DomainBridgeMonitor(Node):
         self.stats[f'{robot_id}_battery_present']['last_ts'] = datetime.now()
 
     def _print_statistics(self):
-        """Print monitoring statistics"""
+        """모니터링 통계 출력"""
         now = datetime.now()
         print("\n" + "="*60)
         print(f"Domain Bridge Monitor - {now.strftime('%H:%M:%S')}")
@@ -708,7 +708,7 @@ if __name__ == '__main__':
   ros2 topic echo /pinky1/amcl_pose
   ros2 topic echo /pinky3/amcl_pose
   ```
-- [ ] 네비게이션 액션 확인
+- [ ] 내비게이션 액션 확인
   ```bash
   ros2 action list
   ```
@@ -735,18 +735,17 @@ cp fms/config/domain_bridge_improved.yaml fms/config/domain_bridge.yaml
 ### Step 3: 테스트 실행
 
 ```bash
-# Terminal 1: Domain Bridge 시작
+# 터미널 1: Domain Bridge 시작
 ros2 run domain_bridge domain_bridge fms/config/domain_bridge.yaml
 
-# Terminal 2: 로봇 토픽 모니터링
+# 터미널 2: 로봇 토픽 모니터링
 python3 fms/scripts/monitor_domain_bridge.py
 
-# Terminal 3: FMS Node 시작
+# 터미널 3: FMS Node 시작
 ros2 launch fms_system fms_bringup.launch.xml
 
-# Terminal 4: 토픽 확인
+# 터미널 4: 토픽 확인
 ros2 topic list | grep pinky
 ros2 topic hz /pinky1/amcl_pose
 ros2 topic hz /pinky3/amcl_pose
 ```
-

@@ -1,11 +1,11 @@
-# Navigation System Setup Guide
-**For Kitchmatics FMS with Pinky Mobile Robots**
+# 내비게이션 시스템 설정 가이드
+**Kitchmatics FMS와 Pinky 모바일 로봇용**
 
 ---
 
-## Quick Status Check
+## 빠른 상태 확인
 
-Run this command to check the navigation system status:
+다음 명령어로 내비게이션 시스템 상태를 확인하세요:
 
 ```bash
 cd /home/gw/kitchmatics/roscamp-repo-1
@@ -14,124 +14,124 @@ bash fms/scripts/diagnose_navigation.sh
 
 ---
 
-## Problem: Nav2 Stack Not Running on Pinky Robots
+## 문제: Pinky 로봇에서 Nav2 스택이 실행되지 않음
 
-### Symptom
-- FMS fleet status shows robots at position (0, 0, 0)
-- No `/pinky1/amcl_pose` or `/pinky2/amcl_pose` topics
-- Cannot send navigation goals to robots
-- `/navigate_to_pose` action servers not available
+### 증상
+- FMS 플릿 상태에서 로봇 위치가 (0, 0, 0)으로 표시됨
+- `/pinky1/amcl_pose` 또는 `/pinky2/amcl_pose` 토픽이 없음
+- 로봇에 내비게이션 목표를 전송할 수 없음
+- `/navigate_to_pose` 액션 서버를 사용할 수 없음
 
-### Root Cause
-The Pinky robot bringup is not launching the Nav2 navigation stack. Currently, only the lamp module is being launched.
+### 근본 원인
+Pinky 로봇 시작 과정에서 Nav2 내비게이션 스택이 실행되지 않습니다. 현재는 lamp 모듈만 실행되고 있습니다.
 
-### Solution
+### 해결 방법
 
-#### Step 1: Identify Robot Bringup Script
+#### 1단계: 로봇 시작 스크립트 확인
 
-SSH to Pinky1 and find the actual bringup script:
+Pinky1에 SSH로 접속하여 실제 시작 스크립트를 확인합니다:
 
 ```bash
 ssh pinky@192.168.1.7
 
-# Check what's currently running
+# 현재 실행 중인 프로세스 확인
 ps aux | grep -i bringup | grep -v grep
 
-# Output should show:
+# 다음과 같이 출력되어야 합니다:
 # /bin/bash /home/pinky/pinky_devices/lamp_module_bringup
 ```
 
-#### Step 2: Modify Bringup to Include Nav2
+#### 2단계: Nav2를 포함하도록 시작 스크립트 수정
 
-The bringup script needs to be updated to launch the Nav2 navigation stack. There are two approaches:
+시작 스크립트에 Nav2 내비게이션 스택 실행을 추가해야 합니다. 두 가지 방법이 있습니다:
 
-**Option A: Create a Master Bringup Script** (Recommended)
+**방법 A: 통합 시작 스크립트 생성** (권장)
 
-Create `/home/pinky/bringup_full.sh`:
+`/home/pinky/bringup_full.sh`를 생성합니다:
 
 ```bash
 #!/bin/bash
 #
-# Full Robot Bringup: Lamp Module + Navigation
-# Usage: ./bringup_full.sh [robot_name]
+# 전체 로봇 시작: Lamp 모듈 + 내비게이션
+# 사용법: ./bringup_full.sh [robot_name]
 #
 
 ROBOT_NAME=${1:-"pinky_b4bc"}
-export ROS_DOMAIN_ID=11  # or 12 for pinky2, 13 for pinky3
+export ROS_DOMAIN_ID=11  # pinky2는 12, pinky3는 13
 
 source /opt/ros/jazzy/setup.bash
 
-# Start lamp module in background
+# 백그라운드에서 lamp 모듈 시작
 echo "Starting lamp module..."
 /home/pinky/pinky_devices/lamp_module_bringup &
 LAMP_PID=$!
 
-# Give lamp module time to initialize
+# lamp 모듈 초기화 대기
 sleep 2
 
-# Start Nav2 navigation
+# Nav2 내비게이션 시작
 echo "Starting Nav2 navigation stack..."
 cd /home/pinky/pinky_pro
 
-# Build if needed
+# 필요시 빌드
 if [ ! -d "install" ]; then
     echo "Building packages..."
     colcon build --packages-select pinky_navigation pinky_bringup
 fi
 
-# Source the built packages
+# 빌드된 패키지 소싱
 source install/setup.bash
 
-# Launch navigation
+# 내비게이션 실행
 ros2 launch pinky_navigation bringup_launch.xml robot_name:=$ROBOT_NAME
 
-# Cleanup on exit
+# 종료 시 정리
 trap "kill $LAMP_PID" EXIT
 ```
 
-Save and make executable:
+저장 후 실행 권한 부여:
 ```bash
 chmod +x /home/pinky/bringup_full.sh
 ```
 
-**Option B: Modify Existing Lamp Module Script**
+**방법 B: 기존 Lamp 모듈 스크립트 수정**
 
-If you want to keep using the existing lamp_module_bringup, you can modify it to also launch Nav2 after lamp initialization.
+기존 lamp_module_bringup을 계속 사용하면서 lamp 초기화 후 Nav2도 함께 실행하도록 수정할 수 있습니다.
 
-Edit `/home/pinky/pinky_devices/lamp_module_bringup`:
+`/home/pinky/pinky_devices/lamp_module_bringup`을 편집합니다:
 
 ```bash
 #!/bin/bash
-# ... existing lamp setup code ...
+# ... 기존 lamp 설정 코드 ...
 
-# After lamp initialization, add:
+# lamp 초기화 후 다음을 추가:
 export ROS_DOMAIN_ID=11
 source /opt/ros/jazzy/setup.bash
 cd /home/pinky/pinky_pro
 source install/setup.bash
 
-# Launch Nav2 in background or foreground
+# Nav2를 백그라운드 또는 포그라운드로 실행
 ros2 launch pinky_navigation bringup_launch.xml robot_name:=pinky_b4bc &
 ```
 
-#### Step 3: Verify Map File Exists
+#### 3단계: 맵 파일 존재 여부 확인
 
-On Pinky1, check that the map file is available:
+Pinky1에서 맵 파일이 있는지 확인합니다:
 
 ```bash
 ssh pinky@192.168.1.7
 
 ls -la /home/pinky/pinky_pro/src/pinky_pro/pinky_navigation/maps/
 
-# Should show:
+# 다음 파일이 있어야 합니다:
 # - map.yaml
-# - map.pgm (or map.png)
+# - map.pgm (또는 map.png)
 ```
 
-If maps don't exist, copy them from main PC:
+맵이 없는 경우 메인 PC에서 복사합니다:
 
 ```bash
-# On main PC
+# 메인 PC에서 실행
 scp /home/gw/kitchmatics/roscamp-repo-1/mobile_robot/maps/real.yaml \
     pinky@192.168.1.7:/home/pinky/pinky_pro/src/pinky_pro/pinky_navigation/maps/
 
@@ -139,38 +139,38 @@ scp /home/gw/kitchmatics/roscamp-repo-1/mobile_robot/maps/real.pgm \
     pinky@192.168.1.7:/home/pinky/pinky_pro/src/pinky_pro/pinky_navigation/maps/
 ```
 
-#### Step 4: Restart Robot with New Bringup
+#### 4단계: 새 시작 스크립트로 로봇 재시작
 
 ```bash
 ssh pinky@192.168.1.7
 
-# Kill existing processes
+# 기존 프로세스 종료
 pkill -f "lamp_module_bringup"
 pkill -f "ros2"
 pkill -f "pillar"
 
-# Wait for cleanup
+# 정리 대기
 sleep 2
 
-# Start with full bringup (Option A)
+# 통합 시작으로 실행 (방법 A)
 /home/pinky/bringup_full.sh pinky_b4bc
 
-# Or if using Option B, just restart lamp module
+# 또는 방법 B를 사용하는 경우, lamp 모듈만 재시작
 /home/pinky/pinky_devices/lamp_module_bringup
 ```
 
-#### Step 5: Verify Nav2 is Running
+#### 5단계: Nav2 실행 확인
 
-In a new terminal, check the nodes:
+새 터미널에서 노드를 확인합니다:
 
 ```bash
 export ROS_DOMAIN_ID=11
 source /opt/ros/jazzy/setup.bash
 
-# Check for nav2 nodes
+# Nav2 노드 확인
 ros2 node list | grep -E "amcl|planner|controller|bt_navigator|map_server"
 
-# Expected output:
+# 예상 출력:
 # /amcl
 # /map_server
 # /planner_server
@@ -182,33 +182,33 @@ ros2 node list | grep -E "amcl|planner|controller|bt_navigator|map_server"
 
 ---
 
-## Step 2: Verify Domain Bridge Configuration
+## 2단계: Domain Bridge 설정 확인
 
-The domain bridge is responsible for forwarding navigation topics from Pinky robots (domain 11/12/13) to the main PC (domain 25).
+Domain Bridge는 Pinky 로봇(도메인 11/12/13)의 내비게이션 토픽을 메인 PC(도메인 25)로 전달하는 역할을 합니다.
 
-### Check Domain Bridge Status
+### Domain Bridge 상태 확인
 
 ```bash
-# On main PC
+# 메인 PC에서 실행
 export ROS_DOMAIN_ID=25
 source /opt/ros/jazzy/setup.bash
 source /home/gw/kitchmatics/roscamp-repo-1/install/setup.bash
 
-# Check if bridge is running
+# 브리지 실행 여부 확인
 ps aux | grep domain_bridge | grep -v grep
 
-# If not running, start it:
+# 실행되지 않는 경우 시작:
 ros2 run domain_bridge domain_bridge \
     /home/gw/kitchmatics/roscamp-repo-1/fms/config/domain_bridge_complete.yaml &
 ```
 
-### Verify Topic Bridging
+### 토픽 브리징 확인
 
 ```bash
-# On main PC, check for Pinky1 topics
+# 메인 PC에서 Pinky1 토픽 확인
 ros2 topic list | grep pinky1
 
-# Expected topics:
+# 예상 토픽:
 # /pinky1/amcl_pose
 # /pinky1/scan
 # /pinky1/odom
@@ -217,22 +217,22 @@ ros2 topic list | grep pinky1
 # /pinky1/navigate_to_pose/_action/status
 ```
 
-If topics are missing, the domain bridge is not working properly. Check the configuration:
+토픽이 없는 경우 Domain Bridge가 제대로 동작하지 않는 것입니다. 설정을 확인하세요:
 
 ```bash
-# Verify domain bridge config
+# Domain Bridge 설정 확인
 cat /home/gw/kitchmatics/roscamp-repo-1/fms/config/domain_bridge_complete.yaml | grep -A5 "pinky1"
 ```
 
 ---
 
-## Step 3: Initialize AMCL Localization
+## 3단계: AMCL 위치 추정 초기화
 
-Once Nav2 is running and domain bridge is working, you need to set the initial pose for AMCL localization.
+Nav2가 실행되고 Domain Bridge가 동작하면, AMCL 위치 추정을 위한 초기 자세를 설정해야 합니다.
 
-### Determine Initial Pose
+### 초기 자세 결정
 
-From `fms/config/fms_config.yaml`, the initial poses are:
+`fms/config/fms_config.yaml`에서 초기 자세 값:
 
 ```yaml
 initial_poses:
@@ -246,13 +246,13 @@ initial_poses:
     theta: 0.0
 ```
 
-### Set Initial Pose via ROS Topic
+### ROS 토픽을 통한 초기 자세 설정
 
 ```bash
 export ROS_DOMAIN_ID=25
 source /opt/ros/jazzy/setup.bash
 
-# For Pinky1
+# Pinky1용
 ros2 topic pub /pinky1/initialpose geometry_msgs/PoseWithCovarianceStamped '{
   header: {
     frame_id: "map"
@@ -273,7 +273,7 @@ ros2 topic pub /pinky1/initialpose geometry_msgs/PoseWithCovarianceStamped '{
   }
 }' --once
 
-# For Pinky2
+# Pinky2용
 ros2 topic pub /pinky2/initialpose geometry_msgs/PoseWithCovarianceStamped '{
   header: {
     frame_id: "map"
@@ -295,26 +295,26 @@ ros2 topic pub /pinky2/initialpose geometry_msgs/PoseWithCovarianceStamped '{
 }' --once
 ```
 
-### Verify AMCL is Active
+### AMCL 활성 상태 확인
 
 ```bash
-# Check for pose estimates
+# 자세 추정값 확인
 timeout 5 ros2 topic echo /pinky1/amcl_pose --once
 
-# Expected output: PoseWithCovarianceStamped with position and covariance
+# 예상 출력: 위치와 공분산이 포함된 PoseWithCovarianceStamped
 ```
 
 ---
 
-## Step 4: Test Navigation Goals
+## 4단계: 내비게이션 목표 테스트
 
-### Send a Simple Navigation Goal
+### 간단한 내비게이션 목표 전송
 
 ```bash
 export ROS_DOMAIN_ID=25
 source /opt/ros/jazzy/setup.bash
 
-# Send goal to table1 (1.785, 0.35)
+# table1 (1.785, 0.35)로 목표 전송
 ros2 action send_goal /pinky1/navigate_to_pose nav2_msgs/action/NavigateToPose '{
   pose: {
     header: {frame_id: "map"},
@@ -326,53 +326,53 @@ ros2 action send_goal /pinky1/navigate_to_pose nav2_msgs/action/NavigateToPose '
 }'
 ```
 
-### Monitor Navigation Progress
+### 내비게이션 진행 상황 모니터링
 
-In another terminal:
+다른 터미널에서:
 
 ```bash
-# Watch AMCL pose updates (shows current position)
+# AMCL 자세 업데이트 확인 (현재 위치 표시)
 ros2 topic echo /pinky1/amcl_pose
 
-# Watch navigation feedback (shows progress)
+# 내비게이션 피드백 확인 (진행 상황 표시)
 ros2 topic echo /pinky1/navigate_to_pose/_action/feedback
 
-# Watch costmap (shows obstacles)
+# 코스트맵 확인 (장애물 표시)
 ros2 topic echo /pinky1/local_costmap/costmap
 ```
 
 ---
 
-## Step 5: Enable FMS Auto-Initialization
+## 5단계: FMS 자동 초기화 활성화
 
-The FMS can automatically set initial poses when it starts. Check the configuration:
+FMS는 시작 시 자동으로 초기 자세를 설정할 수 있습니다. 설정을 확인하세요:
 
 ```bash
 grep -A5 "auto_set_initial_pose" \
     /home/gw/kitchmatics/roscamp-repo-1/fms/config/fms_config.yaml
 
-# Should show:
+# 다음과 같이 표시되어야 합니다:
 # auto_set_initial_pose: true
 ```
 
-If enabled, the FMS will:
-1. Publish initial poses to `/pinky1/initialpose`, `/pinky2/initialpose`
-2. Initialize AMCL localization automatically
-3. Wait for localization to converge before accepting navigation tasks
+활성화된 경우, FMS는:
+1. `/pinky1/initialpose`, `/pinky2/initialpose`에 초기 자세를 발행
+2. AMCL 위치 추정을 자동으로 초기화
+3. 위치 추정이 수렴될 때까지 내비게이션 작업 수락을 대기
 
 ---
 
-## Troubleshooting
+## 문제 해결
 
-### Issue 1: Nav2 Nodes Not Appearing
+### 문제 1: Nav2 노드가 나타나지 않음
 
-**Symptoms**:
-- `/bt_navigator`, `/amcl`, `/planner_server` not in `ros2 node list`
-- Error: "Nav2 package not found"
+**증상**:
+- `ros2 node list`에 `/bt_navigator`, `/amcl`, `/planner_server`가 없음
+- 오류: "Nav2 package not found"
 
-**Solutions**:
+**해결 방법**:
 
-A. Build the packages:
+A. 패키지 빌드:
 ```bash
 ssh pinky@192.168.1.7
 cd /home/pinky/pinky_pro
@@ -380,37 +380,37 @@ colcon build --packages-select pinky_navigation pinky_bringup
 source install/setup.bash
 ```
 
-B. Check package paths:
+B. 패키지 경로 확인:
 ```bash
 ros2 pkg list | grep pinky
-# Should show: pinky_navigation, pinky_bringup
+# pinky_navigation, pinky_bringup이 표시되어야 합니다
 
-# If missing, package_xml.xml or setup.py is incorrect
+# 없는 경우 package_xml.xml 또는 setup.py가 잘못된 것입니다
 ```
 
-C. Verify launch file:
+C. 런치 파일 확인:
 ```bash
-# Try launching directly
+# 직접 실행해 봅니다
 ros2 launch pinky_navigation bringup_launch.xml robot_name:=pinky_b4bc
 
-# Check for errors in output
+# 출력에서 오류 확인
 ```
 
-### Issue 2: Domain Bridge Not Forwarding Topics
+### 문제 2: Domain Bridge가 토픽을 전달하지 않음
 
-**Symptoms**:
-- `/pinky1/amcl_pose` not available on domain 25
-- Topics exist on domain 11 but not 25
+**증상**:
+- 도메인 25에서 `/pinky1/amcl_pose`를 사용할 수 없음
+- 토픽이 도메인 11에는 있지만 25에는 없음
 
-**Solutions**:
+**해결 방법**:
 
-A. Check domain bridge is running:
+A. Domain Bridge 실행 확인:
 ```bash
 ps aux | grep domain_bridge
-# Should see: ros2 run domain_bridge domain_bridge ...
+# 다음이 표시되어야 합니다: ros2 run domain_bridge domain_bridge ...
 ```
 
-B. Restart domain bridge:
+B. Domain Bridge 재시작:
 ```bash
 pkill -f domain_bridge
 sleep 1
@@ -419,31 +419,31 @@ ros2 run domain_bridge domain_bridge \
     /home/gw/kitchmatics/roscamp-repo-1/fms/config/domain_bridge_complete.yaml &
 ```
 
-C. Check bridge configuration:
+C. 브리지 설정 확인:
 ```bash
-# Verify pinky1 topics are configured
+# pinky1 토픽이 설정되어 있는지 확인
 grep -A20 "from_domain: 11" \
     /home/gw/kitchmatics/roscamp-repo-1/fms/config/domain_bridge_complete.yaml
 
-# Should show pinky1/* topics
+# pinky1/* 토픽이 표시되어야 합니다
 ```
 
-### Issue 3: AMCL Not Publishing Poses
+### 문제 3: AMCL이 자세를 발행하지 않음
 
-**Symptoms**:
-- `/pinky1/amcl_pose` topic exists but no messages
-- FMS fleet status shows robots at (0,0,0)
+**증상**:
+- `/pinky1/amcl_pose` 토픽은 존재하지만 메시지가 없음
+- FMS 플릿 상태에서 로봇 위치가 (0,0,0)으로 표시됨
 
-**Solutions**:
+**해결 방법**:
 
-A. Check if map_server is running:
+A. map_server 실행 확인:
 ```bash
 export ROS_DOMAIN_ID=11
 ros2 node info /map_server
-# If error, map not loaded
+# 오류가 발생하면 맵이 로드되지 않은 것입니다
 ```
 
-B. Set initial pose:
+B. 초기 자세 설정:
 ```bash
 export ROS_DOMAIN_ID=25
 
@@ -456,143 +456,143 @@ ros2 topic pub /pinky1/initialpose geometry_msgs/PoseWithCovarianceStamped '{
 }' --once
 ```
 
-C. Check AMCL parameters:
+C. AMCL 파라미터 확인:
 ```bash
 ros2 param get /amcl max_particles
 ros2 param get /amcl min_particles
-# Compare with nav2_params.yaml
+# nav2_params.yaml과 비교
 ```
 
-### Issue 4: Navigation Goals Timeout
+### 문제 4: 내비게이션 목표 시간 초과
 
-**Symptoms**:
-- Send goal but action status shows "TIMEOUT"
-- Robot doesn't move toward goal
+**증상**:
+- 목표를 전송했지만 액션 상태가 "TIMEOUT"으로 표시됨
+- 로봇이 목표를 향해 이동하지 않음
 
-**Solutions**:
+**해결 방법**:
 
-A. Check if costmap is initialized:
+A. 코스트맵 초기화 확인:
 ```bash
 timeout 2 ros2 topic echo /pinky1/local_costmap/costmap --once
-# Should show valid costmap data
+# 유효한 코스트맵 데이터가 표시되어야 합니다
 ```
 
-B. Check if path planner is working:
+B. 경로 플래너 동작 확인:
 ```bash
-# Monitor planner feedback
+# 플래너 피드백 모니터링
 ros2 topic echo /pinky1/plan &
 
-# Send goal
+# 목표 전송
 ros2 action send_goal /pinky1/navigate_to_pose nav2_msgs/action/NavigateToPose '{...}'
 
-# Path should be published to /pinky1/plan
+# /pinky1/plan에 경로가 발행되어야 합니다
 ```
 
-C. Check robot can move:
+C. 로봇 이동 가능 여부 확인:
 ```bash
-# Send velocity command directly (if robot supports it)
-# This verifies hardware is working
+# 속도 명령을 직접 전송 (로봇이 지원하는 경우)
+# 하드웨어 동작 여부를 확인합니다
 ```
 
-### Issue 5: Pinky2 Unreachable
+### 문제 5: Pinky2에 접속 불가
 
-**Symptoms**:
-- SSH timeout to 192.168.1.6
-- ping doesn't work
+**증상**:
+- 192.168.1.6에 SSH 시간 초과
+- ping이 동작하지 않음
 
-**Solutions**:
+**해결 방법**:
 
-A. Check network connectivity:
+A. 네트워크 연결 확인:
 ```bash
 ping 192.168.1.6
-# If fails, network issue
+# 실패하면 네트워크 문제
 
-# Check router/WiFi
-ping 192.168.1.1  # router
+# 라우터/WiFi 확인
+ping 192.168.1.1  # 라우터
 ```
 
-B. Check robot power:
-- Is Pinky2 powered on?
-- Check battery indicator
+B. 로봇 전원 확인:
+- Pinky2 전원이 켜져 있는가?
+- 배터리 표시등 확인
 
-C. Check robot status:
+C. 로봇 상태 확인:
 ```bash
-# From another Pinky that's online
+# 온라인 상태인 다른 Pinky에서 확인
 ssh pinky@192.168.1.7
-ping 192.168.1.6  # Try from within network
+ping 192.168.1.6  # 네트워크 내부에서 시도
 ```
 
-D. Manual recovery:
+D. 수동 복구:
 ```bash
-# If still fails, physically access Pinky2 and:
-# 1. Check if it's on
-# 2. Check Ethernet connection
-# 3. Restart the robot
-# 4. Try SSH again
+# 여전히 실패하면 Pinky2에 물리적으로 접근하여:
+# 1. 전원이 켜져 있는지 확인
+# 2. 이더넷 연결 확인
+# 3. 로봇 재시작
+# 4. SSH 재시도
 ```
 
 ---
 
-## Performance Tuning
+## 성능 튜닝
 
-Once navigation is working, you can tune performance using these parameters:
+내비게이션이 동작한 후 다음 파라미터로 성능을 조정할 수 있습니다:
 
-### Faster Navigation
+### 더 빠른 내비게이션
 ```yaml
-# In nav2_params.yaml
+# nav2_params.yaml에서
 
 controller_server:
   FollowPath:
-    desired_linear_vel: 0.20        # Increase from 0.15
-    max_angular_vel: 1.0             # Increase from 0.8
+    desired_linear_vel: 0.20        # 0.15에서 증가
+    max_angular_vel: 1.0             # 0.8에서 증가
 
 planner_server:
   GridBased:
-    tolerance: 0.04                  # Increase from 0.02
+    tolerance: 0.04                  # 0.02에서 증가
 ```
 
-### More Precise Navigation
+### 더 정밀한 내비게이션
 ```yaml
-# In nav2_params.yaml
+# nav2_params.yaml에서
 
 controller_server:
   general_goal_checker:
-    xy_goal_tolerance: 0.02          # Decrease from 0.05
-    yaw_goal_tolerance: 0.05         # Decrease from 0.1
+    xy_goal_tolerance: 0.02          # 0.05에서 감소
+    yaw_goal_tolerance: 0.05         # 0.1에서 감소
 ```
 
-### Better Localization
+### 더 나은 위치 추정
 ```yaml
-# In nav2_params.yaml
+# nav2_params.yaml에서
 
 amcl:
-  max_particles: 4000                # Increase from 3000
-  min_particles: 1000                # Increase from 500
+  max_particles: 4000                # 3000에서 증가
+  min_particles: 1000                # 500에서 증가
 ```
 
 ---
 
-## Success Criteria
+## 성공 기준
 
-Navigation system is working correctly when:
+내비게이션 시스템이 올바르게 동작하는 경우:
 
-1. ✓ Nav2 nodes appear in `ros2 node list`
-2. ✓ `/pinky1/amcl_pose` published on domain 25 (via domain bridge)
-3. ✓ `/pinky1/navigate_to_pose` action available
-4. ✓ Robots show actual positions in FMS fleet status
-5. ✓ Navigation goals complete successfully
-6. ✓ Path conflicts resolved by FMS collision avoidance
-7. ✓ Both Pinky1 and Pinky2 can navigate simultaneously
+1. `ros2 node list`에 Nav2 노드가 표시됨
+2. `/pinky1/amcl_pose`가 도메인 25에서 발행됨 (Domain Bridge를 통해)
+3. `/pinky1/navigate_to_pose` 액션을 사용할 수 있음
+4. FMS 플릿 상태에서 실제 로봇 위치가 표시됨
+5. 내비게이션 목표가 성공적으로 완료됨
+6. FMS 충돌 회피로 경로 충돌이 해결됨
+7. Pinky1과 Pinky2가 동시에 내비게이션 가능
 
 ---
 
-## Next Steps
+## 다음 단계
 
-1. Implement the bringup script changes from **Step 1**
-2. Verify domain bridge from **Step 2**
-3. Initialize AMCL from **Step 3**
-4. Test goals from **Step 4**
-5. Run diagnostic script to verify all systems
+1. **1단계**의 시작 스크립트 변경 사항 적용
+2. **2단계**의 Domain Bridge 확인
+3. **3단계**의 AMCL 초기화
+4. **4단계**의 목표 테스트
+5. 진단 스크립트를 실행하여 전체 시스템 확인
 
 ```bash
 bash /home/gw/kitchmatics/roscamp-repo-1/fms/scripts/diagnose_navigation.sh
@@ -600,9 +600,8 @@ bash /home/gw/kitchmatics/roscamp-repo-1/fms/scripts/diagnose_navigation.sh
 
 ---
 
-## References
+## 참고 자료
 
-- Navigation Validation Report: `/home/gw/kitchmatics/roscamp-repo-1/fms/docs/NAVIGATION_VALIDATION_REPORT.md`
-- Config Files: `/home/gw/kitchmatics/roscamp-repo-1/fms/config/`
-- ROS2 Nav2 Docs: https://nav2.org/
-
+- 내비게이션 검증 보고서: `/home/gw/kitchmatics/roscamp-repo-1/fms/docs/NAVIGATION_VALIDATION_REPORT.md`
+- 설정 파일: `/home/gw/kitchmatics/roscamp-repo-1/fms/config/`
+- ROS2 Nav2 문서: https://nav2.org/

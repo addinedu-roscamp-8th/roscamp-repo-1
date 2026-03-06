@@ -1,96 +1,96 @@
-# FMS Test Scripts Documentation
+# FMS 테스트 스크립트 문서
 
-This directory contains comprehensive test scripts for validating the Kitchmatics Fleet Management System (FMS) communication layer.
+이 디렉토리에는 Kitchmatics 플릿 관리 시스템(FMS) 통신 레이어를 검증하기 위한 종합 테스트 스크립트가 포함되어 있습니다.
 
-## Quick Start
+## 빠른 시작
 
-### 1. Test ROS 2 Messages (Most Important for FMS Integration)
+### 1. ROS 2 메시지 테스트 (FMS 연동에 가장 중요)
 ```bash
-# Test all message types
+# 모든 메시지 타입 테스트
 python3 test_messages.py --all
 
-# Test goal_arrived message publishing (point13 arrival)
+# goal_arrived 메시지 발행 테스트 (point13 도착)
 python3 test_messages.py --test-goal-arrived
 
-# Test fleet status subscription
+# 플릿 상태 구독 테스트
 python3 test_messages.py --test-fleet-status
 
-# Interactive testing mode
+# 대화형 테스트 모드
 python3 test_messages.py --interactive
 ```
 
-### 2. Test External Team Mocks (For Skip Mode Testing)
+### 2. 외부 팀 모의 테스트 (skip 모드 테스트용)
 ```bash
-# Start all mocks (precision control + robot arm)
+# 모든 모의 서비스 시작 (정밀 제어 + 로봇 암)
 python3 mock_external_teams.py --start-all
 
-# Start precision control mock (simulates precision_parked message)
+# 정밀 제어 모의 시작 (precision_parked 메시지 시뮬레이션)
 python3 mock_external_teams.py --mock-precision
 
-# Start robot arm mock (simulates food_loaded message)
+# 로봇 암 모의 시작 (food_loaded 메시지 시뮬레이션)
 python3 mock_external_teams.py --mock-arm
 
-# Interactive control of mocks
+# 모의 서비스 대화형 제어
 python3 mock_external_teams.py --interactive
 ```
 
-### 3. Test TCP Communication
+### 3. TCP 통신 테스트
 ```bash
-# Test all TCP ports
+# 모든 TCP 포트 테스트
 python3 test_tcp_communication.py --test-all
 
-# Test specific port accessibility
+# 특정 포트 접근성 테스트
 python3 test_tcp_communication.py --test-ports
 
-# Test message format and serialization
+# 메시지 형식 및 직렬화 테스트
 python3 test_tcp_communication.py --test-message-format
 
-# Start TCP echo server (for testing)
+# TCP 에코 서버 시작 (테스트용)
 python3 test_tcp_communication.py --echo-server --port 9000
 
-# Connect as client to echo server
+# 에코 서버에 클라이언트로 접속
 python3 test_tcp_communication.py --echo-client --host 192.168.1.3 --port 9000
 ```
 
-## Detailed Test Scripts
+## 상세 테스트 스크립트
 
 ### test_messages.py
 
-Tests ROS 2 message communication for the FMS system.
+FMS 시스템의 ROS 2 메시지 통신을 테스트합니다.
 
-**What it tests:**
-1. **goal_arrived Publishing** - Validates that goal_arrived messages can be published when a robot reaches point13
-2. **fleet_status Subscription** - Verifies FMS can receive and process fleet status updates
-3. **Per-robot Topics** - Checks namespace isolation (/pinky1/*, /pinky2/*, /pinky3/*)
-4. **TCP Message Format** - Validates TCP message serialization/deserialization
-5. **Namespace Isolation** - Ensures messages don't cross between robot namespaces
+**테스트 항목:**
+1. **goal_arrived 발행** - 로봇이 point13에 도착했을 때 goal_arrived 메시지를 발행할 수 있는지 검증
+2. **fleet_status 구독** - FMS가 플릿 상태 업데이트를 수신하고 처리할 수 있는지 확인
+3. **로봇별 토픽** - 네임스페이스 격리 확인 (/pinky1/*, /pinky2/*, /pinky3/*)
+4. **TCP 메시지 형식** - TCP 메시지 직렬화/역직렬화 검증
+5. **네임스페이스 격리** - 로봇 네임스페이스 간 메시지가 교차하지 않는지 확인
 
-**Message Types Tested:**
-- `OrderRequest` - Orders from Main Server to FMS
-- `RobotStatus` - Individual robot status
-- `FleetStatus` - Overall fleet status
-- `DeliveryComplete` - Delivery confirmation from customer GUI
-- Custom `goal_arrived` - Robot arrival at point13 (using String type until official message is defined)
+**테스트되는 메시지 타입:**
+- `OrderRequest` - 메인 서버에서 FMS로의 주문
+- `RobotStatus` - 개별 로봇 상태
+- `FleetStatus` - 전체 플릿 상태
+- `DeliveryComplete` - 고객 GUI에서의 배달 확인
+- 커스텀 `goal_arrived` - point13에서의 로봇 도착 (공식 메시지 정의까지 String 타입 사용)
 
-**Usage Examples:**
+**사용 예제:**
 ```bash
-# Test goal_arrived message manually
+# goal_arrived 메시지 수동 테스트
 python3 test_messages.py --test-goal-arrived
 
-# Test fleet status subscription (wait for FMS to publish)
+# 플릿 상태 구독 테스트 (FMS가 발행할 때까지 대기)
 python3 test_messages.py --test-fleet-status
 
-# Interactive mode - publish messages on demand
+# 대화형 모드 - 요청 시 메시지 발행
 python3 test_messages.py --interactive
 
-# Commands in interactive mode:
+# 대화형 모드 명령어:
 # > goal_arrived pinky1 point13
 # > order 1 M001 1
 # > status
 # > quit
 ```
 
-**Expected Output:**
+**예상 출력:**
 ```
 [FMS_TEST_NODE] Created publisher: /fms/goal_arrived (using String type)
 [FMS_TEST_NODE] Created publisher: /fms/order_request
@@ -99,64 +99,64 @@ python3 test_messages.py --interactive
 [ORDER_REQUEST] Published: ORD-123456 to T01
 ```
 
-**Important Notes:**
-- Start the FMS node first: `ros2 launch fms fms_launch.py`
-- The `goal_arrived` message uses `std_msgs/String` as a workaround until an official message type is defined in fleet_interfaces
-- For full testing, also run: `ros2 launch mobile_robot bringup_launch.py`
+**중요 사항:**
+- 먼저 FMS 노드를 시작하세요: `ros2 launch fms fms_launch.py`
+- `goal_arrived` 메시지는 fleet_interfaces에 공식 메시지 타입이 정의될 때까지 `std_msgs/String`을 임시로 사용합니다
+- 전체 테스트를 위해 다음도 실행하세요: `ros2 launch mobile_robot bringup_launch.py`
 
 ---
 
 ### mock_external_teams.py
 
-Mocks external team services for skip mode testing without external dependencies.
+외부 의존성 없이 skip 모드 테스트를 위한 외부 팀 서비스를 모의합니다.
 
-**What it mocks:**
+**모의 대상:**
 
-1. **Precision Control Team** (domain 14)
-   - Listens for `goal_arrived` message on `/fms/goal_arrived`
-   - Simulates precision parking (point13 → pickup_spot)
-   - Publishes `precision_parked` message after delay
-   - Configurable delay (default: 2 seconds)
+1. **정밀 제어 팀** (domain 14)
+   - `/fms/goal_arrived`에서 `goal_arrived` 메시지 수신 대기
+   - 정밀 주차 시뮬레이션 (point13 → pickup_spot)
+   - 지연 후 `precision_parked` 메시지 발행
+   - 설정 가능한 지연 (기본: 2초)
 
-2. **Robot Arm Team** (domain 15)
-   - Listens for `food_load_request` message on `/fms/food_load_request`
-   - Simulates food loading onto robot
-   - Publishes `food_loaded` message after delay
-   - Configurable delay (default: 3 seconds)
+2. **로봇 암 팀** (domain 15)
+   - `/fms/food_load_request`에서 `food_load_request` 메시지 수신 대기
+   - 로봇에 음식 적재 시뮬레이션
+   - 지연 후 `food_loaded` 메시지 발행
+   - 설정 가능한 지연 (기본: 3초)
 
-**Message Flow:**
+**메시지 흐름:**
 ```
 FMS                  Precision Mock              Robot Arm Mock
  |                         |                           |
  +--goal_arrived----------->|                           |
- |                    (simulate parking)                |
+ |                    (주차 시뮬레이션)                   |
  |<-------precision_parked--|                           |
  |                                                      |
  +--food_load_request-------------------→              |
- |                              (simulate loading)      |
+ |                              (적재 시뮬레이션)         |
  |                         food_loaded-----<-----------+
  |
- (Robot navigates to table and completes delivery)
+ (로봇이 테이블로 이동하여 배달 완료)
 ```
 
-**Usage Examples:**
+**사용 예제:**
 ```bash
-# Start both mocks with default delays
+# 기본 지연으로 두 모의 서비스 시작
 python3 mock_external_teams.py --start-all
 
-# Start precision mock with 3-second delay
+# 3초 지연으로 정밀 제어 모의 시작
 python3 mock_external_teams.py --mock-precision --precision-delay 3
 
-# Start arm mock with 5-second delay
+# 5초 지연으로 로봇 암 모의 시작
 python3 mock_external_teams.py --mock-arm --arm-delay 5
 
-# Run both mocks for 30 seconds
+# 30초간 두 모의 서비스 실행
 python3 mock_external_teams.py --start-all --duration 30
 
-# Interactive mode
+# 대화형 모드
 python3 mock_external_teams.py --interactive
 
-# Commands in interactive mode:
+# 대화형 모드 명령어:
 # > start precision 2
 # > start arm 3
 # > stats
@@ -164,7 +164,7 @@ python3 mock_external_teams.py --interactive
 # > quit
 ```
 
-**Expected Output:**
+**예상 출력:**
 ```
 [PRECISION_CONTROL_MOCK] Initialized (delay=2.0s)
 [ROBOT_ARM_MOCK] Initialized (delay=3.0s)
@@ -184,81 +184,81 @@ Robot Arm Mock:
   pending loads:              0
 ```
 
-**Integration with FMS:**
+**FMS와의 연동:**
 ```bash
-# Terminal 1: Start mock external teams
+# 터미널 1: 모의 외부 팀 시작
 python3 mock_external_teams.py --start-all
 
-# Terminal 2: Start FMS with skip mode
+# 터미널 2: skip 모드로 FMS 시작
 ros2 launch fms fms_launch.py skip_robot_arm:=true
 
-# Terminal 3: Send test order
+# 터미널 3: 테스트 주문 전송
 python3 send_order.py --table 1
 
-# Expected flow:
-# 1. FMS receives order
-# 2. FMS navigates pinky to point13
-# 3. FMS publishes goal_arrived
-# 4. Precision mock publishes precision_parked (2s delay)
-# 5. FMS requests robot arm to load (would wait for food_loaded in normal mode)
-# 6. Arm mock publishes food_loaded (3s delay)
-# 7. FMS navigates pinky to table1
-# 8. FMS waits for manual delivery complete
-# 9. FMS returns pinky to parking
+# 예상 흐름:
+# 1. FMS가 주문 수신
+# 2. FMS가 pinky를 point13으로 내비게이션
+# 3. FMS가 goal_arrived 발행
+# 4. 정밀 제어 모의가 precision_parked 발행 (2초 지연)
+# 5. FMS가 로봇 암에 적재 요청 (일반 모드에서는 food_loaded 대기)
+# 6. 로봇 암 모의가 food_loaded 발행 (3초 지연)
+# 7. FMS가 pinky를 table1로 내비게이션
+# 8. FMS가 수동 배달 완료 대기
+# 9. FMS가 pinky를 주차 위치로 복귀
 ```
 
 ---
 
 ### test_tcp_communication.py
 
-Tests TCP communication on the closed network "kitchmatics".
+폐쇄 네트워크 "kitchmatics"에서 TCP 통신을 테스트합니다.
 
-**What it tests:**
+**테스트 항목:**
 
-1. **Port Accessibility** - Checks if all configured ports are reachable
-2. **Message Format** - Validates TCP message serialization/deserialization
-3. **Message Parsing** - Tests JSON parsing of various message formats
-4. **Message Size** - Tests message handling for different payload sizes
-5. **Network Connectivity** - Verifies network configuration is correct
+1. **포트 접근성** - 설정된 모든 포트에 접근 가능한지 확인
+2. **메시지 형식** - TCP 메시지 직렬화/역직렬화 검증
+3. **메시지 파싱** - 다양한 메시지 형식의 JSON 파싱 테스트
+4. **메시지 크기** - 다양한 페이로드 크기의 메시지 처리 테스트
+5. **네트워크 연결** - 네트워크 설정이 올바른지 확인
 
-**Tested Ports:**
-- Master FMS: 192.168.1.3:9000
-- Main Server: 192.168.1.3:9999
-- Robot Clients: 192.168.1.7,6,11:9001 (pinky1,2,3)
-- Arm Clients: 192.168.1.4,10:9002 (cobot1,2)
+**테스트 포트:**
+- 마스터 FMS: 192.168.1.3:9000
+- 메인 서버: 192.168.1.3:9999
+- 로봇 클라이언트: 192.168.1.7,6,11:9001 (pinky1,2,3)
+- 로봇 암 클라이언트: 192.168.1.4,10:9002 (cobot1,2)
 - PostgreSQL: 127.0.0.1:5432
 
-**Usage Examples:**
+**사용 예제:**
 ```bash
-# Test all ports
+# 모든 포트 테스트
 python3 test_tcp_communication.py --test-all
 
-# Test only port accessibility
+# 포트 접근성만 테스트
 python3 test_tcp_communication.py --test-ports
 
-# Test message format validation
+# 메시지 형식 검증 테스트
 python3 test_tcp_communication.py --test-message-format
 
-# Start TCP echo server for testing
+# 테스트용 TCP 에코 서버 시작
 python3 test_tcp_communication.py --echo-server --host 0.0.0.0 --port 9000
 
-# Connect to echo server as client
+# 에코 서버에 클라이언트로 접속
 python3 test_tcp_communication.py --echo-client --host 192.168.1.3 --port 9000
 
-# Test with custom port
+# 커스텀 포트로 테스트
 python3 test_tcp_communication.py --echo-server --port 9999
 ```
 
-**Message Types Tested:**
-- CONNECT - Robot connection setup
-- ROBOT_STATUS - Individual robot status updates
-- TASK_ASSIGN - Task assignment to robots
-- TASK_COMPLETE - Task completion notification
-- FLEET_STATUS - Overall fleet status
-- HEARTBEAT - Periodic heartbeat messages
-- EMERGENCY_STOP - Emergency stop commands
+**테스트되는 메시지 타입:**
+- CONNECT - 로봇 연결 설정
+- ROBOT_STATUS - 개별 로봇 상태 업데이트
+- TASK_ASSIGN - 로봇에 작업 할당
+- TASK_COMPLETE - 작업 완료 알림
+- FLEET_STATUS - 전체 플릿 상태
+- HEARTBEAT - 주기적 하트비트 메시지
+- EMERGENCY_STOP - 비상 정지 명령
 
-**Expected Output for Port Test:**
+**포트 테스트 예상 출력:**
 ```
 TEST 1: TCP Port Accessibility
 Testing port accessibility (3s timeout per port):
@@ -274,7 +274,7 @@ Testing port accessibility (3s timeout per port):
 Summary: 2/8 ports open
 ```
 
-**Expected Output for Message Format Test:**
+**메시지 형식 테스트 예상 출력:**
 ```
 TEST 2: TCP Message Format Validation
 Testing message serialization/deserialization:
@@ -291,9 +291,9 @@ Result: OK
 
 ---
 
-## Network Configuration Reference
+## 네트워크 설정 참조
 
-### WiFi Network: "kitchmatics" (Closed Network)
+### WiFi 네트워크: "kitchmatics" (폐쇄 네트워크)
 
 ```
 Master PC (192.168.1.3)
@@ -311,178 +311,178 @@ Robot Arms (JetCobot):
 └── cobot2: 192.168.1.10:9002
 ```
 
-### ROS 2 Topic Structure (Current - Namespaces)
+### ROS 2 토픽 구조 (현재 - 네임스페이스)
 
 ```
-Global Topics:
+글로벌 토픽:
 ├── /fms/order_request (OrderRequest)
 ├── /fms/fleet_status (FleetStatus)
 ├── /fms/delivery_complete (DeliveryComplete)
-├── /fms/goal_arrived (String - custom)
-├── /fms/precision_parked (String - custom)
-├── /fms/food_loaded (String - custom)
-└── /fms/food_load_request (String - custom)
+├── /fms/goal_arrived (String - 커스텀)
+├── /fms/precision_parked (String - 커스텀)
+├── /fms/food_loaded (String - 커스텀)
+└── /fms/food_load_request (String - 커스텀)
 
-Per-Robot Topics (Namespaced):
+로봇별 토픽 (네임스페이스):
 ├── /pinky1/*
 │   ├── /pose
 │   ├── /battery/voltage
 │   ├── /battery/present
 │   └── /navigate_to_pose (action)
 ├── /pinky2/*
-│   └── (same as pinky1)
+│   └── (pinky1과 동일)
 └── /pinky3/*
-    └── (same as pinky1)
+    └── (pinky1과 동일)
 ```
 
-### ROS 2 Domain IDs (Future - CLAUDE.md Requirement)
+### ROS 2 Domain ID (향후 - CLAUDE.md 요구사항)
 
-**Note: The following is the planned migration based on CLAUDE.md requirements:**
+**참고: 다음은 CLAUDE.md 요구사항에 기반한 마이그레이션 계획입니다:**
 
 ```
-Domain 11: pinky1 (mobile robot)
-Domain 12: pinky2 (mobile robot)
-Domain 13: pinky3 (mobile robot)
-Domain 14: robot_arm_1 (precision control)
-Domain 15: robot_arm_2 (precision control)
-Domain 0:  Master FMS node
+Domain 11: pinky1 (모바일 로봇)
+Domain 12: pinky2 (모바일 로봇)
+Domain 13: pinky3 (모바일 로봇)
+Domain 14: robot_arm_1 (정밀 제어)
+Domain 15: robot_arm_2 (정밀 제어)
+Domain 0:  마스터 FMS 노드
 ```
 
 ---
 
-## Testing Checklist
+## 테스트 체크리스트
 
-### Before Running Full System
+### 전체 시스템 테스트 전
 
-- [ ] All ROS 2 message types are correctly defined in `fleet_interfaces/msg/`
-- [ ] TCP communication paths are tested
-- [ ] Network connectivity verified on "kitchmatics" WiFi
-- [ ] Robot clients can be reached on their configured ports
-- [ ] Main Server and FMS nodes start without errors
+- [ ] 모든 ROS 2 메시지 타입이 `fleet_interfaces/msg/`에 올바르게 정의됨
+- [ ] TCP 통신 경로 테스트 완료
+- [ ] "kitchmatics" WiFi에서 네트워크 연결 확인
+- [ ] 로봇 클라이언트가 설정된 포트로 접근 가능
+- [ ] 메인 서버와 FMS 노드가 오류 없이 시작됨
 
-### Communication Validation
+### 통신 검증
 
-- [ ] `test_messages.py --test-goal-arrived` passes
-- [ ] `test_messages.py --test-fleet-status` receives messages
-- [ ] `test_tcp_communication.py --test-all` shows all critical ports open
-- [ ] `test_tcp_communication.py --test-message-format` validates all message types
-- [ ] TCP echo server and client can communicate bidirectionally
+- [ ] `test_messages.py --test-goal-arrived` 통과
+- [ ] `test_messages.py --test-fleet-status` 메시지 수신
+- [ ] `test_tcp_communication.py --test-all`에서 모든 중요 포트 개방 확인
+- [ ] `test_tcp_communication.py --test-message-format`에서 모든 메시지 타입 검증
+- [ ] TCP 에코 서버와 클라이언트가 양방향 통신 가능
 
-### Skip Mode Testing (No External Dependencies)
+### skip 모드 테스트 (외부 의존성 없음)
 
-- [ ] Mock external teams start without errors: `mock_external_teams.py --start-all`
-- [ ] Mocks correctly receive and respond to messages
-- [ ] FMS processes mock `precision_parked` messages
-- [ ] FMS processes mock `food_loaded` messages
-- [ ] Full delivery flow completes: order → pickup → delivery → return
+- [ ] 모의 외부 팀이 오류 없이 시작됨: `mock_external_teams.py --start-all`
+- [ ] 모의 서비스가 메시지를 올바르게 수신하고 응답
+- [ ] FMS가 모의 `precision_parked` 메시지를 처리
+- [ ] FMS가 모의 `food_loaded` 메시지를 처리
+- [ ] 전체 배달 흐름 완료: 주문 → 픽업 → 배달 → 복귀
 
-### Full Integration Testing
+### 전체 통합 테스트
 
-- [ ] Start all components in correct order:
-  1. Robots and arms on their respective domains
-  2. FMS node with skip mode disabled
-  3. Main Server node
-  4. Send test order via `send_order.py`
-- [ ] Monitor message flow in all terminals
-- [ ] Verify database updates throughout delivery
-- [ ] Check Admin GUI for fleet status updates
-
----
-
-## Troubleshooting
-
-### ROS 2 Topics Not Appearing
-
-**Problem:** `test_messages.py` doesn't receive fleet_status messages
-
-**Solution:**
-1. Verify FMS node is running: `ros2 node list`
-2. Check topic availability: `ros2 topic list`
-3. Verify message type: `ros2 topic type /fms/fleet_status`
-4. Inspect messages: `ros2 topic echo /fms/fleet_status`
-
-### TCP Ports Closed
-
-**Problem:** Port test shows all robot ports closed
-
-**Solution:**
-1. Verify robot IPs are correct in `network_config.yaml`
-2. Check WiFi connection to "kitchmatics" network
-3. Verify robots are powered on and network enabled
-4. Check firewall rules on master PC
-5. Test connectivity: `ping 192.168.1.7`
-
-### Message Parse Errors
-
-**Problem:** "Failed to parse goal_arrived message"
-
-**Solution:**
-1. Check JSON format in published messages
-2. Verify all required fields are present
-3. Review error logs for specific field issues
-4. Use `ros2 topic echo /fms/goal_arrived` to inspect raw messages
-
-### Mock Not Responding
-
-**Problem:** Mocks started but not receiving messages
-
-**Solution:**
-1. Verify FMS node is publishing to correct topics
-2. Check ROS 2 domain ID matching (currently no domain isolation)
-3. Monitor mock output for subscription confirmation
-4. Verify message format matches expected structure
-5. Check ROS 2 network configuration
+- [ ] 올바른 순서로 모든 구성 요소 시작:
+  1. 각 도메인의 로봇과 로봇 암
+  2. skip 모드 비활성화된 FMS 노드
+  3. 메인 서버 노드
+  4. `send_order.py`로 테스트 주문 전송
+- [ ] 모든 터미널에서 메시지 흐름 모니터링
+- [ ] 배달 전 과정에서 데이터베이스 업데이트 확인
+- [ ] 관리자 GUI에서 플릿 상태 업데이트 확인
 
 ---
 
-## File Locations
+## 문제 해결
 
-- Test Scripts: `/home/gw/kitchmatics/roscamp-repo-1/fms/scripts/`
-- FMS Config: `/home/gw/kitchmatics/roscamp-repo-1/fms/config/`
-- Message Definitions: `/home/gw/kitchmatics/roscamp-repo-1/fleet_interfaces/msg/`
-- FMS Node: `/home/gw/kitchmatics/roscamp-repo-1/fms/fms/fms_node.py`
-- Main Server: `/home/gw/kitchmatics/roscamp-repo-1/app/backend/main_server/`
-- TCP Communication: `/home/gw/kitchmatics/roscamp-repo-1/fms/fms/tcp_communication.py`
+### ROS 2 토픽이 나타나지 않음
+
+**문제:** `test_messages.py`가 fleet_status 메시지를 수신하지 못함
+
+**해결 방법:**
+1. FMS 노드 실행 확인: `ros2 node list`
+2. 토픽 가용성 확인: `ros2 topic list`
+3. 메시지 타입 확인: `ros2 topic type /fms/fleet_status`
+4. 메시지 검사: `ros2 topic echo /fms/fleet_status`
+
+### TCP 포트 닫힘
+
+**문제:** 포트 테스트에서 모든 로봇 포트가 닫혀 있음
+
+**해결 방법:**
+1. `network_config.yaml`에서 로봇 IP가 올바른지 확인
+2. "kitchmatics" 네트워크에 WiFi 연결 확인
+3. 로봇 전원이 켜져 있고 네트워크가 활성화되어 있는지 확인
+4. 마스터 PC의 방화벽 규칙 확인
+5. 연결 테스트: `ping 192.168.1.7`
+
+### 메시지 파싱 오류
+
+**문제:** "Failed to parse goal_arrived message"
+
+**해결 방법:**
+1. 발행된 메시지의 JSON 형식 확인
+2. 필수 필드가 모두 있는지 확인
+3. 특정 필드 문제에 대한 오류 로그 검토
+4. `ros2 topic echo /fms/goal_arrived`로 원시 메시지 검사
+
+### 모의 서비스가 응답하지 않음
+
+**문제:** 모의 서비스가 시작되었지만 메시지를 수신하지 못함
+
+**해결 방법:**
+1. FMS 노드가 올바른 토픽에 발행하는지 확인
+2. ROS 2 도메인 ID 일치 확인 (현재 도메인 격리 없음)
+3. 모의 서비스 출력에서 구독 확인 모니터링
+4. 메시지 형식이 예상 구조와 일치하는지 확인
+5. ROS 2 네트워크 설정 확인
 
 ---
 
-## Implementation Notes
+## 파일 위치
 
-### Missing Message Types (CLAUDE.md Requirements)
+- 테스트 스크립트: `/home/gw/kitchmatics/roscamp-repo-1/fms/scripts/`
+- FMS 설정: `/home/gw/kitchmatics/roscamp-repo-1/fms/config/`
+- 메시지 정의: `/home/gw/kitchmatics/roscamp-repo-1/fleet_interfaces/msg/`
+- FMS 노드: `/home/gw/kitchmatics/roscamp-repo-1/fms/fms/fms_node.py`
+- 메인 서버: `/home/gw/kitchmatics/roscamp-repo-1/app/backend/main_server/`
+- TCP 통신: `/home/gw/kitchmatics/roscamp-repo-1/fms/fms/tcp_communication.py`
 
-Three custom message types are currently mocked using `std_msgs/String`:
-1. `goal_arrived` - Robot arrival at point13
-2. `precision_parked` - Precision parking completion
-3. `food_loaded` - Food loading completion
+---
 
-**To implement official message types:**
+## 구현 참고사항
 
-1. Create message files in `fleet_interfaces/msg/`:
+### 누락된 메시지 타입 (CLAUDE.md 요구사항)
+
+세 가지 커스텀 메시지 타입이 현재 `std_msgs/String`으로 모의되고 있습니다:
+1. `goal_arrived` - point13에서의 로봇 도착
+2. `precision_parked` - 정밀 주차 완료
+3. `food_loaded` - 음식 적재 완료
+
+**공식 메시지 타입 구현 방법:**
+
+1. `fleet_interfaces/msg/`에 메시지 파일 생성:
    ```
    GoalArrived.msg
    PrecisionParked.msg
    FoodLoaded.msg
    ```
 
-2. Update `fleet_interfaces/CMakeLists.txt` to include new messages
+2. `fleet_interfaces/CMakeLists.txt`에 새 메시지 포함하도록 업데이트
 
-3. Update test scripts to use official message types instead of String
+3. 테스트 스크립트에서 String 대신 공식 메시지 타입 사용하도록 업데이트
 
-4. Rebuild interfaces: `colcon build --packages-select fleet_interfaces`
+4. 인터페이스 재빌드: `colcon build --packages-select fleet_interfaces`
 
-### Namespace vs Domain ID Migration
+### 네임스페이스에서 Domain ID로의 마이그레이션
 
-Current implementation uses **namespaces** (`/pinky1`, `/pinky2`, `/pinky3`).
+현재 구현은 **네임스페이스** (`/pinky1`, `/pinky2`, `/pinky3`)를 사용합니다.
 
-**CLAUDE.md requires migration to ROS_DOMAIN_ID:**
-- This enables isolated communication between robots in closed network
-- Each robot operates on separate domain without namespace overhead
-- Requires updating launch files and FMS node implementation
+**CLAUDE.md는 ROS_DOMAIN_ID로의 마이그레이션을 요구합니다:**
+- 폐쇄 네트워크에서 로봇 간 격리된 통신을 가능하게 함
+- 각 로봇이 네임스페이스 오버헤드 없이 별도 도메인에서 운영
+- 런치 파일과 FMS 노드 구현 업데이트 필요
 
 ---
 
-## Contact and Support
+## 연락처 및 지원
 
-- Product Planner: Team Lead
-- Communication Validator: Reviews message formats and protocols
-- For detailed implementation requirements: See `/home/gw/kitchmatics/roscamp-repo-1/CLAUDE.md`
+- 프로덕트 기획: 팀 리드
+- 통신 검증 담당: 메시지 형식 및 프로토콜 검토
+- 상세 구현 요구사항: `/home/gw/kitchmatics/roscamp-repo-1/CLAUDE.md` 참조

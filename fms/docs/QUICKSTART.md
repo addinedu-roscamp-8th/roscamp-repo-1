@@ -1,40 +1,40 @@
-# FMS GUI Order Integration - Quick Start Guide
+# FMS GUI 주문 연동 - 빠른 시작 가이드
 
-## Prerequisites
+## 사전 요구사항
 
 - ROS2 Humble
 - Python 3.10+
-- fleet_interfaces package built
-- Network: kitchmatics WiFi (192.168.1.x)
+- fleet_interfaces 패키지 빌드 완료
+- 네트워크: kitchmatics WiFi (192.168.1.x)
 
-## 1. Build FMS Package
+## 1. FMS 패키지 빌드
 
 ```bash
 cd /home/gw/kitchmatics/roscamp-repo-1/fms
 
-# Build
+# 빌드
 colcon build --packages-select fms
 
-# Source
+# 소싱
 source install/setup.bash
 ```
 
-## 2. Start FMS Node
+## 2. FMS 노드 시작
 
-### Terminal 1: FMS Node
+### 터미널 1: FMS 노드
 
 ```bash
 cd /home/gw/kitchmatics/roscamp-repo-1/fms
 source install/setup.bash
 
-# Set ROS_DOMAIN_ID to match pinky1
+# pinky1에 맞게 ROS_DOMAIN_ID 설정
 export ROS_DOMAIN_ID=11
 
-# Run FMS
+# FMS 실행
 ros2 run fms fms_node --ros-args -p skip_robot_arm:=true
 ```
 
-**Expected Output**:
+**예상 출력**:
 ```
 [INFO] Initializing Fleet Management System...
 [INFO] GUI TCP server started on port 9000
@@ -42,18 +42,18 @@ ros2 run fms fms_node --ros-args -p skip_robot_arm:=true
 [INFO] FMS Node is running...
 ```
 
-## 3. Test GUI Order Integration
+## 3. GUI 주문 연동 테스트
 
-### Terminal 2: Test Script
+### 터미널 2: 테스트 스크립트
 
 ```bash
 cd /home/gw/kitchmatics/roscamp-repo-1/fms/scripts
 
-# Test new order
+# 새 주문 테스트
 python3 test_gui_order.py new_order
 ```
 
-**Expected Output**:
+**예상 출력**:
 ```
 ============================================================
 Testing New Order Workflow
@@ -113,32 +113,32 @@ Order workflow completed!
 Connection closed
 ```
 
-## 4. Monitor Robot Navigation
+## 4. 로봇 내비게이션 모니터링
 
-### Terminal 3: Monitor pinky1 pose
+### 터미널 3: pinky1 자세 모니터링
 
 ```bash
 export ROS_DOMAIN_ID=11
 ros2 topic echo /pose
 ```
 
-### Terminal 4: Monitor navigation status
+### 터미널 4: 내비게이션 상태 모니터링
 
 ```bash
 export ROS_DOMAIN_ID=11
 ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose "{pose: {header: {frame_id: 'map'}, pose: {position: {x: 0.585, y: 0.63, z: 0.0}}}}"
 ```
 
-## 5. Monitor Cooking Orders
+## 5. 조리 주문 모니터링
 
-### Terminal 5: Monitor robot arm commands
+### 터미널 5: 로봇 암 명령 모니터링
 
 ```bash
-export ROS_DOMAIN_ID=25  # FMS domain
+export ROS_DOMAIN_ID=25  # FMS 도메인
 ros2 topic echo /cooking/order
 ```
 
-**Expected Output**:
+**예상 출력**:
 ```
 order_id: 'ORD-20260225123456-0001'
 menu_id: 'M001'
@@ -147,83 +147,83 @@ sauce_type: ''
 assigned_robot_id: 'pinky1'
 ```
 
-## 6. Full System Integration Test
+## 6. 전체 시스템 통합 테스트
 
-### Start All Components
+### 모든 구성 요소 시작
 
-1. **Start pinky1**:
+1. **pinky1 시작**:
    ```bash
-   # On pinky1 robot (DOMAIN_ID=11)
+   # pinky1 로봇에서 (DOMAIN_ID=11)
    ros2 launch pinky_navigation pinky_navigation.launch.py
    ```
 
-2. **Start FMS**:
+2. **FMS 시작**:
    ```bash
-   # On master PC (DOMAIN_ID=25, but monitoring DOMAIN_ID=11)
+   # 메인 PC에서 (DOMAIN_ID=25이지만 DOMAIN_ID=11을 모니터링)
    export ROS_DOMAIN_ID=11
    ros2 run fms fms_node --ros-args -p skip_robot_arm:=true
    ```
 
-3. **Start Robot Arm Coordinator** (if available):
+3. **로봇 암 Coordinator 시작** (가능한 경우):
    ```bash
    export ROS_DOMAIN_ID=25
    ros2 run robot_arm arm_coordinator_node
    ```
 
-4. **Send Test Order**:
+4. **테스트 주문 전송**:
    ```bash
    python3 test_gui_order.py new_order
    ```
 
-## 7. Troubleshooting
+## 7. 문제 해결
 
-### Problem: Connection Refused
+### 문제: 연결 거부
 
 ```
 ERROR: Could not connect to FMS at 192.168.1.3:9000
 ```
 
-**Solution**:
-- Check FMS is running: `ps aux | grep fms_node`
-- Check port is open: `netstat -tulpn | grep 9000`
-- Check IP address: `ip addr show`
+**해결 방법**:
+- FMS 실행 확인: `ps aux | grep fms_node`
+- 포트 개방 확인: `netstat -tulpn | grep 9000`
+- IP 주소 확인: `ip addr show`
 
-### Problem: No delivery notification received
+### 문제: 배달 알림을 받지 못함
 
-**Solution**:
-- Check pinky1 is navigating: `ros2 topic echo /pose`
-- Check order status: Look at FMS logs
-- Verify map positions in `fms_config.yaml`
+**해결 방법**:
+- pinky1 내비게이션 확인: `ros2 topic echo /pose`
+- 주문 상태 확인: FMS 로그 확인
+- `fms_config.yaml`에서 맵 위치 확인
 
-### Problem: Robot arm not receiving cooking order
+### 문제: 로봇 암이 조리 주문을 받지 못함
 
-**Solution**:
-- Check ROS_DOMAIN_ID=25 for FMS
-- Monitor topic: `ros2 topic echo /cooking/order`
-- Verify robot arm coordinator is running
+**해결 방법**:
+- FMS의 ROS_DOMAIN_ID=25 확인
+- 토픽 모니터링: `ros2 topic echo /cooking/order`
+- 로봇 암 Coordinator 실행 확인
 
-## 8. Configuration
+## 8. 설정 변경
 
-### Change TCP Port
+### TCP 포트 변경
 
-Edit `/home/gw/kitchmatics/roscamp-repo-1/fms/fms/fms_node.py`:
-
-```python
-self.gui_tcp_server = GUITCPServer(host='0.0.0.0', port=9000)  # Change port here
-```
-
-### Change Robot Selection
-
-Edit `/home/gw/kitchmatics/roscamp-repo-1/fms/fms/order_handler.py`:
+`/home/gw/kitchmatics/roscamp-repo-1/fms/fms/fms_node.py` 편집:
 
 ```python
-# In _execute_order_workflow()
-robot_id = "pinky1"  # Change to pinky2 or pinky3
+self.gui_tcp_server = GUITCPServer(host='0.0.0.0', port=9000)  # 여기서 포트 변경
 ```
 
-### Change Map Positions
+### 로봇 선택 변경
 
-Edit `/home/gw/kitchmatics/roscamp-repo-1/fms/config/fms_config.yaml`:
+`/home/gw/kitchmatics/roscamp-repo-1/fms/fms/order_handler.py` 편집:
+
+```python
+# _execute_order_workflow() 안에서
+robot_id = "pinky1"  # pinky2 또는 pinky3로 변경
+```
+
+### 맵 위치 변경
+
+`/home/gw/kitchmatics/roscamp-repo-1/fms/config/fms_config.yaml` 편집:
 
 ```yaml
 positions:
@@ -237,13 +237,13 @@ positions:
     theta: 0.0
 ```
 
-## 9. API Reference
+## 9. API 레퍼런스
 
-### TCP Message Format
+### TCP 메시지 형식
 
-All messages use 4-byte length header + JSON payload.
+모든 메시지는 4바이트 길이 헤더 + JSON 페이로드를 사용합니다.
 
-#### Request: new_order
+#### 요청: new_order
 ```json
 {
     "command": "new_order",
@@ -256,7 +256,7 @@ All messages use 4-byte length header + JSON payload.
 }
 ```
 
-#### Response: new_order
+#### 응답: new_order
 ```json
 {
     "status": "success",
@@ -267,7 +267,7 @@ All messages use 4-byte length header + JSON payload.
 }
 ```
 
-#### Push Notification: delivery_notification
+#### 푸시 알림: delivery_notification
 ```json
 {
     "type": "delivery_notification",
@@ -280,7 +280,7 @@ All messages use 4-byte length header + JSON payload.
 }
 ```
 
-#### Request: delivery_complete
+#### 요청: delivery_complete
 ```json
 {
     "command": "delivery_complete",
@@ -289,7 +289,7 @@ All messages use 4-byte length header + JSON payload.
 }
 ```
 
-#### Response: delivery_complete
+#### 응답: delivery_complete
 ```json
 {
     "status": "success",
@@ -299,59 +299,59 @@ All messages use 4-byte length header + JSON payload.
 }
 ```
 
-## 10. Development
+## 10. 개발
 
-### Run Unit Tests
+### 유닛 테스트 실행
 
 ```bash
 cd /home/gw/kitchmatics/roscamp-repo-1/fms
 pytest tests/
 ```
 
-### Enable Debug Logging
+### 디버그 로깅 활성화
 
 ```python
-# In fms_node.py
+# fms_node.py에서
 logging.basicConfig(level=logging.DEBUG)
 ```
 
-### Add Custom Order Handler
+### 커스텀 주문 핸들러 추가
 
 ```python
-# In fms_node.py
+# fms_node.py에서
 def _handle_custom_command(self, message: Dict[str, Any]) -> Dict[str, Any]:
-    # Your custom logic
+    # 커스텀 로직 구현
     return {'success': True, 'data': {}}
 
-# Register handler
+# 핸들러 등록
 self.gui_tcp_server.register_handler('custom_command', self._handle_custom_command)
 ```
 
-## 11. Next Steps
+## 11. 다음 단계
 
-1. **Integrate with Customer GUI**:
-   - Update GUI TCP client to use 4-byte length header protocol
-   - Implement delivery notification listener
-   - Add order status tracking UI
+1. **고객 GUI 연동**:
+   - GUI TCP 클라이언트에 4바이트 길이 헤더 프로토콜 적용
+   - 배달 알림 리스너 구현
+   - 주문 상태 추적 UI 추가
 
-2. **Add Robot Arm Integration**:
-   - Implement robot arm coordinator node
-   - Subscribe to `/cooking/order`
-   - Publish `/cooking/loading_complete`
+2. **로봇 암 연동 추가**:
+   - 로봇 암 Coordinator 노드 구현
+   - `/cooking/order` 구독
+   - `/cooking/loading_complete` 발행
 
-3. **Add Multiple Robot Support**:
-   - Implement robot selection algorithm
-   - Handle concurrent orders
-   - Add robot availability checking
+3. **다중 로봇 지원 추가**:
+   - 로봇 선택 알고리즘 구현
+   - 동시 주문 처리
+   - 로봇 가용성 확인 추가
 
-4. **Add Persistence**:
-   - Save order history to database
-   - Implement order recovery on restart
-   - Add order query API
+4. **영속성 추가**:
+   - 주문 이력을 데이터베이스에 저장
+   - 재시작 시 주문 복구 구현
+   - 주문 조회 API 추가
 
-## Support
+## 지원
 
-For issues or questions, check:
-- FMS logs: `~/.ros/log/`
-- Documentation: `/home/gw/kitchmatics/roscamp-repo-1/fms/docs/`
-- Test scripts: `/home/gw/kitchmatics/roscamp-repo-1/fms/scripts/`
+문제나 질문이 있으면 다음을 확인하세요:
+- FMS 로그: `~/.ros/log/`
+- 문서: `/home/gw/kitchmatics/roscamp-repo-1/fms/docs/`
+- 테스트 스크립트: `/home/gw/kitchmatics/roscamp-repo-1/fms/scripts/`

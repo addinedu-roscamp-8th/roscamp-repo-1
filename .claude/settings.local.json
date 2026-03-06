@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm:*)",
+      "Bash(for f in fms/ERROR_HANDLING_GUIDE.md fms/TASK_SCHEDULER_GUIDE.md fms/ZONE_MANAGER_README.md fms/ZONE_RESERVATION_GUIDE.md fms/docs/ARCHITECTURE_DIAGRAM.md fms/docs/CODE_FIXES_FOR_DOMAIN_BRIDGE.md fms/docs/DDS_DISCOVERY_TROUBLESHOOTING.md fms/docs/DOMAIN_BRIDGE_REVIEW.md fms/docs/NAVIGATION_QUICK_START.md fms/docs/NAVIGATION_SETUP_GUIDE.md fms/docs/NAVIGATION_VALIDATION_REPORT.md fms/docs/QUICKSTART.md fms/scripts/INDEX.md fms/scripts/TEST_SCRIPTS_README.md fms/scripts/VERIFICATION_CHECKLIST.md)",
+      "Bash(do echo \"=== $f ===\")",
+      "Read(//c/Users/82103/Desktop/roscamp-repo-1/**)",
+      "Bash(done)"
+    ]
+  }
+}
